@@ -1,0 +1,123 @@
+{
+  "values": {
+    "pki.blocklist": "c99d4e650533b92061b09918e838a5a0a6aaee21eed1d12fd937682865936c72",
+    "pki.initiatingVersion": "2",
+    "staticHosts": "fd00:1234:5678::9 = 203.0.113.9:4242, relay.example.com:4242",
+    "staticMap.cadence": "45s",
+    "staticMap.network": "ip",
+    "staticMap.lookupTimeout": "500ms",
+    "lighthouse.interval": "30",
+    "lighthouse.remoteAllowList": "172.16.0.0/12 = false\n0.0.0.0/0 = true",
+    "lighthouse.localAllowList": "tun0 = false\n10.0.0.0/8 = true",
+    "lighthouse.advertiseAddrs": "1.2.3.4:0",
+    "lighthouse.calculatedRemotes": "10.0.10.0/24, 192.168.1.0/24, 4242\n10.0.10.0/24, 192.168.2.0/24, 4243",
+    "listen.host": "0.0.0.0",
+    "listen.port": "0",
+    "listen.batch": "128",
+    "listen.readBuffer": "10485760",
+    "listen.writeBuffer": "0",
+    "listen.sendRecvError": "private",
+    "listen.acceptRecvError": "never",
+    "routines": "2",
+    "punchy.delay": "2s",
+    "punchy.respondDelay": "7s",
+    "cipher": "chachapoly",
+    "preferredRanges": "172.16.0.0/24\nfd00::/8",
+    "relay.relays": "fd00:1234:5678::7",
+    "tun.mtu": "1400",
+    "tun.txQueue": "1000",
+    "tun.routes": "fd00:1234:5678::/64, 8800",
+    "logging.format": "json",
+    "stats.type": "graphite",
+    "stats.prefix": "tn",
+    "stats.protocol": "udp",
+    "stats.host": "127.0.0.1:2003",
+    "stats.listen": "127.0.0.1:8080",
+    "stats.path": "/metrics",
+    "stats.namespace": "prometheusns",
+    "stats.subsystem": "nebula",
+    "stats.interval": "30s",
+    "handshakes.tryInterval": "200ms",
+    "handshakes.retries": "10",
+    "handshakes.queryBuffer": "128",
+    "handshakes.triggerBuffer": "32",
+    "tunnels.inactivityTimeout": "15m",
+    "firewall.inboundAction": "drop",
+    "firewall.outboundAction": "reject",
+    "firewall.conntrack.tcpTimeout": "13m",
+    "firewall.conntrack.udpTimeout": "4m",
+    "firewall.conntrack.defaultTimeout": "11m",
+    "sshd.listen": "127.0.0.1:2223",
+    "sshd.hostKey": "/data/ssh_host_ed25519_key",
+    "sshd.authorizedUsers": "alice: ssh-ed25519 AAAAC3Nza, ssh-rsa AAAAB3Nza",
+    "sshd.trustedCas": "ssh-ed25519 AAAAtrustedCA"
+  },
+  "flags": {
+    "pki.disconnectInvalid": true,
+    "listen.udpOffloads": true,
+    "punchy.punch": true,
+    "punchy.respond": false,
+    "relay.useRelays": false,
+    "relay.amRelay": true,
+    "tun.dropLocalBroadcast": false,
+    "tun.dropMulticast": true,
+    "logging.disableTimestamp": true,
+    "stats.messageMetrics": true,
+    "stats.lighthouseMetrics": false,
+    "tunnels.dropInactive": true,
+    "firewall.defaultLocalCidrAny": true,
+    "sshd.isEnabled": true
+  },
+  "inbound": [
+    {
+      "id": "in-1",
+      "proto": "tcp",
+      "port": "22",
+      "match": "groups",
+      "value": "admins, ops",
+      "localCidr": "",
+      "caName": "",
+      "caSha": ""
+    },
+    {
+      "id": "in-2",
+      "proto": "icmp",
+      "port": "any",
+      "match": "cidr",
+      "value": "10.0.0.0/8",
+      "localCidr": "192.168.100.0/24",
+      "caName": "corp-ca",
+      "caSha": "abc123"
+    }
+  ],
+  "outbound": [
+    {
+      "id": "out-1",
+      "proto": "udp",
+      "port": "5000-5100",
+      "match": "host",
+      "value": "media-server",
+      "localCidr": "",
+      "caName": "",
+      "caSha": ""
+    }
+  ],
+  "unsafeRoutes": [
+    {
+      "id": "r-install",
+      "route": "192.168.100.0/24",
+      "via": "fd00:1234:5678::9",
+      "mtu": "1300",
+      "metric": "100",
+      "isInstalled": true
+    },
+    {
+      "id": "r-noinstall",
+      "route": "192.168.200.0/24",
+      "via": "fd00:1234:5678::9",
+      "mtu": "",
+      "metric": "",
+      "isInstalled": false
+    }
+  ]
+}

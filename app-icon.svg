@@ -1,0 +1,14 @@
+<svg data-dc-tpl="5" id="main-icon" width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" style="background: transparent; display: block;">
+    <path data-dc-tpl="6" fill="#4AA8CC" d="M 200 40 L 312 40 A 160 160 0 0 1 472 200 L 472 472 L 200 472 A 160 160 0 0 1 40 312 L 40 200 A 160 160 0 0 1 200 40 Z"/>
+    <g data-dc-tpl="7" fill="none" stroke="#FFFFFF" stroke-width="20.8" stroke-linecap="round">
+      <line data-dc-tpl="8" x1="350.5319170337867" y1="180.83588779050663" x2="302.1068832739016" y2="301.48005924256637"/>
+      <line data-dc-tpl="9" x1="302.1068832739016" y1="301.48005924256637" x2="209.8931167260984" y2="218.51994075743366"/>
+      <line data-dc-tpl="10" x1="209.8931167260984" y1="218.51994075743366" x2="161.46808296621325" y2="339.1641122094934"/>
+    </g>
+    <g data-dc-tpl="11" fill="#4AA8CC" stroke="#FFFFFF" stroke-width="20.8">
+      <circle data-dc-tpl="12" cx="350.5319170337867" cy="180.83588779050663" r="31.200000000000003"/>
+      <circle data-dc-tpl="13" cx="302.1068832739016" cy="301.48005924256637" r="31.200000000000003"/>
+      <circle data-dc-tpl="14" cx="209.8931167260984" cy="218.51994075743366" r="31.200000000000003"/>
+      <circle data-dc-tpl="15" cx="161.46808296621325" cy="339.1641122094934" r="31.200000000000003"/>
+    </g>
+  </svg>

@@ -1,0 +1,26 @@
+{
+  "inbound": [
+    {
+      "proto": "icmp",
+      "port": "any",
+      "reason": "ping between nebula hosts"
+    },
+    {
+      "proto": "tcp",
+      "port": "4433",
+      "reason": "messaging and call signaling (TCP on the message port)"
+    },
+    {
+      "proto": "udp",
+      "port": "any",
+      "reason": "WebRTC voice and video media (ephemeral UDP ports)"
+    }
+  ],
+  "outbound": [
+    {
+      "proto": "any",
+      "port": "any",
+      "reason": "everything this device sends"
+    }
+  ]
+}

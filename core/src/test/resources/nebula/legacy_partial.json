@@ -1,0 +1,8 @@
+{
+  "punchy": { "punch": false, "delay": "3s" },
+  "tun": { "mtu": 1200 },
+  "routines": 4,
+  "staticHosts": [{ "nebulaIp": "fd00:1234:5678::9", "underlays": ["203.0.113.9:4242"] }],
+  "firewall": { "inboundAction": "reject", "conntrack": { "tcpTimeout": "1m" } },
+  "customSection": { "keep": true }
+}

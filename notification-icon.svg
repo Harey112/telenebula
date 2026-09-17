@@ -1,0 +1,19 @@
+<svg data-dc-tpl="22" id="notif-icon" width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" style="width: 48px; height: 48px; display: block;">
+        <defs data-dc-tpl="23">
+          <mask data-dc-tpl="24" id="notif-mask">
+                <path data-dc-tpl="25" fill="#FFFFFF" d="M 200 40 L 312 40 A 160 160 0 0 1 472 200 L 472 472 L 200 472 A 160 160 0 0 1 40 312 L 40 200 A 160 160 0 0 1 200 40 Z"/>
+            <g data-dc-tpl="26" stroke="#000000" stroke-width="20.8" stroke-linecap="round" fill="none">
+              <line data-dc-tpl="27" x1="350.5319170337867" y1="180.83588779050663" x2="302.1068832739016" y2="301.48005924256637"/>
+              <line data-dc-tpl="28" x1="302.1068832739016" y1="301.48005924256637" x2="209.8931167260984" y2="218.51994075743366"/>
+              <line data-dc-tpl="29" x1="209.8931167260984" y1="218.51994075743366" x2="161.46808296621325" y2="339.1641122094934"/>
+            </g>
+            <g data-dc-tpl="30" fill="#000000">
+              <circle data-dc-tpl="31" cx="350.5319170337867" cy="180.83588779050663" r="31.200000000000003"/>
+              <circle data-dc-tpl="32" cx="302.1068832739016" cy="301.48005924256637" r="31.200000000000003"/>
+              <circle data-dc-tpl="33" cx="209.8931167260984" cy="218.51994075743366" r="31.200000000000003"/>
+              <circle data-dc-tpl="34" cx="161.46808296621325" cy="339.1641122094934" r="31.200000000000003"/>
+            </g>
+          </mask>
+        </defs>
+        <rect data-dc-tpl="35" x="0" y="0" width="512" height="512" fill="#FFFFFF" mask="url(#notif-mask)"/>
+      </svg>

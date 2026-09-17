@@ -1,0 +1,621 @@
+[
+  {
+    "key": "pki",
+    "title": "PKI",
+    "subtitle": "Blocklist, invalid certificates",
+    "footnote": "CA, certificate and key come from setup. A v2 initiating version only matters once every host carries both certificate versions.",
+    "fields": [
+      {
+        "path": "pki.blocklist",
+        "label": "Blocklist (certificate fingerprints, one per line)",
+        "kind": "fingerprint-lines",
+        "placeholder": "c99d4e65…36c72"
+      },
+      {
+        "path": "pki.disconnectInvalid",
+        "label": "Disconnect invalid certificates",
+        "helper": "Drop tunnels whose certificate expired or became invalid",
+        "isSwitch": true
+      },
+      {
+        "path": "pki.initiatingVersion",
+        "label": "Initiating certificate version",
+        "options": [
+          {
+            "key": "1",
+            "label": "v1"
+          },
+          {
+            "key": "2",
+            "label": "v2"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "key": "staticHosts",
+    "title": "Static hosts",
+    "subtitle": "Fixed addresses besides the lighthouse, DNS re-query",
+    "footnote": "The lighthouse above is always in static_host_map; list additional hosts here.",
+    "fields": [
+      {
+        "path": "staticHosts",
+        "label": "Extra static hosts (nebula IP = endpoint, endpoint; one per line)",
+        "kind": "static-host-lines",
+        "placeholder": "fd00:1234:5678::9 = 203.0.113.9:4242, relay.example.com:4242"
+      },
+      {
+        "path": "staticMap.cadence",
+        "label": "DNS re-query cadence",
+        "kind": "duration",
+        "placeholder": "30s"
+      },
+      {
+        "path": "staticMap.network",
+        "label": "DNS address family",
+        "options": [
+          {
+            "key": "ip4",
+            "label": "IPv4"
+          },
+          {
+            "key": "ip6",
+            "label": "IPv6"
+          },
+          {
+            "key": "ip",
+            "label": "Both"
+          }
+        ]
+      },
+      {
+        "path": "staticMap.lookupTimeout",
+        "label": "DNS lookup timeout",
+        "kind": "duration",
+        "placeholder": "250ms"
+      }
+    ]
+  },
+  {
+    "key": "lighthouse",
+    "title": "Lighthouse",
+    "subtitle": "Report interval, allow lists, advertised addresses",
+    "footnote": "This device is never a lighthouse (am_lighthouse stays off). Allow lists take \"cidr = true|false\"; the most specific rule wins. In the local list an entry without \"/\" is an interface name pattern.",
+    "fields": [
+      {
+        "path": "lighthouse.interval",
+        "label": "Report interval (seconds)",
+        "kind": "number",
+        "min": 1,
+        "max": 3600
+      },
+      {
+        "path": "lighthouse.remoteAllowList",
+        "label": "Remote allow list",
+        "kind": "allow-lines",
+        "placeholder": "172.16.0.0/12 = false"
+      },
+      {
+        "path": "lighthouse.localAllowList",
+        "label": "Local allow list",
+        "kind": "allow-lines",
+        "placeholder": "tun0 = false"
+      },
+      {
+        "path": "lighthouse.advertiseAddrs",
+        "label": "Advertised addresses (ip:port, port 0 = listening port)",
+        "kind": "hostport-lines",
+        "placeholder": "1.2.3.4:0"
+      },
+      {
+        "path": "lighthouse.calculatedRemotes",
+        "label": "Calculated remotes (experimental: nebula cidr, mask cidr, port)",
+        "kind": "calculated-remote-lines",
+        "placeholder": "10.0.10.0/24, 192.168.1.0/24, 4242"
+      }
+    ]
+  },
+  {
+    "key": "listen",
+    "title": "Listen",
+    "subtitle": "UDP socket, buffers, recv_error",
+    "footnote": "Port 0 picks a random port on every start, which the nebula authors recommend for roaming devices. Host, port, batch and offloads apply on the next tunnel start.",
+    "fields": [
+      {
+        "path": "listen.host",
+        "label": "Bind host",
+        "kind": "host",
+        "placeholder": "::"
+      },
+      {
+        "path": "listen.port",
+        "label": "UDP port (0 = random)",
+        "kind": "number",
+        "min": 0,
+        "max": 65535
+      },
+      {
+        "path": "listen.batch",
+        "label": "Batch (packets per syscall)",
+        "kind": "number",
+        "min": 1,
+        "max": 1024
+      },
+      {
+        "path": "listen.readBuffer",
+        "label": "Read buffer bytes (0 = system default)",
+        "kind": "number",
+        "min": 0
+      },
+      {
+        "path": "listen.writeBuffer",
+        "label": "Write buffer bytes (0 = system default)",
+        "kind": "number",
+        "min": 0
+      },
+      {
+        "path": "listen.sendRecvError",
+        "label": "Send recv_error",
+        "options": [
+          {
+            "key": "always",
+            "label": "Always"
+          },
+          {
+            "key": "never",
+            "label": "Never"
+          },
+          {
+            "key": "private",
+            "label": "Private remotes"
+          }
+        ]
+      },
+      {
+        "path": "listen.acceptRecvError",
+        "label": "Accept recv_error",
+        "options": [
+          {
+            "key": "always",
+            "label": "Always"
+          },
+          {
+            "key": "never",
+            "label": "Never"
+          },
+          {
+            "key": "private",
+            "label": "Private remotes"
+          }
+        ]
+      },
+      {
+        "path": "listen.udpOffloads",
+        "label": "UDP offloads (GSO/GRO)",
+        "helper": "Linux only; leave off unless you know the kernel supports it",
+        "isSwitch": true
+      },
+      {
+        "path": "routines",
+        "label": "Routines (tun/UDP reader pairs)",
+        "kind": "number",
+        "min": 1,
+        "max": 16
+      }
+    ]
+  },
+  {
+    "key": "punchy",
+    "title": "NAT punching",
+    "subtitle": "Hole punching, responses, delays",
+    "fields": [
+      {
+        "path": "punchy.punch",
+        "label": "Punch",
+        "helper": "Keep NAT mappings alive with periodic punches",
+        "isSwitch": true
+      },
+      {
+        "path": "punchy.respond",
+        "label": "Respond",
+        "helper": "Connect back out when the other side cannot punch through",
+        "isSwitch": true
+      },
+      {
+        "path": "punchy.delay",
+        "label": "Punch delay",
+        "kind": "duration",
+        "placeholder": "1s"
+      },
+      {
+        "path": "punchy.respondDelay",
+        "label": "Respond delay",
+        "kind": "duration",
+        "placeholder": "5s",
+        "showWhen": {
+          "path": "punchy.respond",
+          "equals": true
+        }
+      }
+    ]
+  },
+  {
+    "key": "crypto",
+    "title": "Cipher and ranges",
+    "subtitle": "Cipher, preferred local ranges",
+    "footnote": "The cipher must be identical on every node and lighthouse of the network.",
+    "fields": [
+      {
+        "path": "cipher",
+        "label": "Cipher",
+        "options": [
+          {
+            "key": "aes",
+            "label": "AES"
+          },
+          {
+            "key": "chachapoly",
+            "label": "ChaCha20-Poly1305"
+          }
+        ]
+      },
+      {
+        "path": "preferredRanges",
+        "label": "Preferred ranges (CIDRs, one per line)",
+        "kind": "cidr-lines",
+        "placeholder": "172.16.0.0/24"
+      }
+    ]
+  },
+  {
+    "key": "relay",
+    "title": "Relay",
+    "subtitle": "Relays for peers behind hard NATs",
+    "footnote": "Leave the list empty to relay through your lighthouse (it must run with am_relay on). This device can also relay for others.",
+    "fields": [
+      {
+        "path": "relay.relays",
+        "label": "Relays (nebula IPs, one per line)",
+        "kind": "ip-lines",
+        "placeholder": "fd00:1234:5678::1"
+      },
+      {
+        "path": "relay.useRelays",
+        "label": "Use relays",
+        "isSwitch": true
+      },
+      {
+        "path": "relay.amRelay",
+        "label": "Act as a relay",
+        "isSwitch": true
+      }
+    ]
+  },
+  {
+    "key": "tun",
+    "title": "Tunnel interface",
+    "subtitle": "MTU, broadcast, routes, unsafe routes",
+    "footnote": "Android provides the tun device, so dev, disabled, offloads and CPU pinning are fixed. Unsafe routes are also installed in the VPN so the OS sends them into the tunnel.",
+    "fields": [
+      {
+        "path": "tun.mtu",
+        "label": "MTU",
+        "kind": "number",
+        "min": 576,
+        "max": 9000
+      },
+      {
+        "path": "tun.dropLocalBroadcast",
+        "label": "Drop local broadcast",
+        "isSwitch": true
+      },
+      {
+        "path": "tun.dropMulticast",
+        "label": "Drop multicast",
+        "isSwitch": true
+      },
+      {
+        "path": "tun.txQueue",
+        "label": "Transmit queue length",
+        "kind": "number",
+        "min": 1
+      },
+      {
+        "path": "tun.routes",
+        "label": "Route MTU overrides (cidr, mtu; one per line)",
+        "kind": "route-mtu-lines",
+        "placeholder": "fd00:1234:5678::/64, 8800"
+      }
+    ],
+    "editor": "unsafe-routes"
+  },
+  {
+    "key": "logging",
+    "title": "Logging",
+    "subtitle": "Format, timestamps",
+    "footnote": "The log level lives under Network → Nebula log level.",
+    "fields": [
+      {
+        "path": "logging.format",
+        "label": "Format",
+        "options": [
+          {
+            "key": "text",
+            "label": "Text"
+          },
+          {
+            "key": "json",
+            "label": "JSON"
+          }
+        ]
+      },
+      {
+        "path": "logging.disableTimestamp",
+        "label": "Disable timestamps",
+        "isSwitch": true
+      }
+    ]
+  },
+  {
+    "key": "stats",
+    "title": "Stats",
+    "subtitle": "Graphite or Prometheus metrics",
+    "fields": [
+      {
+        "path": "stats.type",
+        "label": "Backend",
+        "options": [
+          {
+            "key": "none",
+            "label": "Off"
+          },
+          {
+            "key": "graphite",
+            "label": "Graphite"
+          },
+          {
+            "key": "prometheus",
+            "label": "Prometheus"
+          }
+        ]
+      },
+      {
+        "path": "stats.prefix",
+        "label": "Prefix",
+        "kind": "text",
+        "showWhen": {
+          "path": "stats.type",
+          "equals": "graphite"
+        }
+      },
+      {
+        "path": "stats.protocol",
+        "label": "Protocol (tcp/udp)",
+        "kind": "text",
+        "showWhen": {
+          "path": "stats.type",
+          "equals": "graphite"
+        }
+      },
+      {
+        "path": "stats.host",
+        "label": "Graphite host:port",
+        "kind": "hostport",
+        "showWhen": {
+          "path": "stats.type",
+          "equals": "graphite"
+        }
+      },
+      {
+        "path": "stats.listen",
+        "label": "Listen host:port",
+        "kind": "hostport",
+        "showWhen": {
+          "path": "stats.type",
+          "equals": "prometheus"
+        }
+      },
+      {
+        "path": "stats.path",
+        "label": "Metrics path",
+        "kind": "text",
+        "showWhen": {
+          "path": "stats.type",
+          "equals": "prometheus"
+        }
+      },
+      {
+        "path": "stats.namespace",
+        "label": "Namespace",
+        "kind": "text",
+        "showWhen": {
+          "path": "stats.type",
+          "equals": "prometheus"
+        }
+      },
+      {
+        "path": "stats.subsystem",
+        "label": "Subsystem",
+        "kind": "text",
+        "showWhen": {
+          "path": "stats.type",
+          "equals": "prometheus"
+        }
+      },
+      {
+        "path": "stats.interval",
+        "label": "Interval",
+        "kind": "duration",
+        "placeholder": "10s"
+      },
+      {
+        "path": "stats.messageMetrics",
+        "label": "Message metrics",
+        "isSwitch": true
+      },
+      {
+        "path": "stats.lighthouseMetrics",
+        "label": "Lighthouse metrics",
+        "isSwitch": true
+      }
+    ]
+  },
+  {
+    "key": "handshakes",
+    "title": "Handshakes and tunnels",
+    "subtitle": "Retry timing, buffers, inactive tunnels",
+    "fields": [
+      {
+        "path": "handshakes.tryInterval",
+        "label": "Try interval",
+        "kind": "duration",
+        "placeholder": "100ms"
+      },
+      {
+        "path": "handshakes.retries",
+        "label": "Retries",
+        "kind": "number",
+        "min": 1,
+        "max": 100
+      },
+      {
+        "path": "handshakes.queryBuffer",
+        "label": "Query buffer",
+        "kind": "number",
+        "min": 1
+      },
+      {
+        "path": "handshakes.triggerBuffer",
+        "label": "Trigger buffer",
+        "kind": "number",
+        "min": 1
+      },
+      {
+        "path": "tunnels.dropInactive",
+        "label": "Drop inactive tunnels",
+        "isSwitch": true
+      },
+      {
+        "path": "tunnels.inactivityTimeout",
+        "label": "Inactivity timeout",
+        "kind": "duration",
+        "placeholder": "10m",
+        "showWhen": {
+          "path": "tunnels.dropInactive",
+          "equals": true
+        }
+      }
+    ]
+  },
+  {
+    "key": "firewall",
+    "title": "Firewall",
+    "subtitle": "Actions, connection tracking, rules",
+    "footnote": "Nebula firewalls are default-deny; rules only allow. The locked rules carry what TeleNebula itself needs: TCP on the message port for messaging and signaling, UDP for call media, ICMP for pings.",
+    "fields": [
+      {
+        "path": "firewall.inboundAction",
+        "label": "Inbound action for blocked packets",
+        "options": [
+          {
+            "key": "drop",
+            "label": "Drop"
+          },
+          {
+            "key": "reject",
+            "label": "Reject"
+          }
+        ]
+      },
+      {
+        "path": "firewall.outboundAction",
+        "label": "Outbound action for blocked packets",
+        "options": [
+          {
+            "key": "drop",
+            "label": "Drop"
+          },
+          {
+            "key": "reject",
+            "label": "Reject"
+          }
+        ]
+      },
+      {
+        "path": "firewall.defaultLocalCidrAny",
+        "label": "Rules apply to all unsafe routes (deprecated)",
+        "isSwitch": true
+      },
+      {
+        "path": "firewall.conntrack.tcpTimeout",
+        "label": "TCP conntrack timeout",
+        "kind": "duration",
+        "placeholder": "12m"
+      },
+      {
+        "path": "firewall.conntrack.udpTimeout",
+        "label": "UDP conntrack timeout",
+        "kind": "duration",
+        "placeholder": "3m"
+      },
+      {
+        "path": "firewall.conntrack.defaultTimeout",
+        "label": "Default conntrack timeout",
+        "kind": "duration",
+        "placeholder": "10m"
+      }
+    ],
+    "editor": "firewall"
+  },
+  {
+    "key": "sshd",
+    "title": "SSH debug console",
+    "subtitle": "Off by default",
+    "footnote": "Exposes nebula diagnostics over SSH. The host key is a file path on this device; port 22 is refused by nebula.",
+    "fields": [
+      {
+        "path": "sshd.isEnabled",
+        "label": "Enable sshd",
+        "isSwitch": true
+      },
+      {
+        "path": "sshd.listen",
+        "label": "Listen host:port",
+        "kind": "hostport",
+        "showWhen": {
+          "path": "sshd.isEnabled",
+          "equals": true
+        }
+      },
+      {
+        "path": "sshd.hostKey",
+        "label": "Host key file path",
+        "kind": "text",
+        "showWhen": {
+          "path": "sshd.isEnabled",
+          "equals": true
+        }
+      },
+      {
+        "path": "sshd.authorizedUsers",
+        "label": "Authorized users (user: key, key; one per line)",
+        "kind": "ssh-user-lines",
+        "placeholder": "alice: ssh-ed25519 AAAA…",
+        "showWhen": {
+          "path": "sshd.isEnabled",
+          "equals": true
+        }
+      },
+      {
+        "path": "sshd.trustedCas",
+        "label": "Trusted SSH CA public keys (one per line)",
+        "kind": "lines",
+        "showWhen": {
+          "path": "sshd.isEnabled",
+          "equals": true
+        }
+      }
+    ]
+  }
+]

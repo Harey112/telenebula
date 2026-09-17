@@ -1,0 +1,7 @@
+<resources>
+  <!-- Window colours only; every on-screen colour is a Compose token in ui/theme. -->
+  <color name="window_background">#F6F7F9</color>
+  <color name="splash_background">#F6F7F9</color>
+  <!-- Adaptive-icon background: full-bleed, the launcher supplies the mask shape. -->
+  <color name="ic_launcher_background">#4AA8CC</color>
+</resources>

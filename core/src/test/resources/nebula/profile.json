@@ -1,0 +1,104 @@
+{
+  "certName": "alice-phone",
+  "overlayIp": "fd00:1234:5678::2",
+  "networks": ["fd00:1234:5678::2/64"],
+  "caPem": "-----BEGIN NEBULA CERTIFICATE-----\nCkQKEnRlbGVuZWJ1bGEtdGVzdC1jYRIKZmQwMDoxMjM0OjU2Nzg6OjEvNjQ=\n-----END NEBULA CERTIFICATE-----\n",
+  "certPem": "-----BEGIN NEBULA CERTIFICATE-----\nCk8KC2FsaWNlLXBob25lEg1mZDAwOjEyMzQ6NTY3ODo6Mi82NA==\n-----END NEBULA CERTIFICATE-----\n",
+  "certFingerprint": "3f2a9c1d4e5b6a7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f7",
+  "certNotAfter": "2027-09-11T00:00:00Z",
+  "lighthouses": [
+    { "nebulaIp": "fd00:1234:5678::1", "underlay": "203.0.113.10:4242" },
+    { "nebulaIp": "fd00:1234:5678::a", "underlay": "lh2.example.com:4242" }
+  ],
+  "listenPort": 4242,
+  "msgPort": 4433,
+  "nebula": {
+    "pki": {
+      "blocklist": ["c99d4e650533b92061b09918e838a5a0a6aaee21eed1d12fd937682865936c72"],
+      "disconnectInvalid": true,
+      "initiatingVersion": 2
+    },
+    "staticHosts": [
+      { "nebulaIp": "fd00:1234:5678::9", "underlays": ["203.0.113.9:4242", "relay.example.com:4242"] }
+    ],
+    "staticMap": { "cadence": "45s", "network": "ip", "lookupTimeout": "500ms" },
+    "lighthouse": {
+      "interval": 30,
+      "remoteAllowList": [
+        { "target": "172.16.0.0/12", "isAllowed": false },
+        { "target": "0.0.0.0/0", "isAllowed": true }
+      ],
+      "localAllowList": [
+        { "target": "tun0", "isAllowed": false },
+        { "target": "10.0.0.0/8", "isAllowed": true }
+      ],
+      "advertiseAddrs": ["1.2.3.4:0"],
+      "calculatedRemotes": [
+        { "cidr": "10.0.10.0/24", "mask": "192.168.1.0/24", "port": 4242 },
+        { "cidr": "10.0.10.0/24", "mask": "192.168.2.0/24", "port": 4243 }
+      ]
+    },
+    "listen": {
+      "host": "0.0.0.0",
+      "port": 0,
+      "batch": 128,
+      "readBuffer": 10485760,
+      "writeBuffer": 0,
+      "sendRecvError": "private",
+      "acceptRecvError": "never",
+      "udpOffloads": true
+    },
+    "routines": 2,
+    "punchy": { "punch": true, "respond": false, "delay": "2s", "respondDelay": "7s" },
+    "cipher": "chachapoly",
+    "preferredRanges": ["172.16.0.0/24", "fd00::/8"],
+    "sshd": {
+      "isEnabled": true,
+      "listen": "127.0.0.1:2223",
+      "hostKey": "/data/ssh_host_ed25519_key",
+      "authorizedUsers": [{ "user": "alice", "keys": ["ssh-ed25519 AAAAC3Nza", "ssh-rsa AAAAB3Nza"] }],
+      "trustedCas": ["ssh-ed25519 AAAAtrustedCA"]
+    },
+    "relay": { "relays": ["fd00:1234:5678::7"], "amRelay": true, "useRelays": false },
+    "tun": {
+      "dropLocalBroadcast": false,
+      "dropMulticast": true,
+      "txQueue": 1000,
+      "mtu": 1400,
+      "routes": [{ "route": "fd00:1234:5678::/64", "mtu": 8800 }],
+      "unsafeRoutes": [
+        { "id": "r-install", "route": "192.168.100.0/24", "via": "fd00:1234:5678::9", "mtu": "1300", "metric": "100", "isInstalled": true },
+        { "id": "r-noinstall", "route": "192.168.200.0/24", "via": "fd00:1234:5678::9", "mtu": "", "metric": "", "isInstalled": false }
+      ]
+    },
+    "logging": { "format": "json", "disableTimestamp": true },
+    "stats": {
+      "type": "graphite",
+      "prefix": "tn",
+      "protocol": "udp",
+      "host": "127.0.0.1:2003",
+      "interval": "30s",
+      "listen": "127.0.0.1:8080",
+      "path": "/metrics",
+      "namespace": "prometheusns",
+      "subsystem": "nebula",
+      "messageMetrics": true,
+      "lighthouseMetrics": false
+    },
+    "handshakes": { "tryInterval": "200ms", "retries": 10, "queryBuffer": 128, "triggerBuffer": 32 },
+    "tunnels": { "dropInactive": true, "inactivityTimeout": "15m" },
+    "firewall": {
+      "outboundAction": "reject",
+      "inboundAction": "drop",
+      "defaultLocalCidrAny": true,
+      "conntrack": { "tcpTimeout": "13m", "udpTimeout": "4m", "defaultTimeout": "11m" },
+      "inbound": [
+        { "id": "in-1", "proto": "tcp", "port": "22", "match": "groups", "value": "admins, ops", "localCidr": "", "caName": "", "caSha": "" },
+        { "id": "in-2", "proto": "icmp", "port": "any", "match": "cidr", "value": "10.0.0.0/8", "localCidr": "192.168.100.0/24", "caName": "corp-ca", "caSha": "abc123" }
+      ],
+      "outbound": [
+        { "id": "out-1", "proto": "udp", "port": "5000-5100", "match": "host", "value": "media-server", "localCidr": "", "caName": "", "caSha": "" }
+      ]
+    }
+  }
+}

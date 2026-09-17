@@ -1,0 +1,105 @@
+{
+  "pki": {
+    "blocklist": [],
+    "disconnectInvalid": false,
+    "initiatingVersion": 1
+  },
+  "staticHosts": [
+    {
+      "nebulaIp": "fd00:1234:5678::9",
+      "underlays": [
+        "203.0.113.9:4242"
+      ]
+    }
+  ],
+  "staticMap": {
+    "cadence": "30s",
+    "network": "ip4",
+    "lookupTimeout": "250ms"
+  },
+  "lighthouse": {
+    "interval": 60,
+    "remoteAllowList": [],
+    "localAllowList": [],
+    "advertiseAddrs": [],
+    "calculatedRemotes": []
+  },
+  "listen": {
+    "host": "::",
+    "port": 4242,
+    "batch": 64,
+    "readBuffer": 0,
+    "writeBuffer": 0,
+    "sendRecvError": "always",
+    "acceptRecvError": "always",
+    "udpOffloads": false
+  },
+  "routines": 4,
+  "punchy": {
+    "punch": false,
+    "respond": true,
+    "delay": "3s",
+    "respondDelay": "5s"
+  },
+  "cipher": "aes",
+  "preferredRanges": [],
+  "sshd": {
+    "isEnabled": false,
+    "listen": "127.0.0.1:2222",
+    "hostKey": "",
+    "authorizedUsers": [],
+    "trustedCas": []
+  },
+  "relay": {
+    "relays": [],
+    "amRelay": false,
+    "useRelays": true
+  },
+  "tun": {
+    "dropLocalBroadcast": true,
+    "dropMulticast": true,
+    "txQueue": 500,
+    "mtu": 1200,
+    "routes": [],
+    "unsafeRoutes": []
+  },
+  "logging": {
+    "format": "text",
+    "disableTimestamp": false
+  },
+  "stats": {
+    "type": "none",
+    "prefix": "nebula",
+    "protocol": "tcp",
+    "host": "127.0.0.1:9999",
+    "interval": "10s",
+    "listen": "127.0.0.1:8080",
+    "path": "/metrics",
+    "namespace": "prometheusns",
+    "subsystem": "nebula",
+    "messageMetrics": false,
+    "lighthouseMetrics": false
+  },
+  "handshakes": {
+    "tryInterval": "100ms",
+    "retries": 20,
+    "queryBuffer": 64,
+    "triggerBuffer": 64
+  },
+  "tunnels": {
+    "dropInactive": false,
+    "inactivityTimeout": "10m"
+  },
+  "firewall": {
+    "outboundAction": "drop",
+    "inboundAction": "reject",
+    "defaultLocalCidrAny": false,
+    "conntrack": {
+      "tcpTimeout": "1m",
+      "udpTimeout": "3m",
+      "defaultTimeout": "10m"
+    },
+    "inbound": [],
+    "outbound": []
+  }
+}

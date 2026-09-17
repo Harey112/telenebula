@@ -1,0 +1,25 @@
+# Gradle / Android Studio
+.gradle/
+build/
+*/build/
+.kotlin/
+local.properties
+keystore.properties
+*.iml
+.idea/
+captures/
+.cxx/
+
+# Rust build output (the .so files under core/src/main/jniLibs are committed instead)
+/native/target
+
+# secrets: local env, signing keys, nebula private keys/certs
+.env*.local
+*.jks
+*.keystore
+*.p12
+*.key
+*.pem
+
+# local tool state
+.claude/scheduled_tasks.lock

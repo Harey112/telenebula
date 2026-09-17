@@ -1,0 +1,165 @@
+name: android
+
+# APKs are built for tags only. Two tag shapes, both read by the in-app update check
+# (it asks GitHub for releases/latest, which skips pre-releases):
+#   v1.4.0          -> full release, becomes "Latest" and is offered to everyone
+#   v1.4.0-beta.1   -> pre-release (any -suffix), downloadable but never offered
+# Pull requests run lint and the unit tests; they produce no APK.
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    name: Gradle lint and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-37.2 build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Size Gradle for the runner
+        run: |
+          mkdir -p ~/.gradle
+          printf 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8\nkotlin.daemon.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m\norg.gradle.workers.max=4\n' > ~/.gradle/gradle.properties
+      - name: Build
+        run: ./gradlew --no-daemon --console=plain lint testDebugUnitTest
+
+  release:
+    name: Release APKs
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [checks]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # the changelog needs the tag that came before this one
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-37.2 build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Read the tag
+        id: tag
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          # a semver suffix (-beta.1, -rc.2, …) marks the build as a pre-release
+          case "$version" in
+            *-*) prerelease=true ;;
+            *)   prerelease=false ;;
+          esac
+          # the same minutes-since-2024 code local builds use, so a release is never a downgrade
+          code=$(( ( $(date +%s) - 1704067200 ) / 60 ))
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "prerelease=$prerelease"
+            echo "code=$code"
+          } >> "$GITHUB_OUTPUT"
+
+      # the secrets context is not allowed in `if`, so the shell decides
+      - name: Keystores from secrets
+        run: |
+          if [ -n "$TN_DEBUG_KEYSTORE_B64" ]; then
+            echo "$TN_DEBUG_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/debug.keystore"
+            echo "TN_DEBUG_KEYSTORE_FILE=$RUNNER_TEMP/debug.keystore" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No TN_DEBUG_KEYSTORE_B64 secret; debug-signed builds use the runner's own key and will not install over a test device."
+          fi
+          if [ -n "$TN_KEYSTORE_B64" ]; then
+            echo "$TN_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "TN_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No TN_KEYSTORE_B64 secret; the APKs are signed with the debug key and cannot be installed over a released build."
+            echo "TN_ALLOW_DEBUG_SIGNED_RELEASE=1" >> "$GITHUB_ENV"
+          fi
+        env:
+          TN_DEBUG_KEYSTORE_B64: ${{ secrets.TN_DEBUG_KEYSTORE_B64 }}
+          TN_KEYSTORE_B64: ${{ secrets.TN_KEYSTORE_B64 }}
+
+      - name: Size Gradle for the runner
+        run: |
+          mkdir -p ~/.gradle
+          printf 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8\nkotlin.daemon.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m\norg.gradle.workers.max=4\n' > ~/.gradle/gradle.properties
+      # lint and the tests already ran in the checks job this one depends on
+      - name: Build
+        run: ./gradlew --no-daemon --console=plain assembleRelease
+        env:
+          TN_VERSION_CODE: ${{ steps.tag.outputs.code }}
+          TN_VERSION_NAME: ${{ steps.tag.outputs.version }}
+          TN_KEYSTORE_PASSWORD: ${{ secrets.TN_KEYSTORE_PASSWORD }}
+          TN_KEY_ALIAS: ${{ secrets.TN_KEY_ALIAS }}
+          TN_KEY_PASSWORD: ${{ secrets.TN_KEY_PASSWORD }}
+          TN_DEBUG_KEYSTORE_PASSWORD: ${{ secrets.TN_DEBUG_KEYSTORE_PASSWORD }}
+          TN_DEBUG_KEY_ALIAS: ${{ secrets.TN_DEBUG_KEY_ALIAS }}
+          TN_DEBUG_KEY_PASSWORD: ${{ secrets.TN_DEBUG_KEY_PASSWORD }}
+
+      - name: Name the APKs after the release
+        id: apks
+        run: |
+          set -eu
+          mkdir -p dist
+          version='${{ steps.tag.outputs.version }}'
+          for abi in arm64-v8a armeabi-v7a x86_64 universal; do
+            src="app/build/outputs/apk/release/app-$abi-release.apk"
+            [ -f "$src" ] || { echo "missing $src"; exit 1; }
+            cp "$src" "dist/telenebula-$version-$abi.apk"
+          done
+          ( cd dist && sha256sum ./*.apk > SHA256SUMS.txt )
+          ls -l dist
+
+      - name: Collect what changed
+        id: notes
+        run: |
+          set -eu
+          tag='${{ steps.tag.outputs.tag }}'
+          previous="$(git describe --tags --abbrev=0 --exclude="$tag" "$tag^" 2>/dev/null || true)"
+          {
+            echo "## What changed"
+            echo
+            if [ -n "$previous" ]; then
+              git log --no-merges --pretty=format:'- %s (%h)' "$previous..$tag"
+              echo
+              echo
+              echo "**Full changelog:** https://github.com/${GITHUB_REPOSITORY}/compare/$previous...$tag"
+            else
+              echo "First release."
+            fi
+            echo
+            echo "## Which APK"
+            echo
+            echo "| File | Install it when |"
+            echo "| --- | --- |"
+            echo "| \`telenebula-${{ steps.tag.outputs.version }}-arm64-v8a.apk\` | Any phone from the last several years. Take this one. |"
+            echo "| \`telenebula-${{ steps.tag.outputs.version }}-armeabi-v7a.apk\` | Older 32-bit ARM phones. |"
+            echo "| \`telenebula-${{ steps.tag.outputs.version }}-x86_64.apk\` | Emulators and x86 tablets. |"
+            echo "| \`telenebula-${{ steps.tag.outputs.version }}-universal.apk\` | You are not sure. Works everywhere, roughly three times the size. |"
+            echo
+            echo "Verify a download against \`SHA256SUMS.txt\` before installing."
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create '${{ steps.tag.outputs.tag }}' dist/* \
+            --title 'TeleNebula ${{ steps.tag.outputs.version }}' \
+            --notes-file release-notes.md \
+            ${{ steps.tag.outputs.prerelease == 'true' && '--prerelease' || '--latest' }}

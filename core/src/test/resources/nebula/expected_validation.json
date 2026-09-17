@@ -1,0 +1,350 @@
+{
+  "invalidDraft": {
+    "values": {
+      "pki.blocklist": "c99d4e650533b92061b09918e838a5a0a6aaee21eed1d12fd937682865936c72\nzz",
+      "pki.initiatingVersion": "1",
+      "staticHosts": "fd00::9 = 203.0.113.9:4242\nnot-an-ip = 1.2.3.4:1",
+      "staticMap.cadence": "30s",
+      "staticMap.network": "ip4",
+      "staticMap.lookupTimeout": "250ms",
+      "lighthouse.interval": "12.5",
+      "lighthouse.remoteAllowList": "172.16.0.0/12 = maybe",
+      "lighthouse.localAllowList": "172.16.0.0/33 = true",
+      "lighthouse.advertiseAddrs": "1.2.3.4:0\n1.2.3.4",
+      "lighthouse.calculatedRemotes": "10.0.10.0/24, 192.168.1.0/24, 99999",
+      "listen.host": "bad host!",
+      "listen.port": "70000",
+      "listen.batch": "0",
+      "listen.readBuffer": "0",
+      "listen.writeBuffer": "0",
+      "listen.sendRecvError": "always",
+      "listen.acceptRecvError": "always",
+      "routines": "1",
+      "punchy.delay": "5 seconds",
+      "punchy.respondDelay": "5s",
+      "cipher": "aes",
+      "preferredRanges": "10.0.0.0/8\n10.0.0.0/33",
+      "relay.relays": "fd00::1\nnot-an-ip",
+      "tun.mtu": "1300",
+      "tun.txQueue": "500",
+      "tun.routes": "fd00:1234:5678::/64, big",
+      "logging.format": "text",
+      "stats.type": "none",
+      "stats.prefix": "nebula",
+      "stats.protocol": "tcp",
+      "stats.host": "graphite.example.com",
+      "stats.listen": "127.0.0.1:8080",
+      "stats.path": "/metrics",
+      "stats.namespace": "prometheusns",
+      "stats.subsystem": "nebula",
+      "stats.interval": "10s",
+      "handshakes.tryInterval": "100ms",
+      "handshakes.retries": "20",
+      "handshakes.queryBuffer": "64",
+      "handshakes.triggerBuffer": "64",
+      "tunnels.inactivityTimeout": "10m",
+      "firewall.inboundAction": "drop",
+      "firewall.outboundAction": "drop",
+      "firewall.conntrack.tcpTimeout": "12m",
+      "firewall.conntrack.udpTimeout": "3m",
+      "firewall.conntrack.defaultTimeout": "10m",
+      "sshd.listen": "127.0.0.1:2222",
+      "sshd.hostKey": "",
+      "sshd.authorizedUsers": "alice:",
+      "sshd.trustedCas": ""
+    },
+    "flags": {
+      "pki.disconnectInvalid": false,
+      "listen.udpOffloads": false,
+      "punchy.punch": true,
+      "punchy.respond": true,
+      "relay.useRelays": true,
+      "relay.amRelay": false,
+      "tun.dropLocalBroadcast": true,
+      "tun.dropMulticast": true,
+      "logging.disableTimestamp": false,
+      "stats.messageMetrics": false,
+      "stats.lighthouseMetrics": false,
+      "tunnels.dropInactive": false,
+      "firewall.defaultLocalCidrAny": false,
+      "sshd.isEnabled": false
+    },
+    "inbound": [
+      {
+        "id": "in-bad-port",
+        "proto": "tcp",
+        "port": "80-",
+        "match": "host",
+        "value": "any",
+        "localCidr": "",
+        "caName": "",
+        "caSha": ""
+      }
+    ],
+    "outbound": [
+      {
+        "id": "out-bad-cidr",
+        "proto": "tcp",
+        "port": "any",
+        "match": "cidr",
+        "value": "10.0.0.0/40",
+        "localCidr": "",
+        "caName": "",
+        "caSha": ""
+      }
+    ],
+    "unsafeRoutes": [
+      {
+        "id": "route-bad-via",
+        "route": "10.0.0.0/8",
+        "via": "nowhere",
+        "mtu": "",
+        "metric": "",
+        "isInstalled": true
+      }
+    ]
+  },
+  "draftErrors": {
+    "pki.blocklist": "Not a 64-hex fingerprint: zz",
+    "staticHosts": "Use \"nebula ip = endpoint, endpoint\": not-an-ip = 1.2.3.4:1",
+    "lighthouse.interval": "Enter a whole number",
+    "lighthouse.remoteAllowList": "Use \"target = true|false\": 172.16.0.0/12 = maybe",
+    "lighthouse.localAllowList": "Not a CIDR: 172.16.0.0/33",
+    "lighthouse.advertiseAddrs": "Not host:port: 1.2.3.4",
+    "lighthouse.calculatedRemotes": "Bad port: 99999",
+    "listen.host": "Enter an IP address or host name",
+    "listen.port": "Maximum is 65535",
+    "listen.batch": "Minimum is 1",
+    "punchy.delay": "Use a duration like 250ms, 1s, 10m or 1h",
+    "preferredRanges": "Not a CIDR: 10.0.0.0/33",
+    "relay.relays": "Not an IP address: not-an-ip",
+    "tun.routes": "Use \"cidr, mtu\": fd00:1234:5678::/64, big",
+    "stats.host": "Use host:port",
+    "sshd.authorizedUsers": "No key for alice",
+    "in-bad-port": "Port must be any, a number, a range like 200-901, or fragment",
+    "out-bad-cidr": "Not a CIDR: 10.0.0.0/40",
+    "route-bad-via": "Via is not a nebula IP: nowhere"
+  },
+  "rules": [
+    {
+      "rule": {
+        "id": "ok-host",
+        "proto": "tcp",
+        "port": "any",
+        "match": "host",
+        "value": "any",
+        "localCidr": "",
+        "caName": "",
+        "caSha": ""
+      },
+      "error": null
+    },
+    {
+      "rule": {
+        "id": "ok-icmp-any-port",
+        "proto": "icmp",
+        "port": "garbage",
+        "match": "host",
+        "value": "any",
+        "localCidr": "",
+        "caName": "",
+        "caSha": ""
+      },
+      "error": null
+    },
+    {
+      "rule": {
+        "id": "ok-range",
+        "proto": "tcp",
+        "port": "200-901",
+        "match": "groups",
+        "value": "a, b",
+        "localCidr": "",
+        "caName": "",
+        "caSha": ""
+      },
+      "error": null
+    },
+    {
+      "rule": {
+        "id": "bad-port",
+        "proto": "tcp",
+        "port": "99999-1",
+        "match": "host",
+        "value": "any",
+        "localCidr": "",
+        "caName": "",
+        "caSha": ""
+      },
+      "error": null
+    },
+    {
+      "rule": {
+        "id": "bad-port-text",
+        "proto": "tcp",
+        "port": "http",
+        "match": "host",
+        "value": "any",
+        "localCidr": "",
+        "caName": "",
+        "caSha": ""
+      },
+      "error": "Port must be any, a number, a range like 200-901, or fragment"
+    },
+    {
+      "rule": {
+        "id": "empty-group",
+        "proto": "tcp",
+        "port": "any",
+        "match": "group",
+        "value": "  ",
+        "localCidr": "",
+        "caName": "",
+        "caSha": ""
+      },
+      "error": "Enter a group"
+    },
+    {
+      "rule": {
+        "id": "bad-cidr",
+        "proto": "tcp",
+        "port": "any",
+        "match": "cidr",
+        "value": "10.0.0.0",
+        "localCidr": "",
+        "caName": "",
+        "caSha": ""
+      },
+      "error": "Not a CIDR: 10.0.0.0"
+    },
+    {
+      "rule": {
+        "id": "ok-cidr-any",
+        "proto": "tcp",
+        "port": "any",
+        "match": "cidr",
+        "value": "any",
+        "localCidr": "",
+        "caName": "",
+        "caSha": ""
+      },
+      "error": null
+    },
+    {
+      "rule": {
+        "id": "bad-local-cidr",
+        "proto": "tcp",
+        "port": "any",
+        "match": "host",
+        "value": "any",
+        "localCidr": " 192.168.0.0 ",
+        "caName": "",
+        "caSha": ""
+      },
+      "error": "Local CIDR is not a CIDR:  192.168.0.0 "
+    },
+    {
+      "rule": {
+        "id": "ok-local-cidr-any",
+        "proto": "tcp",
+        "port": "any",
+        "match": "host",
+        "value": "any",
+        "localCidr": "any",
+        "caName": "",
+        "caSha": ""
+      },
+      "error": null
+    }
+  ],
+  "routes": [
+    {
+      "route": {
+        "id": "ok",
+        "route": "10.0.0.0/8",
+        "via": "fd00:1234:5678::9",
+        "mtu": "",
+        "metric": "",
+        "isInstalled": true
+      },
+      "error": null
+    },
+    {
+      "route": {
+        "id": "ok-mtu-metric",
+        "route": "10.0.0.0/8",
+        "via": "fd00:1234:5678::9",
+        "mtu": " 1300 ",
+        "metric": "100",
+        "isInstalled": true
+      },
+      "error": null
+    },
+    {
+      "route": {
+        "id": "empty-route",
+        "route": "",
+        "via": "fd00:1234:5678::9",
+        "mtu": "",
+        "metric": "",
+        "isInstalled": true
+      },
+      "error": "Route is not a CIDR: (empty)"
+    },
+    {
+      "route": {
+        "id": "bad-route",
+        "route": "10.0.0.0",
+        "via": "fd00:1234:5678::9",
+        "mtu": "",
+        "metric": "",
+        "isInstalled": true
+      },
+      "error": "Route is not a CIDR: 10.0.0.0"
+    },
+    {
+      "route": {
+        "id": "empty-via",
+        "route": "10.0.0.0/8",
+        "via": "",
+        "mtu": "",
+        "metric": "",
+        "isInstalled": true
+      },
+      "error": "Via is not a nebula IP: (empty)"
+    },
+    {
+      "route": {
+        "id": "bad-via",
+        "route": "10.0.0.0/8",
+        "via": "fd00::/64",
+        "mtu": "",
+        "metric": "",
+        "isInstalled": true
+      },
+      "error": "Via is not a nebula IP: fd00::/64"
+    },
+    {
+      "route": {
+        "id": "bad-mtu",
+        "route": "10.0.0.0/8",
+        "via": "fd00:1234:5678::9",
+        "mtu": "13a0",
+        "metric": "",
+        "isInstalled": true
+      },
+      "error": "MTU must be a number"
+    },
+    {
+      "route": {
+        "id": "bad-metric",
+        "route": "10.0.0.0/8",
+        "via": "fd00:1234:5678::9",
+        "mtu": "",
+        "metric": "-1",
+        "isInstalled": true
+      },
+      "error": "Metric must be a number"
+    }
+  ]
+}
