@@ -183,7 +183,7 @@ fun RootShell(activity: MainActivity) {
                                     viewModel(key = key.peerIp) {
                                         ChatViewModel(
                                             key.peerIp, activity.applicationContext, graph.core, graph.runtime, graph.prefs, graph.typing, graph.peerPresence, graph.transfers,
-                                            graph.peerQueues, graph.chatSearch, graph.gateway, graph.attachments, graph.openWith, graph.viewer, graph.callEngine, graph.sheets,
+                                            graph.peerQueues, graph.chatSearch, graph.gateway, graph.attachments, graph.openWith, graph.viewer, graph.voicePlayer, graph.voiceRecorder, graph.callEngine, graph.sheets,
                                             graph.notices, navigator,
                                         )
                                     },

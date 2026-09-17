@@ -171,6 +171,17 @@ class EngineLoopbackTest {
     }
 
     @Test
+    fun `an attachment's audio length travels with it`() = runBlocking {
+        val (a, b) = pair()
+        val source = File(scratch, "alice/attachments/clip.m4a").apply { writeBytes(ByteArray(2_048)) }
+        a.engine.outbox.sendAttachment(b.ip, source.path, MessageAttachment(name = "Voice message.m4a", mime = "audio/mp4", size = 2_048, durationMs = 4_200), null)
+        waitFor("the clip to land") { b.store.getMessages(a.ip, 10).firstOrNull()?.attachment?.uri != null }
+        val got = b.store.getMessages(a.ip, 10).single().attachment
+        assertEquals(4_200L, got?.durationMs)
+        assertEquals("audio/mp4", got?.mime)
+    }
+
+    @Test
     fun `a text message is delivered, acked and announced`() = runBlocking {
         val (a, b) = pair()
         a.engine.outbox.sendText(b.ip, "hello over the overlay", null)

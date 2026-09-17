@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.telenebula.app.platform.ActionQueue
+import com.telenebula.app.platform.VoicePlayback
 import com.telenebula.app.platform.Format
 import com.telenebula.app.ui.icons.Icon
 import com.telenebula.app.ui.icons.TnIcon
@@ -282,6 +283,8 @@ fun MessageBubble(
     onDeclineOffer: (ChatMessage) -> Unit,
     /** room left on this device, so an offer too large to fit can say so before it is taken */
     freeBytes: Long,
+    voicePlayback: VoicePlayback? = null,
+    onToggleVoice: (ChatMessage) -> Unit = {},
 ) {
     val colors = TnTheme.colors
     val mine = msg.direction == MessageDirection.OUT
@@ -417,6 +420,7 @@ fun MessageBubble(
                     )
                 } else {
                     val source = remember(msg.attachment) { msg.attachment?.mediaSource() }
+                    val voiceAttachment = msg.attachment?.takeIf { it.mime.startsWith("audio/") }
                     // an unopenable row must not take the tap, or the bubble never opens its details
                     val canOpen = source != null
                     val openModifier = if (canOpen) {
@@ -462,7 +466,16 @@ fun MessageBubble(
                             }
                             if (!isBleeding) Box(Modifier.height(5.dp))
                         }
-                        MessageKind.FILE -> AttachmentLabel(
+                        MessageKind.FILE -> if (voiceAttachment != null) VoiceClip(
+                            attachment = voiceAttachment,
+                            playback = voicePlayback,
+                            canPlay = canOpen,
+                            ink = ink,
+                            inkMuted = inkMuted,
+                            inkSurface = inkSurface,
+                            onToggle = { onToggleVoice(msg) },
+                            onLongClick = { onLongClick(msg) },
+                        ) else AttachmentLabel(
                             name = msg.attachment?.name ?: "File",
                             detail = Format.bytes(msg.attachment?.size ?: 0) + if (canOpen) " · Tap to open" else " · not on this device",
                             ink = ink,
@@ -587,4 +600,56 @@ private fun BubbleDetails(
 private fun maxBubbleWidth(): androidx.compose.ui.unit.Dp {
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     return (configuration.screenWidthDp * 0.82f).dp
+}
+
+/** A voice clip: play or pause, a position bar, and the length before anything is played. */
+@Composable
+private fun VoiceClip(
+    attachment: MessageAttachment,
+    playback: VoicePlayback?,
+    canPlay: Boolean,
+    ink: Color,
+    inkMuted: Color,
+    inkSurface: Color,
+    onToggle: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val durationMs = playback?.durationMs?.takeIf { it > 0 } ?: attachment.durationMs ?: 0L
+    val positionMs = playback?.positionMs ?: 0L
+    val isPlaying = playback?.isPlaying == true
+    val fraction = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+    Row(
+        modifier = Modifier
+            .widthIn(min = 200.dp, max = 260.dp)
+            .combinedClickable(enabled = canPlay, role = Role.Button, onClick = onToggle, onLongClick = onLongClick)
+            .semantics {
+                contentDescription = when {
+                    !canPlay -> "Voice message, not on this device"
+                    isPlaying -> "Pause voice message"
+                    else -> "Play voice message"
+                }
+            }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(inkSurface), contentAlignment = Alignment.Center) {
+            Icon(if (isPlaying) TnIcon.PAUSE else TnIcon.PLAY, tint = if (canPlay) ink else inkMuted, size = 18.dp)
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(inkSurface)) {
+                Box(modifier = Modifier.fillMaxWidth(fraction).height(4.dp).clip(CircleShape).background(ink))
+            }
+            Text(
+                when {
+                    !canPlay -> "Voice message · not on this device"
+                    positionMs > 0 || isPlaying -> "${Format.clockMs(positionMs)} / ${Format.clockMs(durationMs)}"
+                    durationMs > 0 -> Format.clockMs(durationMs)
+                    else -> "Voice message"
+                },
+                style = TnType.caption,
+                color = inkMuted,
+            )
+        }
+    }
 }

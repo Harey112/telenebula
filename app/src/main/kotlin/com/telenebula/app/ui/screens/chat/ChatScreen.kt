@@ -244,6 +244,8 @@ private fun MessageList(state: ChatUiState, actions: ChatActions, modifier: Modi
             isLoadingOlder = state.isLoadingOlder,
             onReachOlder = actions::loadOlder,
             onReachNewest = actions::reachedNewest,
+            voicePlayback = state.voicePlayback,
+            onToggleVoice = actions::toggleVoice,
             )
             if (state.isDetachedFromLatest) {
                 Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = TnSpace.lg)) {
@@ -303,6 +305,10 @@ private fun Composer(state: ChatUiState, actions: ChatActions) {
         }
         return
     }
+    if (state.isRecording) {
+        RecordingBar(label = state.recordingLabel, onCancel = actions::cancelVoiceMessage, onSend = actions::sendVoiceMessage)
+        return
+    }
     Row(modifier = Modifier.fillMaxWidth().padding(TnSpace.sm), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(TnSpace.sm)) {
         Row(
             modifier = Modifier
@@ -331,7 +337,7 @@ private fun Composer(state: ChatUiState, actions: ChatActions) {
                     }
                 },
             )
-            Icon(TnIcon.ATTACH, tint = colors.textMuted, size = 23.dp, contentDescription = "Attach", modifier = Modifier.clickable(role = Role.Button, onClick = actions::openAttachSheet))
+            Icon(TnIcon.SQUARE_PLUS, tint = colors.textMuted, size = 23.dp, contentDescription = "Add to message", modifier = Modifier.clickable(role = Role.Button, onClick = actions::openAttachSheet))
         }
         Box(
             modifier = Modifier
@@ -347,6 +353,41 @@ private fun Composer(state: ChatUiState, actions: ChatActions) {
 }
 
 private class ComposerNotice(val message: String, val action: String, val onAction: () -> Unit)
+
+/** Takes the composer's place while a voice message records: the running time, cancel, send. */
+@Composable
+private fun RecordingBar(label: String, onCancel: () -> Unit, onSend: () -> Unit) {
+    val colors = TnTheme.colors
+    Row(modifier = Modifier.fillMaxWidth().padding(TnSpace.sm), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TnSpace.sm)) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(TnRadius.lg + 6.dp))
+                .background(colors.surfaceRaised)
+                .padding(horizontal = TnSpace.md, vertical = TnSpace.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(TnSpace.md),
+        ) {
+            Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(colors.danger))
+            Text("Recording $label", style = TnType.body, color = colors.text, modifier = Modifier.weight(1f).semantics { contentDescription = "Recording voice message, $label" })
+            Text(
+                "Cancel",
+                style = TnType.body.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                color = colors.textMuted,
+                modifier = Modifier.clickable(role = Role.Button, onClick = onCancel),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(colors.accent)
+                .clickable(role = Role.Button, onClick = onSend)
+                .semantics { contentDescription = "Send voice message" },
+            contentAlignment = Alignment.Center,
+        ) { Icon(TnIcon.SEND, tint = colors.onAccent, size = 20.dp) }
+    }
+}
 
 /** Long-press message menu, attachment picker, media viewer and forward sheet. */
 @Composable
@@ -373,6 +414,8 @@ private fun ChatDialogs(state: ChatUiState, actions: ChatActions) {
             listOf(
                 MenuOption("media", TnIcon.IMAGE, "Photos & Videos", onClick = actions::attachMedia),
                 MenuOption("file", TnIcon.FOLDER, "Files & Documents", onClick = actions::attachFile),
+                MenuOption("voice", TnIcon.MIC, "Voice message", onClick = actions::startVoiceMessage),
+                MenuOption("cover", TnIcon.EYE, "Cover message · coming soon", onClick = actions::coverMessageSoon),
             )
         },
         onClose = actions::closeAttachSheet,

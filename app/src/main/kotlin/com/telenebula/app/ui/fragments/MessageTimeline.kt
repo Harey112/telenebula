@@ -1,5 +1,6 @@
 package com.telenebula.app.ui.fragments
 
+import com.telenebula.app.platform.VoicePlayback
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
@@ -84,6 +85,8 @@ fun MessageTimeline(
     isLoadingOlder: Boolean = false,
     onReachOlder: () -> Unit = {},
     onReachNewest: () -> Unit = {},
+    voicePlayback: VoicePlayback? = null,
+    onToggleVoice: (ChatMessage) -> Unit = {},
 ) {
     val listState = rememberLazyListState()
     LaunchedEffect(listState, hasOlder) {
@@ -141,6 +144,8 @@ fun MessageTimeline(
                     onAcceptOffer = onAcceptOffer,
                     onDeclineOffer = onDeclineOffer,
                     freeBytes = freeBytes,
+                    voicePlayback = voicePlayback?.takeIf { it.messageId == item.msg.id },
+                    onToggleVoice = onToggleVoice,
                 )
             }
         }

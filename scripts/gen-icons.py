@@ -22,7 +22,7 @@ ICONS = {
     "minimize": "chevron-down", "chevron_down": "chevron-down", "chevron_right": "chevron-right", "link": "link",
     "pin": "pin", "pin_off": "pin-off", "archive": "archive", "unarchive": "archive-restore", "bell": "bell",
     "bell_off": "bell-off", "block": "ban", "mark_unread": "mail-open", "vibrate": "vibrate",
-    "ping": "satellite-dish", "desktop": "monitor",
+    "ping": "satellite-dish", "desktop": "monitor", "square_plus": "square-plus", "pause": "pause",
 }
 NS = "{http://www.w3.org/2000/svg}"
 

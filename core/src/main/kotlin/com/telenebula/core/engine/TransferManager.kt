@@ -30,6 +30,7 @@ internal class IncomingTransfer(
     val body: String,
     val width: Long?,
     val height: Long?,
+    val durationMs: Long?,
     received: Long,
 ) {
     @Volatile
@@ -267,6 +268,7 @@ internal class TransferManager(private val engine: Engine) {
             body = envelope.body.orEmpty(),
             width = envelope.width?.takeIf { it > 0 },
             height = envelope.height?.takeIf { it > 0 },
+            durationMs = envelope.duration?.takeIf { it > 0 },
             received = resumeFrom,
         )
     }
@@ -331,6 +333,7 @@ internal class TransferManager(private val engine: Engine) {
                 uri = CorePaths.pathToUri(done.file.path),
                 width = done.width,
                 height = done.height,
+                durationMs = done.durationMs,
             ),
         )
         store.setMessageStatus(transferId, MessageStatus.RECEIVED)
@@ -461,6 +464,7 @@ internal class TransferManager(private val engine: Engine) {
             size = size,
             width = envelope.width?.takeIf { it > 0 },
             height = envelope.height?.takeIf { it > 0 },
+            durationMs = envelope.duration?.takeIf { it > 0 },
         ),
         replyToId = envelope.replyToId,
         expireSecs = envelope.expiresIn?.takeIf { it in 0..Limits.MAX_EXPIRE_SECS },

@@ -26,6 +26,8 @@ import com.telenebula.app.platform.PrefsRepository
 import com.telenebula.app.platform.SystemNightMode
 import com.telenebula.app.platform.UpdateInstaller
 import com.telenebula.app.platform.UpdateNotifier
+import com.telenebula.app.platform.VoicePlayer
+import com.telenebula.app.platform.VoiceRecorder
 import com.telenebula.app.platform.UpdateChecker
 import com.telenebula.app.runtime.UpdateMonitor
 import com.telenebula.app.runtime.ScreenshotPolicy
@@ -90,6 +92,8 @@ class AppGraph(app: Application) {
     val attachments = AttachmentStore(app)
     val viewer = MediaViewerCenter(attachments, notices, appScope)
     val openWith = OpenWith(app)
+    val voicePlayer = VoicePlayer(appScope)
+    val voiceRecorder = VoiceRecorder(app)
     val haptics = Haptics(app)
     val emojis = EmojiCatalog(app, appScope)
     val updates = UpdateChecker(CoreJson)
