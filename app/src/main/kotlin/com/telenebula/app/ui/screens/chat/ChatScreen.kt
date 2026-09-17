@@ -43,6 +43,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -317,7 +318,10 @@ private fun Composer(state: ChatUiState, actions: ChatActions) {
                 onValueChange = actions::setDraft,
                 textStyle = TnType.body.copy(color = colors.text),
                 cursorBrush = SolidColor(colors.accent),
-                keyboardOptions = KeyboardOptions(imeAction = if (state.isEnterToSend) ImeAction.Send else ImeAction.Default),
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Sentences,
+                    imeAction = if (state.isEnterToSend) ImeAction.Send else ImeAction.Default,
+                ),
                 keyboardActions = KeyboardActions(onSend = { if (state.canSend) actions.send() }),
                 modifier = Modifier.weight(1f).heightIn(max = 110.dp).padding(vertical = TnSpace.sm).semantics { contentDescription = "Message" },
                 decorationBox = { inner ->
