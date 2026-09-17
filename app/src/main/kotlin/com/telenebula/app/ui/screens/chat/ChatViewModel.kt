@@ -91,6 +91,9 @@ import kotlinx.coroutines.withContext
 
 enum class PingResult { ONLINE, REACHABLE, OFFLINE }
 
+/** The recording bar's face: still recording, or a stopped clip that can be heard, discarded or sent. */
+class VoiceBar(val isRecording: Boolean, val label: String, val isPreviewPlaying: Boolean)
+
 /** What the composer is doing; editing and replying exclude each other by construction. */
 sealed interface ComposerMode {
     data object Idle : ComposerMode
@@ -133,8 +136,8 @@ data class ChatUiState(
     val isLoadingOlder: Boolean = false,
     /** the window is full of history, so new messages are not on screen until "jump to latest" */
     val isDetachedFromLatest: Boolean = false,
-    val isRecording: Boolean = false,
-    val recordingLabel: String = "",
+    /** the composer is replaced by this while a voice message is recorded or reviewed */
+    val voiceBar: VoiceBar? = null,
     /** the clip playing or paused anywhere in the app; a bubble shows it only for its own message */
     val voicePlayback: VoicePlayback? = null,
     val actionsByMessage: Map<String, List<MessageAction>> = emptyMap(),
@@ -166,8 +169,10 @@ interface ChatActions {
     fun attachFile()
     fun attachMedia()
     fun startVoiceMessage()
+    fun stopVoiceMessage()
     fun cancelVoiceMessage()
     fun sendVoiceMessage()
+    fun toggleVoicePreview()
     fun toggleVoice(msg: ChatMessage)
     fun coverMessageSoon()
     fun beginEdit()
@@ -265,11 +270,16 @@ class ChatViewModel(
         val pingResult: PingResult? = null,
         val freeBytes: Long = 0,
         val error: String? = null,
-        val recording: Recording? = null,
-        val recordingElapsedMs: Long = 0,
+        val voice: VoiceDraft? = null,
+        val voiceElapsedMs: Long = 0,
     )
 
-    private class Recording(val file: File, val startedAtMs: Long)
+    /** A voice message on its way to being sent: still recording, or stopped and waiting for a decision. */
+    private sealed interface VoiceDraft {
+        val file: File
+        class Recording(override val file: File, val startedAtMs: Long) : VoiceDraft
+        class Stopped(override val file: File, val durationMs: Long) : VoiceDraft
+    }
 
     private var recordingJob: Job? = null
 
@@ -386,9 +396,8 @@ class ChatViewModel(
             canLoadOlder = d.isLoaded && search == null && !w.isExhausted && !w.isLoading && d.view.messages.isNotEmpty(),
             isLoadingOlder = w.isLoading,
             isDetachedFromLatest = w.anchor != null && d.view.messages.size >= WINDOW_MAX,
-            isRecording = l.recording != null,
-            recordingLabel = Format.clockMs(l.recordingElapsedMs),
-            voicePlayback = playing,
+            voiceBar = voiceBarOf(l, playing),
+            voicePlayback = playing?.takeIf { it.messageId != VOICE_PREVIEW_ID },
             actionsByMessage = d.view.actions,
             replyPreviews = d.replyPreviews,
             linkRanges = d.linkRanges,
@@ -485,9 +494,6 @@ class ChatViewModel(
         isVisible.value = true
     }
 
-    fun onHidden() {
-        isVisible.value = false
-    }
 
     // --- composing ---
 
@@ -587,9 +593,29 @@ class ChatViewModel(
 
     // --- voice messages ---
 
+    private fun voiceBarOf(l: Local, playing: VoicePlayback?): VoiceBar? = when (val v = l.voice) {
+        null -> null
+        is VoiceDraft.Recording -> {
+            val left = MAX_VOICE_MS - l.voiceElapsedMs
+            VoiceBar(
+                isRecording = true,
+                label = if (left <= CAP_WARNING_MS) "${Format.clockMs(l.voiceElapsedMs)} · ${Format.clockMs(left)} left" else Format.clockMs(l.voiceElapsedMs),
+                isPreviewPlaying = false,
+            )
+        }
+        is VoiceDraft.Stopped -> {
+            val preview = playing?.takeIf { it.messageId == VOICE_PREVIEW_ID }
+            VoiceBar(
+                isRecording = false,
+                label = if (preview != null && (preview.isPlaying || preview.positionMs > 0)) "${Format.clockMs(preview.positionMs)} / ${Format.clockMs(v.durationMs)}" else Format.clockMs(v.durationMs),
+                isPreviewPlaying = preview?.isPlaying == true,
+            )
+        }
+    }
+
     override fun startVoiceMessage() {
         closeOverlay()
-        if (local.value.recording != null) return
+        if (local.value.voice != null) return
         viewModelScope.launch {
             if (!gateway.requestPermission(Manifest.permission.RECORD_AUDIO)) {
                 notices.addWarning("Microphone permission denied: Allow the microphone to record a voice message.")
@@ -598,12 +624,18 @@ class ChatViewModel(
             try {
                 val file = files.voiceFile()
                 recorder.start(file)
-                local.update { it.copy(recording = Recording(file, System.currentTimeMillis()), recordingElapsedMs = 0) }
+                local.update { it.copy(voice = VoiceDraft.Recording(file, System.currentTimeMillis()), voiceElapsedMs = 0) }
                 recordingJob?.cancel()
                 recordingJob = viewModelScope.launch {
                     while (true) {
                         delay(RECORDING_TICK_MS)
-                        local.update { l -> l.copy(recordingElapsedMs = l.recording?.let { r -> System.currentTimeMillis() - r.startedAtMs } ?: 0) }
+                        val started = (local.value.voice as? VoiceDraft.Recording)?.startedAtMs ?: break
+                        val elapsed = System.currentTimeMillis() - started
+                        local.update { it.copy(voiceElapsedMs = elapsed) }
+                        if (elapsed >= MAX_VOICE_MS) {
+                            stopVoiceMessage()
+                            break
+                        }
                     }
                 }
             } catch (e: CancellationException) {
@@ -614,36 +646,66 @@ class ChatViewModel(
         }
     }
 
-    override fun cancelVoiceMessage() {
-        if (local.value.recording == null) return
+    /** Ends the recording and keeps the clip for review; nothing is sent. */
+    override fun stopVoiceMessage() {
+        val recording = local.value.voice as? VoiceDraft.Recording ?: return
         recordingJob?.cancel()
-        recorder.cancel()
-        local.update { it.copy(recording = null, recordingElapsedMs = 0) }
+        val durationMs = try {
+            recorder.stop()
+        } catch (e: Exception) {
+            local.update { it.copy(voice = null, voiceElapsedMs = 0) }
+            notices.addWarning("Nothing recorded: ${e.userMessage()}")
+            return
+        }
+        if (durationMs < MIN_VOICE_MS) {
+            local.update { it.copy(voice = null, voiceElapsedMs = 0) }
+            viewModelScope.launch { files.remove(recording.file) }
+            notices.addWarning("Voice message too short: Record a little longer.")
+            return
+        }
+        local.update { it.copy(voice = VoiceDraft.Stopped(recording.file, durationMs), voiceElapsedMs = durationMs) }
     }
 
-    override fun sendVoiceMessage() {
-        val recording = local.value.recording ?: return
+    override fun cancelVoiceMessage() {
+        val draft = local.value.voice ?: return
         recordingJob?.cancel()
-        local.update { it.copy(recording = null, recordingElapsedMs = 0) }
+        endPreview()
+        when (draft) {
+            is VoiceDraft.Recording -> recorder.cancel()
+            is VoiceDraft.Stopped -> viewModelScope.launch { files.remove(draft.file) }
+        }
+        local.update { it.copy(voice = null, voiceElapsedMs = 0) }
+    }
+
+    /** From a recording this stops first; from a stopped clip it sends; nothing else ever sends a clip. */
+    override fun sendVoiceMessage() {
+        if (local.value.voice is VoiceDraft.Recording) stopVoiceMessage()
+        val clip = local.value.voice as? VoiceDraft.Stopped ?: return
+        endPreview()
+        local.update { it.copy(voice = null, voiceElapsedMs = 0) }
         val replyTo = (local.value.composer as? LocalComposer.Replying)?.id
         viewModelScope.launch {
-            val durationMs = try {
-                recorder.stop()
+            val meta = MessageAttachment(name = AttachmentStore.VOICE_FILE_NAME, mime = AttachmentStore.VOICE_MIME, size = clip.file.length(), durationMs = clip.durationMs)
+            core.sendAttachment(peerIp, clip.file.absolutePath, meta, replyTo)
+            local.update { it.copy(composer = LocalComposer.Idle) }
+        }
+    }
+
+    override fun toggleVoicePreview() {
+        val clip = local.value.voice as? VoiceDraft.Stopped ?: return
+        viewModelScope.launch {
+            try {
+                voice.toggle(VOICE_PREVIEW_ID, clip.file, clip.durationMs)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                notices.addWarning("Nothing recorded: ${e.userMessage()}")
-                return@launch
+                setError("This recording can't be played: ${e.userMessage()}")
             }
-            if (durationMs < MIN_VOICE_MS) {
-                files.remove(recording.file)
-                notices.addWarning("Voice message too short: Hold the recording a little longer.")
-                return@launch
-            }
-            val meta = MessageAttachment(name = AttachmentStore.VOICE_FILE_NAME, mime = AttachmentStore.VOICE_MIME, size = recording.file.length(), durationMs = durationMs)
-            core.sendAttachment(peerIp, recording.file.absolutePath, meta, replyTo)
-            local.update { it.copy(composer = LocalComposer.Idle) }
         }
+    }
+
+    private fun endPreview() {
+        if (voice.state.value?.messageId == VOICE_PREVIEW_ID) voice.release()
     }
 
     override fun toggleVoice(msg: ChatMessage) {
@@ -944,6 +1006,12 @@ class ChatViewModel(
         cancelVoiceMessage()
     }
 
+    /** A recording cannot outlive the screen that shows it; a stopped clip waits for the decision. */
+    fun onHidden() {
+        isVisible.value = false
+        if (local.value.voice is VoiceDraft.Recording) cancelVoiceMessage()
+    }
+
     private companion object {
         const val TYPING_INTERVAL_MS = 4_000L
         const val TYPING_IDLE_MS = 5_000L
@@ -953,6 +1021,11 @@ class ChatViewModel(
         const val PRESENCE_REFRESH_MS = 30_000L
 
         const val RECORDING_TICK_MS = 500L
+    const val MAX_VOICE_MS = 10 * 60_000L
+    /** the timer counts down through the last minute so a cap never comes as a surprise */
+    const val CAP_WARNING_MS = 60_000L
+    /** the player id a clip under review uses, so no bubble mistakes it for its own message */
+    const val VOICE_PREVIEW_ID = "voice-preview"
 
         /** anything shorter is a slip of the finger, not a message */
 

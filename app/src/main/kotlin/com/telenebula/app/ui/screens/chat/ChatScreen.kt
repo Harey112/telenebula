@@ -305,8 +305,8 @@ private fun Composer(state: ChatUiState, actions: ChatActions) {
         }
         return
     }
-    if (state.isRecording) {
-        RecordingBar(label = state.recordingLabel, onCancel = actions::cancelVoiceMessage, onSend = actions::sendVoiceMessage)
+    state.voiceBar?.let { bar ->
+        VoiceComposerBar(bar, onStop = actions::stopVoiceMessage, onCancel = actions::cancelVoiceMessage, onTogglePreview = actions::toggleVoicePreview, onSend = actions::sendVoiceMessage)
         return
     }
     Row(modifier = Modifier.fillMaxWidth().padding(TnSpace.sm), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(TnSpace.sm)) {
@@ -354,9 +354,9 @@ private fun Composer(state: ChatUiState, actions: ChatActions) {
 
 private class ComposerNotice(val message: String, val action: String, val onAction: () -> Unit)
 
-/** Takes the composer's place while a voice message records: the running time, cancel, send. */
+/** Takes the composer's place for a voice message: recording shows a timer and stop; stopped shows play, the length and cancel. Only Send sends. */
 @Composable
-private fun RecordingBar(label: String, onCancel: () -> Unit, onSend: () -> Unit) {
+private fun VoiceComposerBar(bar: VoiceBar, onStop: () -> Unit, onCancel: () -> Unit, onTogglePreview: () -> Unit, onSend: () -> Unit) {
     val colors = TnTheme.colors
     Row(modifier = Modifier.fillMaxWidth().padding(TnSpace.sm), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TnSpace.sm)) {
         Row(
@@ -364,18 +364,36 @@ private fun RecordingBar(label: String, onCancel: () -> Unit, onSend: () -> Unit
                 .weight(1f)
                 .clip(RoundedCornerShape(TnRadius.lg + 6.dp))
                 .background(colors.surfaceRaised)
-                .padding(horizontal = TnSpace.md, vertical = TnSpace.md),
+                .padding(horizontal = TnSpace.md, vertical = TnSpace.xs),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(TnSpace.md),
         ) {
-            Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(colors.danger))
-            Text("Recording $label", style = TnType.body, color = colors.text, modifier = Modifier.weight(1f).semantics { contentDescription = "Recording voice message, $label" })
+            if (bar.isRecording) {
+                Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(colors.danger))
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(colors.accentSoft)
+                        .clickable(role = Role.Button, onClick = onTogglePreview)
+                        .semantics { contentDescription = if (bar.isPreviewPlaying) "Pause the recording" else "Listen to the recording" },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(if (bar.isPreviewPlaying) TnIcon.PAUSE else TnIcon.PLAY, tint = colors.accent, size = 18.dp) }
+            }
             Text(
-                "Cancel",
-                style = TnType.body.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
-                color = colors.textMuted,
-                modifier = Modifier.clickable(role = Role.Button, onClick = onCancel),
+                if (bar.isRecording) "Recording ${bar.label}" else bar.label,
+                style = TnType.body,
+                color = colors.text,
+                modifier = Modifier.weight(1f).semantics { contentDescription = if (bar.isRecording) "Recording voice message, ${bar.label}" else "Recorded voice message, ${bar.label}" },
             )
+            if (bar.isRecording) {
+                Icon(TnIcon.STOP, tint = colors.danger, size = 20.dp, contentDescription = "Stop recording", modifier = Modifier.size(36.dp).clickable(role = Role.Button, onClick = onStop).padding(8.dp))
+            } else {
+                Icon(TnIcon.CLOSE, tint = colors.textMuted, size = 22.dp, contentDescription = "Discard the recording", modifier = Modifier.size(36.dp).clickable(role = Role.Button, onClick = onCancel).padding(7.dp))
+            }
         }
         Box(
             modifier = Modifier
