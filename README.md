@@ -86,5 +86,4 @@ the wrapper.
 ./gradlew lint testDebugUnitTest
 ```
 
-Release builds are signed with a keystore named in a gitignored `keystore.properties`, or by the
-release workflow from repository secrets. The rules the code follows are in [AGENTS.md](AGENTS.md).
+The rules the code follows are in [AGENTS.md](AGENTS.md).
