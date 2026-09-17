@@ -20,6 +20,7 @@ import com.telenebula.app.platform.Haptics
 import com.telenebula.app.platform.IdentityStore
 import com.telenebula.app.platform.KeystoreBox
 import com.telenebula.app.platform.OpenWith
+import com.telenebula.app.platform.BootStart
 import com.telenebula.app.platform.ForegroundTracker
 import com.telenebula.app.platform.PrefsRepository
 import com.telenebula.app.platform.SystemNightMode
@@ -123,6 +124,7 @@ class AppGraph(app: Application) {
         foreground = foreground,
         updateMonitor = updateMonitor,
         isChatOpen = ::isChatOpen,
+        bootStart = BootStart(app),
         appVersion = BuildConfig.VERSION_NAME,
     )
 

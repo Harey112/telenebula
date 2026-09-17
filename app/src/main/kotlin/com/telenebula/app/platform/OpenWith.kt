@@ -44,6 +44,15 @@ class OpenWith(context: Context) {
         )
     }
 
+    /** Android's settings for one notification channel, where a channel can be silenced or minimised. */
+    fun openChannelSettings(channelId: String) {
+        launch(
+            Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, app.packageName)
+                .putExtra(Settings.EXTRA_CHANNEL_ID, channelId),
+        )
+    }
+
     fun openUrl(url: String) {
         val view = Intent(Intent.ACTION_VIEW, Uri.parse(url))
         try {

@@ -61,6 +61,7 @@ data class NetworkUiState(
     val failedActions: Int = 0,
     val isDeveloperMode: Boolean = false,
     val isVerboseLogging: Boolean = false,
+    val isStartOnBoot: Boolean = true,
     val firewallRules: List<String> = emptyList(),
 )
 
@@ -160,6 +161,7 @@ class NetworkViewModel(
             failedActions = snap.stats.failedActions,
             isDeveloperMode = p.isDeveloperMode,
             isVerboseLogging = p.nebulaLogLevel == NebulaLogLevel.DEBUG,
+            isStartOnBoot = p.isStartOnBootEnabled,
             firewallRules = listOf(
                 "inbound  icmp any        ← any",
                 "inbound  tcp  $msgPort       ← any (messaging)",
@@ -174,6 +176,8 @@ class NetworkViewModel(
     }
 
     fun toggleDeveloperMode() = prefs.update { it.copy(isDeveloperMode = !it.isDeveloperMode) }
+
+    fun toggleStartOnBoot() = prefs.update { it.copy(isStartOnBootEnabled = !it.isStartOnBootEnabled) }
 
     fun toggleVerboseLogging() {
         prefs.update { it.copy(nebulaLogLevel = if (it.nebulaLogLevel == NebulaLogLevel.DEBUG) NebulaLogLevel.INFO else NebulaLogLevel.DEBUG) }

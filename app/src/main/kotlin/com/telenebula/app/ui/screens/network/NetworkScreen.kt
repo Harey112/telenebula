@@ -41,6 +41,7 @@ fun NetworkScreen(viewModel: NetworkViewModel) {
             row { InfoField("Tunnel uptime", s.tunnelUptime) }
             row { InfoField("Messaging engine uptime", s.engineUptime) }
             row { InfoField("Peers with a live message link", s.connectedCount.toString()) }
+            row { SwitchRow(TnIcon.RETRY, "Start when the phone starts", s.isStartOnBoot, viewModel::toggleStartOnBoot, subtitle = "Also after an update; the tunnel connects on its own") }
         }
         Section(title = "My node") {
             row { InfoField("Node ID (certificate name)", "@${s.username}", isMono = true) }

@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.telenebula.app.nav.Navigator
 import com.telenebula.app.nav.TnKey
 import com.telenebula.app.notices.NoticeCenter
-import com.telenebula.app.platform.PrefsRepository
 import com.telenebula.app.platform.QrPayloads
 import com.telenebula.app.platform.userMessage
 import com.telenebula.app.runtime.AppRuntime
@@ -44,7 +43,6 @@ interface MeActions {
 
 class MeViewModel(
     private val runtime: AppRuntime,
-    private val prefs: PrefsRepository,
     private val core: CoreClient,
     private val notices: NoticeCenter,
     private val updates: UpdateMonitor,
@@ -85,7 +83,7 @@ class MeViewModel(
                     val granted = notices.withLoading("Starting the nebula tunnel…") { runtime.ensureVpn(profile) }
                     if (!granted) {
                         notices.addWarning("VPN permission denied: Allow the VPN request to bring the tunnel up.")
-                    } else if (prefs.prefs.value.isBackgroundConnectionEnabled) {
+                    } else {
                         core.startBackgroundService()
                     }
                 }

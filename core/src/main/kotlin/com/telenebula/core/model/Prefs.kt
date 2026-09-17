@@ -116,6 +116,8 @@ data class Prefs(
     val isVideoSpeakerDefault: Boolean = true,
     val isScreenshotBlocked: Boolean = false,
     val isBackgroundConnectionEnabled: Boolean = true,
+    /** the system starts the app at boot and after an update, so the tunnel comes up on its own */
+    val isStartOnBootEnabled: Boolean = true,
     val notifications: NotificationPrefs = NotificationPrefs(),
     val sendReadReceipts: Boolean = true,
     val sendTypingIndicators: Boolean = true,
