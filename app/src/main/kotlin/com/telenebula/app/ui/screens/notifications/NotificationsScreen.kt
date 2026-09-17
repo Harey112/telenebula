@@ -14,8 +14,7 @@ import com.telenebula.app.ui.icons.TnIcon
 
 @Composable
 fun NotificationsScreen(viewModel: NotificationsViewModel) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    val n = state.notifications
+    val n by viewModel.state.collectAsStateWithLifecycle()
     val hourOptions = remember { List(24) { h -> SelectOption(h.toString(), "%02d:00".format(h)) } }
     Screen(title = "Notifications and sounds", onBack = viewModel::goBack) {
         Section(title = "Messages") {
@@ -43,15 +42,7 @@ fun NotificationsScreen(viewModel: NotificationsViewModel) {
             }
         }
         Section(title = "System", footnote = "These settings only make alerts quieter. Your phone’s sound profile and Do Not Disturb are always respected.") {
-            row {
-                SwitchRow(
-                    icon = TnIcon.BELL_OFF,
-                    title = "Hide Nebula tunnel notification",
-                    checked = state.isTunnelNotificationHidden,
-                    onToggle = viewModel::toggleTunnelNotification,
-                    subtitle = "The running tunnel keeps the app alive on its own",
-                )
-            }
+            row { SettingRow(TnIcon.BELL_OFF, "Tunnel notification", subtitle = "Keeps the app alive in the background; silence or minimise it in Android's settings", onClick = viewModel::openTunnelNotificationSettings) }
             row { SettingRow(TnIcon.SETTINGS, "Android notification settings", subtitle = "Channels, tones, Do Not Disturb exceptions", onClick = viewModel::openSystemSettings) }
             row { SettingRow(TnIcon.RETRY, "Reset to defaults", onClick = viewModel::resetToDefaults) }
         }

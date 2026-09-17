@@ -13,6 +13,7 @@ import com.telenebula.app.platform.Haptics
 import com.telenebula.app.platform.HostKey
 import com.telenebula.app.platform.IdentityStore
 import com.telenebula.app.platform.ProfileLoad
+import com.telenebula.app.platform.BootStart
 import com.telenebula.app.platform.ForegroundTracker
 import com.telenebula.app.platform.PrefsRepository
 import com.telenebula.app.platform.SystemNightMode
@@ -27,6 +28,7 @@ import com.telenebula.core.nebula.NebulaConfigRepository
 import com.telenebula.core.notify.MessageNotificationRouter
 import com.telenebula.vpn.NebulaVpnController
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -81,6 +83,7 @@ class AppRuntime(
     private val foreground: ForegroundTracker,
     private val updateMonitor: UpdateMonitor,
     private val isChatOpen: (String) -> Boolean,
+    private val bootStart: BootStart,
     private val appVersion: String,
 ) {
     private val app = context.applicationContext
@@ -111,15 +114,23 @@ class AppRuntime(
     private val isBooted = AtomicBoolean(false)
     private val isSubscribed = AtomicBoolean(false)
     private val parkedVpnConsent = AtomicReference<Profile?>(null)
+    private var bootJob: Job? = null
+    private var lastStart: Job? = null
+
+    /** the user switched the tunnel off; a tunnel that fell over on its own is brought back, this one is not */
+    private val isUserStopped = AtomicBoolean(false)
+    private val reconnectAttempts = AtomicInteger(0)
+    private var reconnectJob: Job? = null
 
     /** Idempotent; called from Application.onCreate. */
     fun boot() {
         if (!isBooted.compareAndSet(false, true)) return
-        scope.launch {
+        bootJob = scope.launch {
             core.openStore()
             val loaded = prefs.load()
             prefs.loadFailure?.let { notices.addWarning("Settings could not be read: $it. The defaults are in use.") }
             launch { prefs.prefs.map { it.themeMode }.distinctUntilChanged().collect(nightMode::apply) }
+            launch { prefs.prefs.map { it.isStartOnBootEnabled }.distinctUntilChanged().collect(bootStart::setEnabled) }
             launch { shareOnline() }
             updateMonitor.start()
             appLock.arm()
@@ -166,11 +177,22 @@ class AppRuntime(
             notices.addError("Couldn't start messaging: ${e.userMessage()}")
             return@launch
         }
-        if (current.isBackgroundConnectionEnabled) {
-            gateway.requestPostNotifications()
-            core.startBackgroundService()
-        }
+        // the foreground service is what keeps the process, and with it the tunnel, alive in the background
+        gateway.requestPostNotifications()
+        core.startBackgroundService()
         connectTunnel(profile)
+    }.also { lastStart = it }
+
+    /** Boot or an update started the process; [done] releases the broadcast once the runtime has come up. */
+    fun onSystemStart(done: () -> Unit) {
+        scope.launch {
+            try {
+                bootJob?.join()
+                lastStart?.join()
+            } finally {
+                done()
+            }
+        }
     }
 
     /** Our pong says "online" only while a screen is showing and the Status setting allows it; a pause ends on time. */
@@ -210,6 +232,7 @@ class AppRuntime(
      * attached yet (the request is parked and retried from [onActivityAttached]).
      */
     suspend fun ensureVpn(profile: Profile): Boolean {
+        isUserStopped.set(false)
         if (vpn.isRunning) {
             core.setTunnelState(true)
             return true
@@ -250,8 +273,33 @@ class AppRuntime(
     }
 
     fun stopVpn() {
+        isUserStopped.set(true)
+        reconnectJob?.cancel()
         vpn.stop()
         core.setTunnelState(false)
+    }
+
+    /** A tunnel that fell over is brought back up the ladder; one the user switched off, or whose consent went, is left alone. */
+    private fun scheduleReconnect() {
+        if (isUserStopped.get()) return
+        val profile = (mutableState.value as? RuntimeState.Ready)?.profile ?: return
+        reconnectJob?.cancel()
+        reconnectJob = scope.launch {
+            delay(TunnelRetry.delayMs(reconnectAttempts.getAndIncrement()))
+            if (vpn.isRunning || isUserStopped.get()) return@launch
+            if (vpn.prepareIntent() != null) {
+                notices.addWarning("Nebula tunnel: VPN permission was revoked. Turn the tunnel on from the Me tab to allow it again.")
+                return@launch
+            }
+            try {
+                ensureVpn(profile)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                reportTunnelError("Nebula tunnel: ${e.userMessage()}")
+                scheduleReconnect()
+            }
+        }
     }
 
     /** A profile edit the messenger need not restart for (lighthouse, nebula options). */
@@ -261,6 +309,8 @@ class AppRuntime(
 
     /** Identity reset: everything down, back to setup. */
     suspend fun stopRuntime() {
+        isUserStopped.set(true)
+        reconnectJob?.cancel()
         core.stopBackgroundService()
         core.stop()
         vpn.stop()
@@ -278,8 +328,15 @@ class AppRuntime(
         scope.launch {
             vpn.state.collect { s ->
                 core.setTunnelState(s.running)
+                if (s.running) {
+                    reconnectAttempts.set(0)
+                    reconnectJob?.cancel()
+                }
                 // nebula reports a bad config or a failed start after start() returned
-                if (!s.running && s.error != null) reportTunnelError("Nebula tunnel: ${s.error}")
+                if (!s.running && s.error != null) {
+                    reportTunnelError("Nebula tunnel: ${s.error}")
+                    scheduleReconnect()
+                }
             }
         }
         scope.launch {

@@ -166,7 +166,7 @@ fun RootShell(activity: MainActivity) {
                             entry<ContactsTab>(metadata = noAnimation) { ContactsScreen(viewModel { ContactsViewModel(graph.core, graph.notices, navigator) }) }
                             entry<CallsTab>(metadata = noAnimation) { CallsScreen(viewModel { CallsViewModel(graph.core, graph.runtime, graph.callEngine, graph.gateway, graph.notices, navigator) }) }
                             entry<MeTab>(metadata = noAnimation) {
-                                MeScreen(viewModel { MeViewModel(graph.runtime, graph.prefs, graph.core, graph.notices, graph.updateMonitor, navigator) })
+                                MeScreen(viewModel { MeViewModel(graph.runtime, graph.core, graph.notices, graph.updateMonitor, navigator) })
                             }
                             entry<Settings> { SettingsScreen(viewModel { SettingsViewModel(graph.runtime, graph.updateMonitor, navigator) }) }
                             entry<Dex> { DexScreen(viewModel { DexViewModel(navigator) }) }
@@ -216,7 +216,7 @@ fun RootShell(activity: MainActivity) {
                                     },
                                 )
                             }
-                            entry<NotificationPrefs> { NotificationsScreen(viewModel { NotificationsViewModel(graph.runtime, graph.prefs, graph.core, graph.openWith, navigator) }) }
+                            entry<NotificationPrefs> { NotificationsScreen(viewModel { NotificationsViewModel(graph.prefs, graph.openWith, navigator) }) }
                             entry<Storage> { StorageScreen(viewModel { StorageViewModel(graph.core, graph.prefs, graph.notices, navigator) }) }
                             entry<About> { AboutScreen(viewModel { AboutViewModel(graph.openWith, navigator) }) }
                             entry<Updates> { UpdatesScreen(viewModel { UpdatesViewModel(graph.updateMonitor, graph.installer, graph.prefs, graph.openWith, graph.notices, navigator) }) }
