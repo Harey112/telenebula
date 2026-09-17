@@ -29,6 +29,14 @@ class AttachmentStore(context: Context, private val io: CoroutineDispatcher = Di
 
     fun cacheFile(name: String): File = File(app.cacheDir, name)
 
+    /** Where a voice clip is recorded straight into the attachments layout, so the send needs no copy. */
+    fun voiceFile(): File {
+        attachmentsDir.mkdirs()
+        return File(attachmentsDir, "${java.util.UUID.randomUUID()}-${sanitize(VOICE_FILE_NAME)}")
+    }
+
+    suspend fun remove(file: File): Boolean = withContext(io) { file.delete() }
+
     suspend fun readText(uri: Uri): String = withContext(io) {
         resolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
             ?: throw IOException("Could not open the picked file")
@@ -161,6 +169,10 @@ class AttachmentStore(context: Context, private val io: CoroutineDispatcher = Di
     }
 
     companion object {
+
+        const val VOICE_FILE_NAME = "Voice message.m4a"
+
+        const val VOICE_MIME = "audio/mp4"
         private const val MAX_NAME_CHARS = 80
         private const val DEFAULT_NAME = "file"
         private const val DEFAULT_MIME = "application/octet-stream"

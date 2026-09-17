@@ -3,6 +3,7 @@ package com.telenebula.app.ui.screens.chat
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
+import android.Manifest
 import android.content.Context
 import android.os.Build
 import android.os.PersistableBundle
@@ -26,6 +27,9 @@ import com.telenebula.app.platform.ContactLabels
 import com.telenebula.app.platform.Format
 import com.telenebula.app.platform.OpenWith
 import com.telenebula.app.platform.PrefsRepository
+import com.telenebula.app.platform.VoicePlayback
+import com.telenebula.app.platform.VoicePlayer
+import com.telenebula.app.platform.VoiceRecorder
 import com.telenebula.app.platform.deniedCallPermission
 import com.telenebula.app.platform.userMessage
 import com.telenebula.app.runtime.AppRuntime
@@ -62,6 +66,7 @@ import com.telenebula.core.model.PeerQueueState
 import com.telenebula.core.model.PeerPresence
 import com.telenebula.core.model.Prefs
 import com.telenebula.app.ui.shared.uiState
+import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -128,6 +133,10 @@ data class ChatUiState(
     val isLoadingOlder: Boolean = false,
     /** the window is full of history, so new messages are not on screen until "jump to latest" */
     val isDetachedFromLatest: Boolean = false,
+    val isRecording: Boolean = false,
+    val recordingLabel: String = "",
+    /** the clip playing or paused anywhere in the app; a bubble shows it only for its own message */
+    val voicePlayback: VoicePlayback? = null,
     val actionsByMessage: Map<String, List<MessageAction>> = emptyMap(),
     val replyPreviews: Map<String, ReplyPreview> = emptyMap(),
     /** message id -> character ranges of the URLs in its body; absent when it has none */
@@ -156,6 +165,11 @@ interface ChatActions {
     fun acceptOffer(msg: ChatMessage)
     fun attachFile()
     fun attachMedia()
+    fun startVoiceMessage()
+    fun cancelVoiceMessage()
+    fun sendVoiceMessage()
+    fun toggleVoice(msg: ChatMessage)
+    fun coverMessageSoon()
     fun beginEdit()
     fun beginReply(msg: ChatMessage)
     fun cancelEdit()
@@ -220,6 +234,8 @@ class ChatViewModel(
     private val files: AttachmentStore,
     private val openWith: OpenWith,
     private val viewer: MediaViewerCenter,
+    private val voice: VoicePlayer,
+    private val recorder: VoiceRecorder,
     private val callEngine: CallEngine,
     private val sheets: SheetCenter,
     private val notices: NoticeCenter,
@@ -249,7 +265,13 @@ class ChatViewModel(
         val pingResult: PingResult? = null,
         val freeBytes: Long = 0,
         val error: String? = null,
+        val recording: Recording? = null,
+        val recordingElapsedMs: Long = 0,
     )
+
+    private class Recording(val file: File, val startedAtMs: Long)
+
+    private var recordingJob: Job? = null
 
     /** how far back the reader has paged; null is the plain head of the chat */
     private data class Window(val anchor: MessageCursor? = null, val isExhausted: Boolean = false, val isLoading: Boolean = false)
@@ -281,21 +303,23 @@ class ChatViewModel(
 
     private val forwardContacts = core.contacts.map(::forwardTargets)
 
-    private data class Content(val derived: ChatDerived, val search: List<TimelineItem>?, val forward: List<ForwardTarget>, val presence: PresenceStore.Entry?, val window: Window)
+    private data class Content(val derived: ChatDerived, val search: List<TimelineItem>?, val forward: List<ForwardTarget>, val presence: PresenceStore.Entry?, val window: Window, val voice: VoicePlayback?)
+
+    private val windowAndVoice = combine(window, voice.state) { w, v -> w to v }
 
     val uiState: StateFlow<ChatUiState> = combine(
-        combine(derived, searchResults, forwardContacts, presence.presence.map { it[peerIp] }.distinctUntilChanged(), window) { d, s, f, p, w -> Content(d, s, f, p, w) },
+        combine(derived, searchResults, forwardContacts, presence.presence.map { it[peerIp] }.distinctUntilChanged(), windowAndVoice) { d, s, f, p, (w, v) -> Content(d, s, f, p, w, v) },
         combine(runtime.tunnelRunning, prefs.prefs, typing.typing, transfers.progress, peerQueues.queues) { running, p, t, tr, q ->
             Quint(running, p, t, tr, q[peerIp])
         },
         local,
-    ) { (d, search, forward, peerPresence, w), (running, p, typingSet, progress, queue), l ->
-        build(d, search, forward, peerPresence, w, running, p, typingSet, progress, queue, l)
+    ) { (d, search, forward, peerPresence, w, playing), (running, p, typingSet, progress, queue), l ->
+        build(d, search, forward, peerPresence, w, playing, running, p, typingSet, progress, queue, l)
     }.uiState(
         viewModelScope,
         // every input is readable now: the cached view (or contact) for the list and header, the
         // tunnel and prefs for the rest, so the first frame is the chat and not a blank shell
-        build(projection.of(headView.value, unreadBoundaryId.value), null, forwardTargets(core.contacts.value), presence.of(peerIp), window.value, runtime.tunnelRunning.value, prefs.prefs.value, typing.typing.value, transfers.progress.value, peerQueues.of(peerIp), local.value),
+        build(projection.of(headView.value, unreadBoundaryId.value), null, forwardTargets(core.contacts.value), presence.of(peerIp), window.value, voice.state.value, runtime.tunnelRunning.value, prefs.prefs.value, typing.typing.value, transfers.progress.value, peerQueues.of(peerIp), local.value),
     )
 
     private fun forwardTargets(contacts: List<Contact>?): List<ForwardTarget> = contacts.orEmpty().map { ForwardTarget(it.ip, ContactLabels.chatLabel(it)) }
@@ -306,6 +330,7 @@ class ChatViewModel(
         forward: List<ForwardTarget>,
         peerPresence: PresenceStore.Entry?,
         w: Window,
+        playing: VoicePlayback?,
         running: Boolean,
         p: Prefs,
         typingSet: Set<String>,
@@ -361,6 +386,9 @@ class ChatViewModel(
             canLoadOlder = d.isLoaded && search == null && !w.isExhausted && !w.isLoading && d.view.messages.isNotEmpty(),
             isLoadingOlder = w.isLoading,
             isDetachedFromLatest = w.anchor != null && d.view.messages.size >= WINDOW_MAX,
+            isRecording = l.recording != null,
+            recordingLabel = Format.clockMs(l.recordingElapsedMs),
+            voicePlayback = playing,
             actionsByMessage = d.view.actions,
             replyPreviews = d.replyPreviews,
             linkRanges = d.linkRanges,
@@ -555,6 +583,85 @@ class ChatViewModel(
                 notices.addError("Couldn't attach that file: ${e.userMessage()}")
             }
         }
+    }
+
+    // --- voice messages ---
+
+    override fun startVoiceMessage() {
+        closeOverlay()
+        if (local.value.recording != null) return
+        viewModelScope.launch {
+            if (!gateway.requestPermission(Manifest.permission.RECORD_AUDIO)) {
+                notices.addWarning("Microphone permission denied: Allow the microphone to record a voice message.")
+                return@launch
+            }
+            try {
+                val file = files.voiceFile()
+                recorder.start(file)
+                local.update { it.copy(recording = Recording(file, System.currentTimeMillis()), recordingElapsedMs = 0) }
+                recordingJob?.cancel()
+                recordingJob = viewModelScope.launch {
+                    while (true) {
+                        delay(RECORDING_TICK_MS)
+                        local.update { l -> l.copy(recordingElapsedMs = l.recording?.let { r -> System.currentTimeMillis() - r.startedAtMs } ?: 0) }
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                notices.addError("Couldn't start recording: ${e.userMessage()}")
+            }
+        }
+    }
+
+    override fun cancelVoiceMessage() {
+        if (local.value.recording == null) return
+        recordingJob?.cancel()
+        recorder.cancel()
+        local.update { it.copy(recording = null, recordingElapsedMs = 0) }
+    }
+
+    override fun sendVoiceMessage() {
+        val recording = local.value.recording ?: return
+        recordingJob?.cancel()
+        local.update { it.copy(recording = null, recordingElapsedMs = 0) }
+        val replyTo = (local.value.composer as? LocalComposer.Replying)?.id
+        viewModelScope.launch {
+            val durationMs = try {
+                recorder.stop()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                notices.addWarning("Nothing recorded: ${e.userMessage()}")
+                return@launch
+            }
+            if (durationMs < MIN_VOICE_MS) {
+                files.remove(recording.file)
+                notices.addWarning("Voice message too short: Hold the recording a little longer.")
+                return@launch
+            }
+            val meta = MessageAttachment(name = AttachmentStore.VOICE_FILE_NAME, mime = AttachmentStore.VOICE_MIME, size = recording.file.length(), durationMs = durationMs)
+            core.sendAttachment(peerIp, recording.file.absolutePath, meta, replyTo)
+            local.update { it.copy(composer = LocalComposer.Idle) }
+        }
+    }
+
+    override fun toggleVoice(msg: ChatMessage) {
+        val file = (msg.attachment?.mediaSource() as? MediaSource.Path)?.file ?: return
+        viewModelScope.launch {
+            try {
+                voice.toggle(msg.id, file, msg.attachment?.durationMs)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                setError("This voice message can't be played: ${e.userMessage()}")
+            }
+        }
+    }
+
+    override fun coverMessageSoon() {
+        closeOverlay()
+        notices.setSuccess("Cover messages are coming soon.")
     }
 
     // --- attachments ---
@@ -834,6 +941,7 @@ class ChatViewModel(
     override fun onCleared() {
         super.onCleared()
         stopTyping()
+        cancelVoiceMessage()
     }
 
     private companion object {
@@ -843,6 +951,12 @@ class ChatViewModel(
         const val PING_RESULT_HOLD_MS = 4_000L
 
         const val PRESENCE_REFRESH_MS = 30_000L
+
+        const val RECORDING_TICK_MS = 500L
+
+        /** anything shorter is a slip of the finger, not a message */
+
+        const val MIN_VOICE_MS = 1_000L
 
         /** rows one older page brings, and the most the window holds before the newest fall off its far end */
 

@@ -65,6 +65,12 @@ object Format {
         return if (h > 0) "$h:$m:$s" else "$m:$s"
     }
 
+    /** A clip length or position as m:ss. */
+    fun clockMs(ms: Long): String {
+        val total = (ms / 1000).coerceAtLeast(0)
+        return "${total / 60}:${(total % 60).toInt().two()}"
+    }
+
     /** Elapsed time between two timestamps as m:ss or h:mm:ss. */
     fun durationBetween(from: Long, to: Long): String {
         val total = ((to - from) / 1000).coerceAtLeast(0)

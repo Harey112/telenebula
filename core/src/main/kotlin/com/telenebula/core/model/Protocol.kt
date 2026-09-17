@@ -118,6 +118,8 @@ data class Envelope(
     /** type=att-begin / att-offer: pixel size of the media, when the sender knew it */
     val width: Long? = null,
     val height: Long? = null,
+    /** type=att-begin / att-offer: audio length in ms; absent from older builds */
+    val duration: Long? = null,
     /** type=hello / hello-ack: the sender's app version */
     val app: String? = null,
     /** type=pong: "online" while the sender uses the app and shares that, else "reachable"; absent from older builds */

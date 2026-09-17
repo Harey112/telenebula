@@ -111,6 +111,8 @@ data class MessageAttachment(
     /** pixel size of image and video, so a bubble can reserve its shape before the file decodes */
     val width: Long? = null,
     val height: Long? = null,
+    /** audio length, so a voice clip shows its length before it is played */
+    val durationMs: Long? = null,
 )
 
 @Serializable

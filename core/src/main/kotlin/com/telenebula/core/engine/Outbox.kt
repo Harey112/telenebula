@@ -286,6 +286,7 @@ internal class Outbox(private val engine: Engine) {
             uri = if (path.startsWith("file://")) path else CorePaths.pathToUri(path),
             width = meta.width?.takeIf { it > 0 },
             height = meta.height?.takeIf { it > 0 },
+            durationMs = meta.durationMs?.takeIf { it > 0 },
         )
         createOutgoing(peerIp, "", attachment, Wire.kindForMime(meta.mime), replyToId, null)
     }

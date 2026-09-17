@@ -36,6 +36,7 @@ internal class OutgoingTransfers(private val engine: Engine) {
             totalChunks = TransferManager.chunkCount(size),
             width = attachment.width,
             height = attachment.height,
+            duration = attachment.durationMs,
             replyToId = message.replyToId,
             expiresIn = message.expireSecs,
         )
@@ -73,6 +74,7 @@ internal class OutgoingTransfers(private val engine: Engine) {
                 totalChunks = totalChunks,
                 width = attachment.width,
                 height = attachment.height,
+                duration = attachment.durationMs,
                 replyToId = message.replyToId,
                 expiresIn = message.expireSecs,
                 seq = resumeFrom,

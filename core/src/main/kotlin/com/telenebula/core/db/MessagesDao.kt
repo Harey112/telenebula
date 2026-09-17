@@ -377,6 +377,7 @@ internal class MessagesDao(db: SqlDb, lock: ReentrantLock, private val contacts:
                 WHEN m.deleted = 1 THEN 'Message deleted'
                 WHEN m.kind = 'image' THEN 'Photo'
                 WHEN m.kind = 'video' THEN 'Video'
+                WHEN m.kind = 'file' AND m.attachment_json LIKE '%"mime":"audio/%' THEN 'Voice message'
                 WHEN m.kind = 'file' THEN 'File'
                 ELSE m.body
               END AS last_body,
