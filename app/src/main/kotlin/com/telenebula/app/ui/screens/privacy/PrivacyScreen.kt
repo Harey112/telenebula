@@ -10,6 +10,7 @@ import com.telenebula.app.ui.fragments.OptionsMenu
 import com.telenebula.app.ui.fragments.RowTone
 import com.telenebula.app.ui.fragments.Screen
 import com.telenebula.app.ui.fragments.Section
+import com.telenebula.app.ui.fragments.SelectMenuRow
 import com.telenebula.app.ui.fragments.SelectRow
 import com.telenebula.app.ui.fragments.SettingRow
 import com.telenebula.app.ui.fragments.SwitchRow
@@ -43,7 +44,7 @@ fun PrivacyScreen(viewModel: PrivacyViewModel) {
             row { SwitchRow(TnIcon.EYE, "Send read receipts", state.sendReadReceipts, viewModel::toggleReadReceipts, subtitle = "Let contacts see when you have read their messages") }
             row { SwitchRow(TnIcon.PENCIL, "Send typing indicators", state.sendTypingIndicators, viewModel::toggleTypingIndicators, subtitle = "Show contacts when you are typing") }
             row { SwitchRow(TnIcon.LOCK, "Block screenshots", state.isScreenshotBlocked, viewModel::toggleScreenshotBlock, subtitle = "Hide the app from screen capture and recents") }
-            row { SettingRow(TnIcon.LOCK, "Reveal covered messages", subtitle = state.coverGateLabel, onClick = viewModel::openCoverGateMenu) }
+            row { SelectMenuRow(TnIcon.LOCK, "Reveal covered messages", state.coverGateLabel, viewModel::openCoverGateMenu) }
         }
         val gateMenu = remember(state.coverGate) { viewModel.coverGateMenu(state.coverGate) }
         OptionsMenu(isVisible = state.isCoverGateMenuOpen, options = gateMenu, onClose = viewModel::closeCoverGateMenu, title = "Reveal covered messages · ${state.coverGateLabel}")
