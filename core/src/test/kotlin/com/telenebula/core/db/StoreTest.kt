@@ -7,6 +7,7 @@ import com.telenebula.core.model.CallOutcome
 import com.telenebula.core.model.ChatMessage
 import com.telenebula.core.model.ContactFlagsPatch
 import com.telenebula.core.model.ContactNotificationPrefs
+import com.telenebula.core.model.CoverRevealGate
 import com.telenebula.core.model.MessageAction
 import com.telenebula.core.model.MessageActionStatus
 import com.telenebula.core.model.MessageActionType
@@ -110,6 +111,35 @@ class StoreTest {
 
         store.setClientVersion("fd::1", "1.2.3")
         assertEquals("1.2.3", store.getContact("fd::1")?.clientVersion)
+    }
+
+    @Test
+    fun `a cover stands in for the message in the chat list and survives a delete`() {
+        val store = store()
+        store.upsertContact("fd::1", "alice")
+        store.insertMessage(message("m1", body = "the real thing").copy(cover = "See you tomorrow"))
+
+        assertEquals("See you tomorrow", store.getMessage("m1")?.cover)
+        assertEquals("the real thing", store.getMessage("m1")?.body)
+        assertEquals("See you tomorrow", store.getChatSummaries().first().lastBody)
+
+        store.markDeleted("m1")
+        store.wipeDeletedContent("m1")
+        assertNull(store.getMessage("m1")?.cover)
+        assertEquals("Message deleted", store.getChatSummaries().first().lastBody)
+    }
+
+    @Test
+    fun `a chat remembers which gate it asks for before a cover comes off`() {
+        val store = store()
+        store.upsertContact("fd::1", "alice")
+        assertNull(store.getContact("fd::1")?.privacy?.revealGate)
+
+        store.setContactPrivacy("fd::1", ContactPrivacyPrefs(revealGate = CoverRevealGate.CODE))
+        assertEquals(CoverRevealGate.CODE, store.getContact("fd::1")?.privacy?.revealGate)
+
+        store.setContactPrivacy("fd::1", ContactPrivacyPrefs())
+        assertNull(store.getContact("fd::1")?.privacy?.revealGate)
     }
 
     @Test

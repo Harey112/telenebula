@@ -39,6 +39,7 @@ internal class OutgoingTransfers(private val engine: Engine) {
             duration = attachment.durationMs,
             replyToId = message.replyToId,
             expiresIn = message.expireSecs,
+            cover = message.cover,
         )
         return engine.acks.register(message.id).use { waiter ->
             if (!engine.transport.send(link, offer)) return@use AckOutcome.Timeout
@@ -77,6 +78,7 @@ internal class OutgoingTransfers(private val engine: Engine) {
                 duration = attachment.durationMs,
                 replyToId = message.replyToId,
                 expiresIn = message.expireSecs,
+                cover = message.cover,
                 seq = resumeFrom,
             )
             engine.acks.register(message.id).use { waiter ->

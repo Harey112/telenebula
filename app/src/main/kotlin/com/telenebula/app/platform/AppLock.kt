@@ -64,8 +64,22 @@ class AppLock(
     fun prompt(activity: FragmentActivity) {
         if (isPromptOpen || !mutable.value) return
         isPromptOpen = true
+        show(activity, PROMPT_TITLE) {
+            backgroundedAt = 0
+            mutable.value = false
+        }
+    }
+
+    /** The same system prompt for something other than the app gate; the caller decides what a success means. */
+    fun authenticate(activity: FragmentActivity, title: String, onSuccess: () -> Unit) {
+        if (isPromptOpen) return
+        isPromptOpen = true
+        show(activity, title, onSuccess)
+    }
+
+    private fun show(activity: FragmentActivity, title: String, onSuccess: () -> Unit) {
         val info = BiometricPrompt.PromptInfo.Builder()
-            .setTitle(PROMPT_TITLE)
+            .setTitle(title)
             .setAllowedAuthenticators(BIOMETRIC_WEAK or DEVICE_CREDENTIAL)
             .build()
         BiometricPrompt(
@@ -74,8 +88,7 @@ class AppLock(
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                     isPromptOpen = false
-                    backgroundedAt = 0
-                    mutable.value = false
+                    onSuccess()
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {

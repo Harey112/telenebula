@@ -183,13 +183,13 @@ fun RootShell(activity: MainActivity) {
                                     viewModel(key = key.peerIp) {
                                         ChatViewModel(
                                             key.peerIp, activity.applicationContext, graph.core, graph.runtime, graph.prefs, graph.typing, graph.peerPresence, graph.transfers,
-                                            graph.peerQueues, graph.chatSearch, graph.gateway, graph.attachments, graph.openWith, graph.viewer, graph.voicePlayer, graph.voiceRecorder, graph.callEngine, graph.sheets,
+                                            graph.peerQueues, graph.chatSearch, graph.gateway, graph.appLock, graph.attachments, graph.openWith, graph.viewer, graph.voicePlayer, graph.voiceRecorder, graph.callEngine, graph.sheets,
                                             graph.notices, navigator,
                                         )
                                     },
                                 )
                             }
-                            entry<ChatSettings> { key -> ChatSettingsScreen(viewModel(key = key.peerIp) { ChatSettingsViewModel(key.peerIp, graph.core, graph.attachments, graph.openWith, graph.viewer, graph.peerQueues, graph.chatSearch, graph.notices, navigator) }) }
+                            entry<ChatSettings> { key -> ChatSettingsScreen(viewModel(key = key.peerIp) { ChatSettingsViewModel(key.peerIp, graph.core, graph.attachments, graph.openWith, graph.viewer, graph.peerQueues, graph.chatSearch, graph.appLock, graph.notices, navigator) }) }
                             entry<ChatMedia> { key -> ChatMediaScreen(viewModel(key = key.peerIp) { ChatMediaViewModel(key.peerIp, graph.core, graph.openWith, graph.viewer, graph.notices, navigator) }) }
                             entry<ChatLinks> { key -> ChatLinksScreen(viewModel(key = key.peerIp) { ChatLinksViewModel(key.peerIp, graph.core, graph.openWith, graph.notices, navigator) }) }
                             entry<ChatNotifications> { key -> ChatNotificationsScreen(viewModel(key = key.peerIp) { ChatNotificationsViewModel(key.peerIp, graph.core, navigator) }) }

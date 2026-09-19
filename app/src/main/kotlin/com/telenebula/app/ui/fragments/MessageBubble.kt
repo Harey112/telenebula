@@ -264,6 +264,8 @@ fun MessageBubble(
     linkRanges: List<IntRange>,
     /** chunked transfer progress 0..1: an upload of ours, or a download still arriving */
     transferPct: Float?,
+    /** what stands in for this message until it is revealed; null once it is, or when it has none */
+    cover: String?,
     /** tap-opened details row: time, edited, seen, every action */
     isExpanded: Boolean,
     /** this is the most recent message the peer has seen — show their avatar */
@@ -304,7 +306,7 @@ fun MessageBubble(
     val isContentless = msg.isDeleted || msg.status.hasNoFile
     // nothing but the picture: it fills the bubble edge to edge, with the bubble's own corners.
     // With a caption or a quote the media stays inset, so the text keeps its breathing room.
-    val isBleeding = !msg.isDeleted && msg.body.isEmpty() && repliedPreview == null &&
+    val isBleeding = cover == null && !msg.isDeleted && msg.body.isEmpty() && repliedPreview == null &&
         (msg.kind == MessageKind.IMAGE || msg.kind == MessageKind.VIDEO) && msg.attachment?.mediaSource() != null
     val reactionCount = msg.reactions.size
 
@@ -367,7 +369,11 @@ fun MessageBubble(
                         onDoubleClick = if (canRetrySend) ({ onRetrySend(msg) }) else null,
                     )
                     .semantics {
-                        contentDescription = if (msg.isDeleted) "Deleted message" else msg.body.ifEmpty { msg.attachment?.name ?: "Attachment" }
+                        contentDescription = when {
+                            cover != null -> "Covered message: $cover. Tap to reveal"
+                            msg.isDeleted -> "Deleted message"
+                            else -> msg.body.ifEmpty { msg.attachment?.name ?: "Attachment" }
+                        }
                     }
                     .padding(
                         horizontal = if (isBleeding) 0.dp else if (isCompact) 9.dp else 11.dp,
@@ -384,7 +390,9 @@ fun MessageBubble(
                     }
                     Box(Modifier.height(5.dp))
                 }
-                if (msg.isDeleted) {
+                if (cover != null) {
+                    CoverFace(cover, ink, inkMuted, textSizeSp)
+                } else if (msg.isDeleted) {
                     Text("Message deleted", style = TnType.body.copy(fontSize = 14.5.sp, fontStyle = FontStyle.Italic), color = inkMuted)
                 } else if (msg.status == MessageStatus.OFFERED && !mine) {
                     val size = msg.attachment?.size ?: 0
@@ -650,6 +658,17 @@ private fun VoiceClip(
                 style = TnType.caption,
                 color = inkMuted,
             )
+        }
+    }
+}
+
+@Composable
+private fun CoverFace(cover: String, ink: Color, inkMuted: Color, textSizeSp: Float) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(TnIcon.EYE, tint = inkMuted, size = 16.dp)
+        Column {
+            Text(cover, style = TnType.body.copy(fontSize = textSizeSp.sp), color = ink)
+            Text("Tap to reveal", style = TnType.caption, color = inkMuted)
         }
     }
 }

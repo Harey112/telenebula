@@ -79,6 +79,7 @@ fun ChatSettingsScreen(viewModel: ChatSettingsViewModel) {
             row { SelectRow("Send read receipts", viewModel.privacyOptions, state.readReceipts.key, viewModel::setReadReceipts) }
             row { SelectRow("Send typing indicator", viewModel.privacyOptions, state.typingIndicators.key, viewModel::setTypingIndicators) }
             row { SelectRow("Block screenshots", viewModel.privacyOptions, state.blockScreenshots.key, viewModel::setBlockScreenshots) }
+            row { SelectRow("Reveal covered messages", viewModel.coverGateOptions, state.revealGateKey, viewModel::setRevealGate) }
         }
         Section(title = "Media") {
             if (state.mediaPreview.isEmpty()) {

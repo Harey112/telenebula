@@ -255,9 +255,9 @@ internal class Outbox(private val engine: Engine) {
 
     // --- message commands ---
 
-    fun sendText(peerIp: String, body: String, replyToId: String?) {
+    fun sendText(peerIp: String, body: String, replyToId: String?, cover: String? = null) {
         requireRoom(peerIp)
-        createOutgoing(peerIp, body, null, MessageKind.TEXT, replyToId, null)
+        createOutgoing(peerIp, body, null, MessageKind.TEXT, replyToId, null, cover)
     }
 
     /**
@@ -277,7 +277,7 @@ internal class Outbox(private val engine: Engine) {
      * The file must already live in app storage (the app copies a picked `content://` there); only
      * its path is handed over.
      */
-    fun sendAttachment(peerIp: String, path: String, meta: MessageAttachment, replyToId: String?) {
+    fun sendAttachment(peerIp: String, path: String, meta: MessageAttachment, replyToId: String?, cover: String? = null) {
         requireRoom(peerIp)
         val attachment = MessageAttachment(
             name = meta.name,
@@ -288,7 +288,7 @@ internal class Outbox(private val engine: Engine) {
             height = meta.height?.takeIf { it > 0 },
             durationMs = meta.durationMs?.takeIf { it > 0 },
         )
-        createOutgoing(peerIp, "", attachment, Wire.kindForMime(meta.mime), replyToId, null)
+        createOutgoing(peerIp, "", attachment, Wire.kindForMime(meta.mime), replyToId, null, cover)
     }
 
     private fun createOutgoing(
@@ -298,6 +298,7 @@ internal class Outbox(private val engine: Engine) {
         kind: MessageKind,
         replyToId: String?,
         presetId: String?,
+        cover: String? = null,
     ) {
         val ip = Ip.normalize(peerIp)
         // the chat's disappearing timer: our copy counts from now, the peer's from first read
@@ -316,6 +317,7 @@ internal class Outbox(private val engine: Engine) {
             expireSecs = expireSecs,
             expiresAt = expireSecs?.let { ts + it * 1000 },
             isRead = true,
+            cover = CoverText.of(cover),
         )
         store.insertMessage(message)
         enqueue(newAction(MessageActionType.SEND, message.id, ip))

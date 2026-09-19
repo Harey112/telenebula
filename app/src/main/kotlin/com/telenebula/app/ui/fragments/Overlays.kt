@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +40,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.telenebula.app.ui.icons.Icon
@@ -198,6 +201,126 @@ fun TnBottomSheet(isVisible: Boolean, title: String, onClose: () -> Unit, conten
                     content()
                 }
             }
+        }
+    }
+}
+
+/** Writes the line that stands in for the next messages sent to this chat. */
+@Composable
+fun CoverModal(
+    isVisible: Boolean,
+    value: String,
+    suggestions: List<String>,
+    onChange: (String) -> Unit,
+    onPick: (String) -> Unit,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val colors = TnTheme.colors
+    val focus = remember { FocusRequester() }
+    CenteredOverlay(isVisible = isVisible, onDismiss = onCancel, horizontalPadding = 28.dp) {
+        LaunchedEffect(Unit) { focus.requestFocus() }
+        Column(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.surface).padding(20.dp),
+        ) {
+            Text("Cover message", style = TnType.body.copy(fontSize = 18.sp, fontWeight = FontWeight.Medium), color = colors.text)
+            Text("What should everyone see?", style = TnType.small, color = colors.textMuted, modifier = Modifier.padding(top = 4.dp))
+            BasicTextField(
+                value = value,
+                onValueChange = onChange,
+                singleLine = true,
+                textStyle = TnType.body.copy(fontSize = 16.sp, color = colors.text),
+                cursorBrush = SolidColor(colors.accent),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 14.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(colors.surfaceRaised)
+                    .focusRequester(focus)
+                    .semantics { contentDescription = "Cover text" },
+                decorationBox = { inner ->
+                    Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                        if (value.isEmpty()) Text("See you tomorrow", style = TnType.body.copy(fontSize = 16.sp), color = colors.textMuted)
+                        inner()
+                    }
+                },
+            )
+            Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(TnSpace.sm)) {
+                for (suggestion in suggestions) {
+                    Text(
+                        suggestion,
+                        style = TnType.small,
+                        color = colors.text,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.surfaceRaised)
+                            .clickable(role = Role.Button) { onPick(suggestion) }
+                            .padding(horizontal = TnSpace.md, vertical = 6.dp)
+                            .semantics { contentDescription = "Use cover: $suggestion" },
+                    )
+                }
+            }
+            Text(
+                "Hides the whole message — text, voice or file. A contact on an older TeleNebula sees the message itself.",
+                style = TnType.caption,
+                color = colors.textMuted,
+                modifier = Modifier.padding(top = 14.dp),
+            )
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(26.dp, Alignment.End)) {
+                Text("Cancel", style = TnType.body.copy(fontWeight = FontWeight.Medium), color = colors.textMuted, modifier = Modifier.clickable(role = Role.Button, onClick = onCancel))
+                Text(
+                    "Use cover",
+                    style = TnType.body.copy(fontWeight = FontWeight.Medium),
+                    color = if (value.isBlank()) colors.hairline else colors.accent,
+                    modifier = Modifier.clickable(enabled = value.isNotBlank(), role = Role.Button, onClick = onConfirm),
+                )
+            }
+        }
+    }
+}
+
+/** The reveal gate that proves a deliberate tap: the code is shown, not remembered. */
+@Composable
+fun RevealCodeModal(code: String?, entry: String, onEntry: (String) -> Unit, onCancel: () -> Unit) {
+    val colors = TnTheme.colors
+    val focus = remember { FocusRequester() }
+    CenteredOverlay(isVisible = code != null, onDismiss = onCancel, horizontalPadding = 36.dp) {
+        LaunchedEffect(Unit) { focus.requestFocus() }
+        Column(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.surface).padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("Type this code to reveal", style = TnType.body.copy(fontWeight = FontWeight.Medium), color = colors.text)
+            Text(
+                code.orEmpty().toCharArray().joinToString("  "),
+                style = TnType.title.copy(fontSize = 26.sp, fontWeight = FontWeight.Medium),
+                color = colors.accent,
+                modifier = Modifier.padding(top = 14.dp).semantics { contentDescription = "Code ${code.orEmpty().toCharArray().joinToString(" ")}" },
+            )
+            BasicTextField(
+                value = entry,
+                onValueChange = onEntry,
+                singleLine = true,
+                textStyle = TnType.title.copy(fontSize = 24.sp, color = colors.text, textAlign = TextAlign.Center, letterSpacing = 8.sp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                cursorBrush = SolidColor(colors.accent),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(colors.surfaceRaised)
+                    .focusRequester(focus)
+                    .semantics { contentDescription = "Enter the code" },
+                decorationBox = { inner ->
+                    Box(modifier = Modifier.padding(vertical = 12.dp), contentAlignment = Alignment.Center) { inner() }
+                },
+            )
+            Text(
+                "Cancel",
+                style = TnType.body.copy(fontWeight = FontWeight.Medium),
+                color = colors.textMuted,
+                modifier = Modifier.padding(top = 18.dp).clickable(role = Role.Button, onClick = onCancel),
+            )
         }
     }
 }

@@ -62,6 +62,8 @@ fun MessageTimeline(
     replyPreviews: Map<String, ReplyPreview>,
     linkRanges: Map<String, List<IntRange>>,
     transferProgress: Map<String, Double>,
+    /** messages whose cover has been lifted for as long as this chat stays open */
+    revealedIds: Set<String>,
     textSizeSp: Float,
     isCompact: Boolean,
     expandedMessageId: String?,
@@ -129,6 +131,7 @@ fun MessageTimeline(
                     repliedPreview = replyPreviews[item.msg.id],
                     linkRanges = linkRanges[item.msg.id].orEmpty(),
                     transferPct = transferProgress[item.msg.id]?.toFloat(),
+                    cover = item.msg.cover?.takeIf { it.isNotBlank() && item.msg.id !in revealedIds && !item.msg.isDeleted },
                     isExpanded = expandedMessageId == item.msg.id,
                     showSeenAvatar = seenAvatarMessageId == item.msg.id,
                     peerName = peerName,

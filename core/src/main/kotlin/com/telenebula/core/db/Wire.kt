@@ -1,6 +1,7 @@
 package com.telenebula.core.db
 
 import com.telenebula.core.model.CallOutcome
+import com.telenebula.core.model.CoverRevealGate
 import com.telenebula.core.model.MessageActionStatus
 import com.telenebula.core.model.MessageActionType
 import com.telenebula.core.model.MessageDirection
@@ -42,6 +43,23 @@ internal object Wire {
         "received" -> MessageStatus.RECEIVED
         // written by a newer build than this one: show it as finished rather than dropping the row
         else -> if (direction == MessageDirection.OUT) MessageStatus.SENT else MessageStatus.RECEIVED
+    }
+
+    val CoverRevealGate.wire: String
+        get() = when (this) {
+            CoverRevealGate.TAP -> "tap"
+            CoverRevealGate.ASK -> "ask"
+            CoverRevealGate.CODE -> "code"
+            CoverRevealGate.DEVICE -> "device"
+        }
+
+    /** null is "follow the global setting", which is also where a value a newer build wrote lands. */
+    fun revealGate(value: String?): CoverRevealGate? = when (value) {
+        "tap" -> CoverRevealGate.TAP
+        "ask" -> CoverRevealGate.ASK
+        "code" -> CoverRevealGate.CODE
+        "device" -> CoverRevealGate.DEVICE
+        else -> null
     }
 
     val MessageKind.wire: String

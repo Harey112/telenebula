@@ -52,11 +52,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.telenebula.app.ui.fragments.Pill
 import com.telenebula.app.ui.fragments.Avatar
 import com.telenebula.app.ui.fragments.ErrorBanner
+import com.telenebula.app.ui.fragments.CoverModal
 import com.telenebula.app.ui.fragments.ForwardSheet
 import com.telenebula.app.ui.fragments.MenuOption
 import com.telenebula.app.ui.fragments.MessageActionsMenu
 import com.telenebula.app.ui.fragments.MessageTimeline
 import com.telenebula.app.ui.fragments.OptionsMenu
+import com.telenebula.app.ui.fragments.RevealCodeModal
 import com.telenebula.app.ui.icons.Icon
 import com.telenebula.app.ui.icons.TnIcon
 import com.telenebula.app.ui.theme.TnRadius
@@ -76,6 +78,7 @@ fun ChatScreen(viewModel: ChatViewModel) {
     Column(modifier = Modifier.fillMaxSize().background(colors.background).statusBarsPadding().navigationBarsPadding().imePadding()) {
         ChatHeader(state, viewModel)
         MessageList(state, viewModel, modifier = Modifier.weight(1f))
+        CoverBanner(state, viewModel)
         ComposerBanner(state, viewModel)
         Composer(state, viewModel)
     }
@@ -223,6 +226,7 @@ private fun MessageList(state: ChatUiState, actions: ChatActions, modifier: Modi
             replyPreviews = state.replyPreviews,
             linkRanges = state.linkRanges,
             transferProgress = state.transferProgress,
+            revealedIds = state.revealedIds,
             textSizeSp = state.textSizeSp,
             isCompact = state.isCompact,
             expandedMessageId = state.expandedMessageId,
@@ -256,13 +260,37 @@ private fun MessageList(state: ChatUiState, actions: ChatActions, modifier: Modi
     }
 }
 
+/** What every message sent from here goes out under, until it is cleared. */
+@Composable
+private fun CoverBanner(state: ChatUiState, actions: ChatActions) {
+    val colors = TnTheme.colors
+    val cover = state.cover ?: return
+    HorizontalDivider(thickness = Dp.Hairline, color = colors.hairline)
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = TnSpace.lg, vertical = TnSpace.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TnSpace.sm),
+    ) {
+        Icon(TnIcon.EYE, tint = colors.accent, size = 16.dp)
+        Text(
+            "Cover: $cover",
+            style = TnType.small,
+            color = colors.textMuted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).clickable(role = Role.Button, onClick = actions::openCoverSheet).semantics { contentDescription = "Edit the cover: $cover" },
+        )
+        Icon(TnIcon.CLOSE, tint = colors.textMuted, size = 18.dp, contentDescription = "Send without a cover", modifier = Modifier.clickable(role = Role.Button, onClick = actions::clearCover))
+    }
+}
+
 /** The "replying to" or "editing" strip above the composer. */
 @Composable
 private fun ComposerBanner(state: ChatUiState, actions: ChatActions) {
     val colors = TnTheme.colors
     val (icon, text, onCancel, label) = when (val mode = state.composer) {
         is ComposerMode.Editing -> Banner(TnIcon.PENCIL, "Editing: ${mode.message.body}", actions::cancelEdit, "Cancel edit")
-        is ComposerMode.Replying -> Banner(TnIcon.REPLY, "Replying to: ${mode.to.body.ifEmpty { mode.to.attachment?.name ?: "Attachment" }}", actions::cancelReply, "Cancel reply")
+        is ComposerMode.Replying -> Banner(TnIcon.REPLY, "Replying to: ${mode.to.cover ?: mode.to.body.ifEmpty { mode.to.attachment?.name ?: "Attachment" }}", actions::cancelReply, "Cancel reply")
         ComposerMode.Idle -> return
     }
     HorizontalDivider(thickness = Dp.Hairline, color = colors.hairline)
@@ -433,10 +461,25 @@ private fun ChatDialogs(state: ChatUiState, actions: ChatActions) {
                 MenuOption("media", TnIcon.IMAGE, "Photos & Videos", onClick = actions::attachMedia),
                 MenuOption("file", TnIcon.FOLDER, "Files & Documents", onClick = actions::attachFile),
                 MenuOption("voice", TnIcon.MIC, "Voice message", onClick = actions::startVoiceMessage),
-                MenuOption("cover", TnIcon.EYE, "Cover message · coming soon", onClick = actions::coverMessageSoon),
+                MenuOption("cover", TnIcon.EYE, "Cover message", onClick = actions::openCoverSheet),
             )
         },
         onClose = actions::closeAttachSheet,
+    )
+    CoverModal(
+        isVisible = overlay is ChatOverlay.Cover,
+        value = state.coverDraft,
+        suggestions = state.coverSuggestions,
+        onChange = actions::setCoverDraft,
+        onPick = actions::pickCover,
+        onCancel = actions::cancelCover,
+        onConfirm = actions::confirmCover,
+    )
+    RevealCodeModal(
+        code = (overlay as? ChatOverlay.RevealCode)?.code,
+        entry = (overlay as? ChatOverlay.RevealCode)?.entry.orEmpty(),
+        onEntry = actions::setRevealCode,
+        onCancel = actions::cancelReveal,
     )
     ForwardSheet(isVisible = overlay is ChatOverlay.Forward, contacts = (overlay as? ChatOverlay.Forward)?.contacts.orEmpty(), onPick = actions::forwardTo, onClose = actions::closeForward)
 }

@@ -7,6 +7,7 @@ import com.telenebula.app.nav.Contact as ContactKey
 import com.telenebula.app.nav.Navigator
 import com.telenebula.app.notices.NoticeCenter
 import com.telenebula.app.notices.Prompt
+import com.telenebula.app.platform.AppLock
 import com.telenebula.app.platform.AttachmentStore
 import com.telenebula.app.platform.ContactLabels
 import com.telenebula.app.platform.FileIo
@@ -19,6 +20,7 @@ import com.telenebula.app.ui.fragments.MenuOption
 import com.telenebula.app.ui.fragments.SelectOption
 import com.telenebula.app.ui.icons.TnIcon
 import com.telenebula.app.ui.shared.ChatSearchRequests
+import com.telenebula.app.ui.shared.CoverGates
 import com.telenebula.app.ui.shared.openAttachment
 import com.telenebula.core.CoreClient
 import com.telenebula.core.PeerQueueStore
@@ -63,6 +65,7 @@ data class ChatSettingsUiState(
     val readReceipts: PrivacyChoice = PrivacyChoice.DEFAULT,
     val typingIndicators: PrivacyChoice = PrivacyChoice.DEFAULT,
     val blockScreenshots: PrivacyChoice = PrivacyChoice.DEFAULT,
+    val revealGateKey: String = CoverGates.DEFAULT_KEY,
     val disappearSeconds: Int = 0,
     val failedCount: Int = 0,
     /** actions still waiting to reach this peer */
@@ -107,6 +110,7 @@ class ChatSettingsViewModel(
     private val viewer: MediaViewerCenter,
     private val peerQueues: PeerQueueStore,
     private val chatSearch: ChatSearchRequests,
+    private val appLock: AppLock,
     private val notices: NoticeCenter,
     private val navigator: Navigator,
 ) : ViewModel() {
@@ -143,6 +147,7 @@ class ChatSettingsViewModel(
         readReceipts = PrivacyChoice.of(contact?.privacy?.sendReadReceipts),
         typingIndicators = PrivacyChoice.of(contact?.privacy?.sendTypingIndicators),
         blockScreenshots = PrivacyChoice.of(contact?.privacy?.blockScreenshots),
+        revealGateKey = CoverGates.keyOf(contact?.privacy?.revealGate),
         disappearSeconds = contact?.disappearSeconds ?: 0,
         failedCount = c.failed,
         queuedCount = queue?.queued ?: 0,
@@ -165,12 +170,17 @@ class ChatSettingsViewModel(
 
     fun setBlockScreenshots(key: String) = privacy { it.copy(blockScreenshots = PrivacyChoice.fromKey(key).value) }
 
+    fun setRevealGate(key: String) = privacy { it.copy(revealGate = CoverGates.of(key)) }
+
+    val coverGateOptions: List<SelectOption> = CoverGates.options(appLock.canUseDeviceAuth(), withDefault = true)
+
     private fun privacy(transform: (ContactPrivacyPrefs) -> ContactPrivacyPrefs) {
         val s = uiState.value
         val current = ContactPrivacyPrefs(
             sendReadReceipts = s.readReceipts.value,
             sendTypingIndicators = s.typingIndicators.value,
             blockScreenshots = s.blockScreenshots.value,
+            revealGate = CoverGates.of(s.revealGateKey),
         )
         viewModelScope.launch { core.setContactPrivacy(ip, transform(current)) }
     }
