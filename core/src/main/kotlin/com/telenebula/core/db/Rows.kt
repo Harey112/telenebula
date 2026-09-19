@@ -14,7 +14,7 @@ import kotlinx.serialization.builtins.serializer
 
 // a mapper indexes into its column list: a column added to one and not the other shifts the row
 internal const val MSG_COLS = "id, peer_ip, direction, body, ts, status, kind, attachment_json, edited, deleted, " +
-    "reactions_json, reply_to_id, seen_at, expire_secs, expires_at, read, cover_text"
+    "reactions_json, reply_to_id, seen_at, expire_secs, expires_at, read, covered"
 
 internal const val ACTION_COLS = "id, message_id, peer_ip, type, payload_json, status, attempts, " +
     "created_at, updated_at"
@@ -71,7 +71,7 @@ internal fun toMessage(row: SqlRow): ChatMessage {
         expireSecs = row.longOrNull(13),
         expiresAt = row.longOrNull(14),
         isRead = row.boolean(15),
-        cover = row.stringOrNull(16),
+        isCovered = row.boolean(16),
     )
 }
 

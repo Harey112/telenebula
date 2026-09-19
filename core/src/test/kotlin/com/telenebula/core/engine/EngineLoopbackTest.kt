@@ -184,10 +184,10 @@ class EngineLoopbackTest {
     @Test
     fun `a cover travels with a message and with an attachment`() = runBlocking {
         val (a, b) = pair()
-        a.engine.outbox.sendText(b.ip, "the real thing", null, "See you tomorrow")
+        a.engine.outbox.sendText(b.ip, "the real thing", null, true)
         waitFor("the covered message to arrive") { b.store.getMessages(a.ip, 10).isNotEmpty() }
         val text = b.store.getMessages(a.ip, 10).single()
-        assertEquals("See you tomorrow", text.cover)
+        assertTrue(text.isCovered)
         assertEquals("the real thing", text.body)
 
         val source = File(scratch, "alice/attachments/covered.m4a").apply { writeBytes(ByteArray(2_048)) }
@@ -196,10 +196,10 @@ class EngineLoopbackTest {
             source.path,
             MessageAttachment(name = "Voice message.m4a", mime = "audio/mp4", size = 2_048, durationMs = 4_200),
             null,
-            "See you tomorrow",
+            true,
         )
         waitFor("the covered clip to land") { b.store.getMessages(a.ip, 10).size == 2 && b.store.getMessages(a.ip, 10).last().attachment?.uri != null }
-        assertEquals("See you tomorrow", b.store.getMessages(a.ip, 10).last().cover)
+        assertTrue(b.store.getMessages(a.ip, 10).last().isCovered)
     }
 
     @Test

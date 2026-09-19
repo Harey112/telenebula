@@ -346,7 +346,8 @@ internal class TransferManager(private val engine: Engine) {
         store.touchContact(fromIp)
         engine.transport.sendAck(link, transferId)
         engine.events.messagesChanged(fromIp, listOf(transferId))
-        engine.inbound.notifyMessage(fromIp, "", store.getMessage(transferId)?.cover ?: done.body.ifEmpty { "Attachment" })
+        val covered = store.getMessage(transferId)?.isCovered == true
+        engine.inbound.notifyMessage(fromIp, "", if (covered) InboundDispatcher.COVERED_PREVIEW else done.body.ifEmpty { "Attachment" })
     }
 
     // --- control frames from the peer ---
@@ -469,7 +470,7 @@ internal class TransferManager(private val engine: Engine) {
         replyToId = envelope.replyToId,
         expireSecs = envelope.expiresIn?.takeIf { it in 0..Limits.MAX_EXPIRE_SECS },
         isRead = false,
-        cover = CoverText.of(envelope),
+        isCovered = envelope.covered == true,
     )
 
     private fun isSane(size: Long, totalChunks: Long): Boolean =

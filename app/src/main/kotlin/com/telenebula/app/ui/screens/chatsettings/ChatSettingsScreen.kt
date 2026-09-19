@@ -79,7 +79,7 @@ fun ChatSettingsScreen(viewModel: ChatSettingsViewModel) {
             row { SelectRow("Send read receipts", viewModel.privacyOptions, state.readReceipts.key, viewModel::setReadReceipts) }
             row { SelectRow("Send typing indicator", viewModel.privacyOptions, state.typingIndicators.key, viewModel::setTypingIndicators) }
             row { SelectRow("Block screenshots", viewModel.privacyOptions, state.blockScreenshots.key, viewModel::setBlockScreenshots) }
-            row { SelectRow("Reveal covered messages", viewModel.coverGateOptions, state.revealGateKey, viewModel::setRevealGate) }
+            row { SettingRow(TnIcon.LOCK, "Reveal covered messages", subtitle = state.revealGateLabel, onClick = viewModel::openRevealGateMenu) }
         }
         Section(title = "Media") {
             if (state.mediaPreview.isEmpty()) {
@@ -121,4 +121,6 @@ fun ChatSettingsScreen(viewModel: ChatSettingsViewModel) {
     }
     val menu = remember(state.disappearSeconds) { viewModel.disappearMenu(state.disappearSeconds) }
     OptionsMenu(isVisible = state.isDisappearMenuOpen, options = menu, onClose = viewModel::closeDisappearMenu, title = "Disappearing messages · ${state.disappearLabel}")
+    val gateMenu = remember(state.revealGate) { viewModel.revealGateMenu(state.revealGate) }
+    OptionsMenu(isVisible = state.isRevealGateMenuOpen, options = gateMenu, onClose = viewModel::closeRevealGateMenu, title = "Reveal covered messages · ${state.revealGateLabel}")
 }

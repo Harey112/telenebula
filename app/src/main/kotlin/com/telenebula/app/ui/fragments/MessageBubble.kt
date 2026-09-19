@@ -264,8 +264,8 @@ fun MessageBubble(
     linkRanges: List<IntRange>,
     /** chunked transfer progress 0..1: an upload of ours, or a download still arriving */
     transferPct: Float?,
-    /** what stands in for this message until it is revealed; null once it is, or when it has none */
-    cover: String?,
+    /** the whole message is behind a lock until it is revealed */
+    isCovered: Boolean,
     /** tap-opened details row: time, edited, seen, every action */
     isExpanded: Boolean,
     /** this is the most recent message the peer has seen — show their avatar */
@@ -306,7 +306,7 @@ fun MessageBubble(
     val isContentless = msg.isDeleted || msg.status.hasNoFile
     // nothing but the picture: it fills the bubble edge to edge, with the bubble's own corners.
     // With a caption or a quote the media stays inset, so the text keeps its breathing room.
-    val isBleeding = cover == null && !msg.isDeleted && msg.body.isEmpty() && repliedPreview == null &&
+    val isBleeding = !isCovered && !msg.isDeleted && msg.body.isEmpty() && repliedPreview == null &&
         (msg.kind == MessageKind.IMAGE || msg.kind == MessageKind.VIDEO) && msg.attachment?.mediaSource() != null
     val reactionCount = msg.reactions.size
 
@@ -370,7 +370,7 @@ fun MessageBubble(
                     )
                     .semantics {
                         contentDescription = when {
-                            cover != null -> "Covered message: $cover. Tap to reveal"
+                            isCovered -> "Covered message, tap to reveal"
                             msg.isDeleted -> "Deleted message"
                             else -> msg.body.ifEmpty { msg.attachment?.name ?: "Attachment" }
                         }
@@ -390,8 +390,8 @@ fun MessageBubble(
                     }
                     Box(Modifier.height(5.dp))
                 }
-                if (cover != null) {
-                    CoverFace(cover, ink, inkMuted, textSizeSp)
+                if (isCovered) {
+                    CoverFace(ink, inkMuted, inkSurface, textSizeSp)
                 } else if (msg.isDeleted) {
                     Text("Message deleted", style = TnType.body.copy(fontSize = 14.5.sp, fontStyle = FontStyle.Italic), color = inkMuted)
                 } else if (msg.status == MessageStatus.OFFERED && !mine) {
@@ -663,11 +663,14 @@ private fun VoiceClip(
 }
 
 @Composable
-private fun CoverFace(cover: String, ink: Color, inkMuted: Color, textSizeSp: Float) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Icon(TnIcon.EYE, tint = inkMuted, size = 16.dp)
+private fun CoverFace(ink: Color, inkMuted: Color, inkSurface: Color, textSizeSp: Float) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(
+            modifier = Modifier.size(32.dp).clip(CircleShape).background(inkSurface),
+            contentAlignment = Alignment.Center,
+        ) { Icon(TnIcon.LOCK, tint = ink, size = 16.dp) }
         Column {
-            Text(cover, style = TnType.body.copy(fontSize = textSizeSp.sp), color = ink)
+            Text("Covered message", style = TnType.body.copy(fontSize = textSizeSp.sp), color = ink)
             Text("Tap to reveal", style = TnType.caption, color = inkMuted)
         }
     }

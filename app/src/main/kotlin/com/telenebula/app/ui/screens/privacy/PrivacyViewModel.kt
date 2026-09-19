@@ -7,9 +7,12 @@ import com.telenebula.app.nav.Navigator
 import com.telenebula.app.platform.AppLock
 import com.telenebula.app.platform.PrefsRepository
 import com.telenebula.app.runtime.AppRuntime
+import com.telenebula.app.ui.fragments.MenuOption
 import com.telenebula.app.ui.fragments.SelectOption
+import com.telenebula.app.ui.icons.TnIcon
 import com.telenebula.core.CoreClient
 import com.telenebula.core.model.Contact
+import com.telenebula.core.model.CoverRevealGate
 import com.telenebula.core.model.Prefs
 import com.telenebula.core.model.Profile
 import com.telenebula.app.ui.shared.CoverGates
@@ -19,9 +22,11 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 
 data class PrivacyUiState(
     val isAppLockEnabled: Boolean = false,
@@ -30,11 +35,14 @@ data class PrivacyUiState(
     val isScreenshotBlocked: Boolean = false,
     val sendReadReceipts: Boolean = true,
     val sendTypingIndicators: Boolean = true,
-    val coverGateKey: String = "tap",
+    val coverGate: CoverRevealGate = CoverRevealGate.TAP,
+    val isCoverGateMenuOpen: Boolean = false,
     val blockedCount: Int = 0,
     val certFingerprint: String = "",
     val certExpiry: String = "",
-)
+) {
+    val coverGateLabel: String get() = CoverGates.labelOf(coverGate)
+}
 
 class PrivacyViewModel(
     private val prefs: PrefsRepository,
@@ -46,20 +54,25 @@ class PrivacyViewModel(
     private val canUseAppLock = appLock.canUseDeviceAuth()
     private val blockedCount = core.contacts.map(::blocked)
 
-    val uiState: StateFlow<PrivacyUiState> = combine(prefs.prefs, runtime.profile, blockedCount, ::buildState)
-        .uiState(viewModelScope, buildState(prefs.prefs.value, runtime.profile.value, blocked(core.contacts.value)))
+    private data class Local(val isCoverGateMenuOpen: Boolean = false)
+
+    private val local = MutableStateFlow(Local())
+
+    val uiState: StateFlow<PrivacyUiState> = combine(prefs.prefs, runtime.profile, blockedCount, local, ::buildState)
+        .uiState(viewModelScope, buildState(prefs.prefs.value, runtime.profile.value, blocked(core.contacts.value), local.value))
 
     private fun blocked(contacts: List<Contact>?): Int = contacts.orEmpty().count { it.isBlocked }
 
-    private fun buildState(p: Prefs, profile: Profile?, blocked: Int): PrivacyUiState = PrivacyUiState(
+    private fun buildState(p: Prefs, profile: Profile?, blocked: Int, l: Local): PrivacyUiState = PrivacyUiState(
         isAppLockEnabled = p.isAppLockEnabled,
         canUseAppLock = canUseAppLock,
         appLockAfterKey = p.appLockAfterSec.toString(),
         isScreenshotBlocked = p.isScreenshotBlocked,
         sendReadReceipts = p.sendReadReceipts,
         sendTypingIndicators = p.sendTypingIndicators,
-        coverGateKey = p.coverRevealGate.key,
+        coverGate = p.coverRevealGate,
         blockedCount = blocked,
+        isCoverGateMenuOpen = l.isCoverGateMenuOpen,
         certFingerprint = profile?.certFingerprint.orEmpty(),
         certExpiry = profile?.certNotAfter?.let(::formatExpiry).orEmpty(),
     )
@@ -68,11 +81,15 @@ class PrivacyViewModel(
         SelectOption("0", "Immediately"), SelectOption("60", "1 minute"), SelectOption("300", "5 minutes"), SelectOption("900", "15 minutes"),
     )
 
-    val coverGateOptions: List<SelectOption> = CoverGates.options(canUseAppLock, withDefault = false)
+    fun openCoverGateMenu() = local.update { it.copy(isCoverGateMenuOpen = true) }
 
-    fun setCoverGate(key: String) {
-        val gate = CoverGates.of(key) ?: return
-        prefs.update { it.copy(coverRevealGate = gate) }
+    fun closeCoverGateMenu() = local.update { it.copy(isCoverGateMenuOpen = false) }
+
+    fun coverGateMenu(current: CoverRevealGate): List<MenuOption> = CoverGates.gates(canUseAppLock).map { gate ->
+        MenuOption(gate.key, if (gate == current) TnIcon.CHECK else TnIcon.LOCK, CoverGates.labelOf(gate)) {
+            local.update { it.copy(isCoverGateMenuOpen = false) }
+            prefs.update { it.copy(coverRevealGate = gate) }
+        }
     }
 
     fun toggleAppLock() = prefs.update { it.copy(isAppLockEnabled = !it.isAppLockEnabled) }

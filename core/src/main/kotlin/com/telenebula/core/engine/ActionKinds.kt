@@ -44,7 +44,7 @@ internal sealed interface ActionKind {
                 replyToId = message.replyToId,
                 expiresIn = message.expireSecs,
                 attachment = inline,
-                cover = message.cover,
+                covered = if (message.isCovered) true else null,
             )
         }
     }

@@ -58,7 +58,7 @@ class CoreClientTest {
     @Test
     fun command_reportsTheEngineError_andStillClearsTheNotification() = runTest {
         val core = object : FakeCore() {
-            override fun sendText(peerIp: String, body: String, replyToId: String?, cover: String?) = throw RuntimeException("db locked")
+            override fun sendText(peerIp: String, body: String, replyToId: String?, isCovered: Boolean) = throw RuntimeException("db locked")
         }
         val client = client(core, StandardTestDispatcher(testScheduler))
         client.sendText("fd00::2", "hi")

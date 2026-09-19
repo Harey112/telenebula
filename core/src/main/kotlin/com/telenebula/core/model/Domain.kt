@@ -145,8 +145,8 @@ data class ChatMessage(
     val isRead: Boolean = true,
     val expireSecs: Long? = null,
     val expiresAt: Long? = null,
-    /** stands in for the whole message until it is revealed on this device */
-    val cover: String? = null,
+    /** the whole message is behind a lock until it is revealed on this device */
+    val isCovered: Boolean = false,
 )
 
 @Serializable

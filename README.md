@@ -26,9 +26,9 @@ Your identity is that certificate: its name is your username and its overlay IPv
   notification, and a floating window that survives leaving the app.
 - **Attachments**: photos, videos and files of any size, streamed phone to phone; large files are
   offered first and an accepted transfer resumes where it stopped.
-- **Cover messages**: any message — text, voice message or file — can be sent under an innocuous
-  line, and that line is all the chat list, the notification and the bubble show until you reveal
-  it: with a tap, a prompt, a code typed back, or the Android lock, per chat.
+- **Cover messages**: any message — text, voice message or file — can be sent covered, and the
+  bubble, the chat list and the notification say only that until it is revealed: with a tap, a
+  prompt, a code typed back, or the Android lock, chosen per chat.
 - **Status**: online, reachable or offline, learnt when phones ping each other, with a switch and a
   pause so you decide what others see.
 - **Nothing gives up**: a message to a phone that is off waits and leaves the moment it comes back.

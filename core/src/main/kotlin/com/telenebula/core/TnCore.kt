@@ -242,11 +242,11 @@ internal class TnCore(
 
     // --- commands ---
 
-    override fun sendText(peerIp: String, body: String, replyToId: String?, cover: String?) =
-        requireEngine().outbox.sendText(peerIp, body, replyToId, cover)
+    override fun sendText(peerIp: String, body: String, replyToId: String?, isCovered: Boolean) =
+        requireEngine().outbox.sendText(peerIp, body, replyToId, isCovered)
 
-    override fun sendAttachment(peerIp: String, path: String, meta: MessageAttachment, replyToId: String?, cover: String?) =
-        requireEngine().outbox.sendAttachment(peerIp, path, meta, replyToId, cover)
+    override fun sendAttachment(peerIp: String, path: String, meta: MessageAttachment, replyToId: String?, isCovered: Boolean) =
+        requireEngine().outbox.sendAttachment(peerIp, path, meta, replyToId, isCovered)
 
     override fun reactToMessage(messageId: String, emoji: String) =
         requireEngine().outbox.reactToMessage(messageId, emoji)
