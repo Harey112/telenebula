@@ -120,6 +120,8 @@ data class Envelope(
     val height: Long? = null,
     /** type=att-begin / att-offer: audio length in ms; absent from older builds */
     val duration: Long? = null,
+    /** type=msg / att-begin / att-offer: what stands in for the message until it is revealed */
+    val cover: String? = null,
     /** type=hello / hello-ack: the sender's app version */
     val app: String? = null,
     /** type=pong: "online" while the sender uses the app and shares that, else "reachable"; absent from older builds */

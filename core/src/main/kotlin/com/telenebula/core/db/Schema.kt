@@ -131,6 +131,7 @@ internal object Schema {
             "seen_reported" to "seen_reported INTEGER NOT NULL DEFAULT 0",
             "expire_secs" to "expire_secs INTEGER",
             "expires_at" to "expires_at INTEGER",
+            "cover_text" to "cover_text TEXT",
         )
         for ((column, ddl) in messageAdditions) {
             if (column !in messageColumns) addColumn(db, "messages", ddl)
@@ -151,6 +152,7 @@ internal object Schema {
             "read_receipts" to "read_receipts INTEGER",
             "typing_indicators" to "typing_indicators INTEGER",
             "block_screenshots" to "block_screenshots INTEGER",
+            "reveal_gate" to "reveal_gate TEXT",
         )
         for ((column, ddl) in contactAdditions) {
             if (column !in contactColumns) addColumn(db, "contacts", ddl)

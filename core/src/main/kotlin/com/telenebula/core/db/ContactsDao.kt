@@ -80,8 +80,8 @@ internal class ContactsDao(db: SqlDb, lock: ReentrantLock) : Dao(db, lock) {
 
     fun setContactPrivacy(ip: String, prefs: ContactPrivacyPrefs) = locked {
         db.update(
-            "UPDATE contacts SET read_receipts = ?, typing_indicators = ?, block_screenshots = ? WHERE ip = ?",
-            listOf(prefs.sendReadReceipts.asFlag(), prefs.sendTypingIndicators.asFlag(), prefs.blockScreenshots.asFlag(), ip),
+            "UPDATE contacts SET read_receipts = ?, typing_indicators = ?, block_screenshots = ?, reveal_gate = ? WHERE ip = ?",
+            listOf(prefs.sendReadReceipts.asFlag(), prefs.sendTypingIndicators.asFlag(), prefs.blockScreenshots.asFlag(), prefs.revealGate?.wire, ip),
         )
         Unit
     }

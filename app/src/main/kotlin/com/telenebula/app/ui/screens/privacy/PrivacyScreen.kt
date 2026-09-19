@@ -41,6 +41,7 @@ fun PrivacyScreen(viewModel: PrivacyViewModel) {
             row { SwitchRow(TnIcon.EYE, "Send read receipts", state.sendReadReceipts, viewModel::toggleReadReceipts, subtitle = "Let contacts see when you have read their messages") }
             row { SwitchRow(TnIcon.PENCIL, "Send typing indicators", state.sendTypingIndicators, viewModel::toggleTypingIndicators, subtitle = "Show contacts when you are typing") }
             row { SwitchRow(TnIcon.LOCK, "Block screenshots", state.isScreenshotBlocked, viewModel::toggleScreenshotBlock, subtitle = "Hide the app from screen capture and recents") }
+            row { SelectRow("Reveal covered messages", viewModel.coverGateOptions, state.coverGateKey, viewModel::setCoverGate) }
         }
         Section(title = "Blocked", footnote = "Peers are authenticated by your nebula CA; only devices holding a certificate it signed can reach this app at all.") {
             row {

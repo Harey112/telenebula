@@ -14,13 +14,13 @@ import kotlinx.serialization.builtins.serializer
 
 // a mapper indexes into its column list: a column added to one and not the other shifts the row
 internal const val MSG_COLS = "id, peer_ip, direction, body, ts, status, kind, attachment_json, edited, deleted, " +
-    "reactions_json, reply_to_id, seen_at, expire_secs, expires_at, read"
+    "reactions_json, reply_to_id, seen_at, expire_secs, expires_at, read, cover_text"
 
 internal const val ACTION_COLS = "id, message_id, peer_ip, type, payload_json, status, attempts, " +
     "created_at, updated_at"
 
 internal const val CONTACT_COLS = "ip, name, nickname, notes, added_at, last_seen_at, pinned_at, is_archived, " +
-    "is_blocked, mute_until, is_marked_unread, notif_json, client_version, disappear_seconds, read_receipts, typing_indicators, block_screenshots"
+    "is_blocked, mute_until, is_marked_unread, notif_json, client_version, disappear_seconds, read_receipts, typing_indicators, block_screenshots, reveal_gate"
 
 internal const val CALL_COLS = "id, peer_ip, direction, is_video, outcome, started_at, connected_at, ended_at"
 
@@ -48,6 +48,7 @@ internal fun toContact(row: SqlRow) = Contact(
         sendReadReceipts = row.longOrNull(14)?.let { it != 0L },
         sendTypingIndicators = row.longOrNull(15)?.let { it != 0L },
         blockScreenshots = row.longOrNull(16)?.let { it != 0L },
+        revealGate = Wire.revealGate(row.stringOrNull(17)),
     ),
 )
 
@@ -70,6 +71,7 @@ internal fun toMessage(row: SqlRow): ChatMessage {
         expireSecs = row.longOrNull(13),
         expiresAt = row.longOrNull(14),
         isRead = row.boolean(15),
+        cover = row.stringOrNull(16),
     )
 }
 

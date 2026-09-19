@@ -50,7 +50,7 @@ class TnCoreTest {
         core.stop()
         assertEquals("nine", core.contact("fd::9")?.name)
         try {
-            core.sendText("fd::9", "hi", null)
+            core.sendText("fd::9", "hi", null, null)
             fail("a command needs the engine")
         } catch (e: CoreException) {
             assertEquals(CoreException.Kind.NOT_RUNNING, e.kind)

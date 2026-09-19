@@ -137,4 +137,7 @@ internal object Limits {
 
     /** Changed rows one chat announcement names before a plain re-read is cheaper than the id list. */
     const val MAX_DELTA_IDS = 200
+
+    /** A cover stands in for one bubble and one notification line; a peer cannot make it a payload. */
+    const val MAX_COVER_CHARS = 120
 }

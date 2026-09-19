@@ -11,6 +11,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.CompletableDeferred
 
 /**
@@ -34,6 +35,13 @@ class ActivityGateway {
     fun startActivity(build: (Context) -> Intent) {
         val host = activity ?: return
         host.startActivity(build(host))
+    }
+
+    /** Lends the attached activity for the length of the call; false when none is attached. */
+    fun withActivity(action: (FragmentActivity) -> Unit): Boolean {
+        val host = activity as? FragmentActivity ?: return false
+        action(host)
+        return true
     }
 
     /** Registers the launchers; must run before the activity is STARTED (call from onCreate). */

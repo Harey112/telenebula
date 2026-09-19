@@ -57,8 +57,8 @@ internal open class FakeCore : MessagingCore {
     override fun networkStats(): NetworkStats = NetworkStats()
     override fun storageStats(): StorageStats = StorageStats()
 
-    override fun sendText(peerIp: String, body: String, replyToId: String?) = Unit
-    override fun sendAttachment(peerIp: String, path: String, meta: MessageAttachment, replyToId: String?) = Unit
+    override fun sendText(peerIp: String, body: String, replyToId: String?, cover: String?) = Unit
+    override fun sendAttachment(peerIp: String, path: String, meta: MessageAttachment, replyToId: String?, cover: String?) = Unit
     override fun reactToMessage(messageId: String, emoji: String) = Unit
     override fun editMessage(messageId: String, newBody: String) = Unit
     override fun deleteForEveryone(messageId: String) = Unit

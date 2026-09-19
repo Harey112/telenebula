@@ -98,10 +98,10 @@ internal interface MessagingCore {
 
     // --- commands ---
 
-    fun sendText(peerIp: String, body: String, replyToId: String?)
+    fun sendText(peerIp: String, body: String, replyToId: String?, cover: String?)
 
     /** The bytes stay at [path]; only the path is handed over. */
-    fun sendAttachment(peerIp: String, path: String, meta: MessageAttachment, replyToId: String?)
+    fun sendAttachment(peerIp: String, path: String, meta: MessageAttachment, replyToId: String?, cover: String?)
 
     fun reactToMessage(messageId: String, emoji: String)
 

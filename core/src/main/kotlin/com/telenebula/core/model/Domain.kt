@@ -52,7 +52,17 @@ data class ContactPrivacyPrefs(
     val sendReadReceipts: Boolean? = null,
     val sendTypingIndicators: Boolean? = null,
     val blockScreenshots: Boolean? = null,
+    val revealGate: CoverRevealGate? = null,
 )
+
+/** What this device asks for before a covered message is shown; local, never sent. */
+@Serializable
+enum class CoverRevealGate {
+    @SerialName("tap") TAP,
+    @SerialName("ask") ASK,
+    @SerialName("code") CODE,
+    @SerialName("device") DEVICE,
+}
 
 /** Absent (null) fields are left untouched by the core. */
 @Serializable
@@ -135,6 +145,8 @@ data class ChatMessage(
     val isRead: Boolean = true,
     val expireSecs: Long? = null,
     val expiresAt: Long? = null,
+    /** stands in for the whole message until it is revealed on this device */
+    val cover: String? = null,
 )
 
 @Serializable

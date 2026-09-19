@@ -39,7 +39,7 @@ class MessageActionReceiver : BroadcastReceiver() {
                         withTimeout(REPLY_TIMEOUT_MS) {
                             // the core runs in this process (kept alive by the foreground service)
                             val core = CoreRegistry.current() ?: return@withTimeout
-                            core.sendText(ip, text, null)
+                            core.sendText(ip, text, null, null)
                             // reading the chat here also reports the messages as seen
                             core.markChatRead(ip)
                         }

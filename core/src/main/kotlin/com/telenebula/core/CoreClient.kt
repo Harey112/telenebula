@@ -368,15 +368,15 @@ class CoreClient internal constructor(
 
     // --- commands (failures go to the error sink) ---
 
-    suspend fun sendText(peerIp: String, body: String, replyToId: String? = null) =
-        command { core.sendText(peerIp, body, replyToId) }
+    suspend fun sendText(peerIp: String, body: String, replyToId: String? = null, cover: String? = null) =
+        command { core.sendText(peerIp, body, replyToId, cover) }
 
     /**
      * [path] is the stored copy (see [CorePaths.attachmentFile]); the core streams it from there,
      * and [meta]'s own `uri` is ignored.
      */
-    suspend fun sendAttachment(peerIp: String, path: String, meta: MessageAttachment, replyToId: String? = null) =
-        command { core.sendAttachment(peerIp, path, meta, replyToId) }
+    suspend fun sendAttachment(peerIp: String, path: String, meta: MessageAttachment, replyToId: String? = null, cover: String? = null) =
+        command { core.sendAttachment(peerIp, path, meta, replyToId, cover) }
 
     suspend fun reactToMessage(messageId: String, emoji: String) = command { core.reactToMessage(messageId, emoji) }
 

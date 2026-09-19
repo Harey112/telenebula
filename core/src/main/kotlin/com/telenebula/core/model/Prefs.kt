@@ -128,6 +128,7 @@ data class Prefs(
     val nebulaLogLevel: NebulaLogLevel = NebulaLogLevel.INFO,
     val isDeveloperMode: Boolean = false,
     val isAppLockEnabled: Boolean = false,
+    val coverRevealGate: CoverRevealGate = CoverRevealGate.TAP,
     /** seconds in the background before the lock re-arms (0 = immediately) */
     val appLockAfterSec: Int = 60,
     val autoCleanOrphans: Boolean = false,

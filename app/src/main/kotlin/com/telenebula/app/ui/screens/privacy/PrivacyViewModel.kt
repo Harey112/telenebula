@@ -12,6 +12,8 @@ import com.telenebula.core.CoreClient
 import com.telenebula.core.model.Contact
 import com.telenebula.core.model.Prefs
 import com.telenebula.core.model.Profile
+import com.telenebula.app.ui.shared.CoverGates
+import com.telenebula.app.ui.shared.key
 import com.telenebula.app.ui.shared.uiState
 import java.time.Instant
 import java.time.ZoneId
@@ -28,6 +30,7 @@ data class PrivacyUiState(
     val isScreenshotBlocked: Boolean = false,
     val sendReadReceipts: Boolean = true,
     val sendTypingIndicators: Boolean = true,
+    val coverGateKey: String = "tap",
     val blockedCount: Int = 0,
     val certFingerprint: String = "",
     val certExpiry: String = "",
@@ -55,6 +58,7 @@ class PrivacyViewModel(
         isScreenshotBlocked = p.isScreenshotBlocked,
         sendReadReceipts = p.sendReadReceipts,
         sendTypingIndicators = p.sendTypingIndicators,
+        coverGateKey = p.coverRevealGate.key,
         blockedCount = blocked,
         certFingerprint = profile?.certFingerprint.orEmpty(),
         certExpiry = profile?.certNotAfter?.let(::formatExpiry).orEmpty(),
@@ -63,6 +67,13 @@ class PrivacyViewModel(
     val appLockAfterOptions: List<SelectOption> = listOf(
         SelectOption("0", "Immediately"), SelectOption("60", "1 minute"), SelectOption("300", "5 minutes"), SelectOption("900", "15 minutes"),
     )
+
+    val coverGateOptions: List<SelectOption> = CoverGates.options(canUseAppLock, withDefault = false)
+
+    fun setCoverGate(key: String) {
+        val gate = CoverGates.of(key) ?: return
+        prefs.update { it.copy(coverRevealGate = gate) }
+    }
 
     fun toggleAppLock() = prefs.update { it.copy(isAppLockEnabled = !it.isAppLockEnabled) }
     fun setAppLockAfter(key: String) = key.toIntOrNull()?.let { sec -> prefs.update { it.copy(appLockAfterSec = sec) } } ?: Unit
