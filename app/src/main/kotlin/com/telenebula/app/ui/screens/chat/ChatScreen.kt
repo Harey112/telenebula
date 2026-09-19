@@ -271,7 +271,7 @@ private fun CoverBanner(state: ChatUiState, actions: ChatActions) {
         horizontalArrangement = Arrangement.spacedBy(TnSpace.sm),
     ) {
         Icon(TnIcon.LOCK, tint = colors.accent, size = 16.dp)
-        Text("Covered: they tap to reveal it", style = TnType.small, color = colors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text("Covered", style = TnType.small, color = colors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Icon(TnIcon.CLOSE, tint = colors.textMuted, size = 18.dp, contentDescription = "Send without a cover", modifier = Modifier.clickable(role = Role.Button, onClick = actions::clearCover))
     }
 }
