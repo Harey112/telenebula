@@ -130,6 +130,25 @@ class StoreTest {
     }
 
     @Test
+    fun `a covered message is in neither the media gallery nor the link list`() {
+        val store = store()
+        store.upsertContact("fd::1", "alice")
+        store.insertMessage(
+            message("m1", body = "see https://example.com/a").copy(
+                isCovered = true,
+                kind = MessageKind.IMAGE,
+                attachment = MessageAttachment(name = "photo.jpg", mime = "image/jpeg", size = 10, uri = "file:///tmp/photo.jpg"),
+            ),
+        )
+        store.insertMessage(message("m2", body = "open https://example.com/b", ts = 2))
+
+        assertTrue(store.getChatMedia("fd::1", 10).isEmpty())
+        assertEquals(0, store.countChatMedia("fd::1"))
+        assertEquals(listOf("https://example.com/b"), store.getChatLinks("fd::1", 10).map { it.url })
+        assertEquals(1, store.countChatLinkMessages("fd::1"))
+    }
+
+    @Test
     fun `a chat remembers which gate it asks for before a cover comes off`() {
         val store = store()
         store.upsertContact("fd::1", "alice")

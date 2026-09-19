@@ -287,8 +287,6 @@ class ChatViewModel(
         val voiceElapsedMs: Long = 0,
         val isCoverOn: Boolean = false,
         val revealed: Set<String> = emptySet(),
-        /** one answered gate opens the rest of this chat's covers */
-        val isGateOpen: Boolean = false,
         val codeEntry: String = "",
     )
 
@@ -777,15 +775,11 @@ class ChatViewModel(
     }
 
     private fun revealMessage(msg: ChatMessage) {
-        if (local.value.isGateOpen) {
-            reveal(msg.id)
-            return
-        }
         when (revealGate()) {
             CoverRevealGate.TAP -> reveal(msg.id)
             CoverRevealGate.ASK -> notices.setPrompt(
                 Prompt(
-                    message = "Reveal this message? Covered messages stay open until you leave this chat.",
+                    message = "Reveal this message? It stays open until you leave this chat.",
                     rightLabel = "Reveal",
                     onRight = { reveal(msg.id) },
                 ),
@@ -798,7 +792,7 @@ class ChatViewModel(
     }
 
     private fun reveal(id: String) = local.update {
-        it.copy(revealed = it.revealed + id, isGateOpen = true, overlay = LocalOverlay.None, codeEntry = "")
+        it.copy(revealed = it.revealed + id, overlay = LocalOverlay.None, codeEntry = "")
     }
 
     private fun newCode(): String = Random.nextInt(1_000, 10_000).toString()
