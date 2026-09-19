@@ -30,6 +30,7 @@ import com.telenebula.app.ui.fragments.RowTone
 import com.telenebula.app.ui.fragments.Screen
 import com.telenebula.app.ui.fragments.ScreenHeader
 import com.telenebula.app.ui.fragments.Section
+import com.telenebula.app.ui.fragments.SelectMenuRow
 import com.telenebula.app.ui.fragments.SelectRow
 import com.telenebula.app.ui.fragments.SettingRow
 import com.telenebula.app.ui.icons.Icon
@@ -79,7 +80,7 @@ fun ChatSettingsScreen(viewModel: ChatSettingsViewModel) {
             row { SelectRow("Send read receipts", viewModel.privacyOptions, state.readReceipts.key, viewModel::setReadReceipts) }
             row { SelectRow("Send typing indicator", viewModel.privacyOptions, state.typingIndicators.key, viewModel::setTypingIndicators) }
             row { SelectRow("Block screenshots", viewModel.privacyOptions, state.blockScreenshots.key, viewModel::setBlockScreenshots) }
-            row { SettingRow(TnIcon.LOCK, "Reveal covered messages", subtitle = state.revealGateLabel, onClick = viewModel::openRevealGateMenu) }
+            row { SelectMenuRow(TnIcon.LOCK, "Reveal covered messages", state.revealGateLabel, viewModel::openRevealGateMenu) }
         }
         Section(title = "Media") {
             if (state.mediaPreview.isEmpty()) {
