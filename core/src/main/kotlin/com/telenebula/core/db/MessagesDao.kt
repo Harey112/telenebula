@@ -322,7 +322,7 @@ internal class MessagesDao(db: SqlDb, lock: ReentrantLock, private val contacts:
         db.query(
             """
             SELECT $MSG_COLS FROM messages
-            WHERE peer_ip = ? AND deleted = 0 AND attachment_json IS NOT NULL
+            WHERE peer_ip = ? AND deleted = 0 AND covered = 0 AND attachment_json IS NOT NULL
               AND status NOT IN ('offered','receiving','declined','cancelled')
             ORDER BY ts DESC LIMIT ?
             """.trimIndent(),
@@ -336,7 +336,7 @@ internal class MessagesDao(db: SqlDb, lock: ReentrantLock, private val contacts:
         db.count(
             """
             SELECT COUNT(*) FROM messages
-            WHERE peer_ip = ? AND deleted = 0 AND attachment_json IS NOT NULL
+            WHERE peer_ip = ? AND deleted = 0 AND covered = 0 AND attachment_json IS NOT NULL
               AND status NOT IN ('offered','receiving','declined','cancelled')
             """.trimIndent(),
             listOf(peerIp),
@@ -348,7 +348,7 @@ internal class MessagesDao(db: SqlDb, lock: ReentrantLock, private val contacts:
         db.query(
             """
             SELECT id, body, ts FROM messages
-            WHERE peer_ip = ? AND deleted = 0 AND (body LIKE '%http://%' OR body LIKE '%https://%')
+            WHERE peer_ip = ? AND deleted = 0 AND covered = 0 AND (body LIKE '%http://%' OR body LIKE '%https://%')
             ORDER BY ts DESC LIMIT ?
             """.trimIndent(),
             listOf(peerIp, limit),
@@ -359,7 +359,7 @@ internal class MessagesDao(db: SqlDb, lock: ReentrantLock, private val contacts:
     /** Messages in one chat that carry a URL; the count a header shows next to a few of them. */
     fun countChatLinkMessages(peerIp: String): Int = locked {
         db.count(
-            "SELECT COUNT(*) FROM messages WHERE peer_ip = ? AND deleted = 0 AND (body LIKE '%http://%' OR body LIKE '%https://%')",
+            "SELECT COUNT(*) FROM messages WHERE peer_ip = ? AND deleted = 0 AND covered = 0 AND (body LIKE '%http://%' OR body LIKE '%https://%')",
             listOf(peerIp),
         ).toInt()
     }
