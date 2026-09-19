@@ -114,18 +114,18 @@ class StoreTest {
     }
 
     @Test
-    fun `a cover stands in for the message in the chat list and survives a delete`() {
+    fun `a covered message says only that in the chat list, and stops being covered once it is gone`() {
         val store = store()
         store.upsertContact("fd::1", "alice")
-        store.insertMessage(message("m1", body = "the real thing").copy(cover = "See you tomorrow"))
+        store.insertMessage(message("m1", body = "the real thing").copy(isCovered = true))
 
-        assertEquals("See you tomorrow", store.getMessage("m1")?.cover)
+        assertTrue(store.getMessage("m1")?.isCovered == true)
         assertEquals("the real thing", store.getMessage("m1")?.body)
-        assertEquals("See you tomorrow", store.getChatSummaries().first().lastBody)
+        assertEquals("Covered message", store.getChatSummaries().first().lastBody)
 
         store.markDeleted("m1")
         store.wipeDeletedContent("m1")
-        assertNull(store.getMessage("m1")?.cover)
+        assertFalse(store.getMessage("m1")?.isCovered == true)
         assertEquals("Message deleted", store.getChatSummaries().first().lastBody)
     }
 

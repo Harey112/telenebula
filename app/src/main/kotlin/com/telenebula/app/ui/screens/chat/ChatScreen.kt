@@ -52,7 +52,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.telenebula.app.ui.fragments.Pill
 import com.telenebula.app.ui.fragments.Avatar
 import com.telenebula.app.ui.fragments.ErrorBanner
-import com.telenebula.app.ui.fragments.CoverModal
 import com.telenebula.app.ui.fragments.ForwardSheet
 import com.telenebula.app.ui.fragments.MenuOption
 import com.telenebula.app.ui.fragments.MessageActionsMenu
@@ -260,26 +259,19 @@ private fun MessageList(state: ChatUiState, actions: ChatActions, modifier: Modi
     }
 }
 
-/** What every message sent from here goes out under, until it is cleared. */
+/** Says every message sent from here goes out covered, until it is turned off. */
 @Composable
 private fun CoverBanner(state: ChatUiState, actions: ChatActions) {
     val colors = TnTheme.colors
-    val cover = state.cover ?: return
+    if (!state.isCoverOn) return
     HorizontalDivider(thickness = Dp.Hairline, color = colors.hairline)
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = TnSpace.lg, vertical = TnSpace.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(TnSpace.sm),
     ) {
-        Icon(TnIcon.EYE, tint = colors.accent, size = 16.dp)
-        Text(
-            "Cover: $cover",
-            style = TnType.small,
-            color = colors.textMuted,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).clickable(role = Role.Button, onClick = actions::openCoverSheet).semantics { contentDescription = "Edit the cover: $cover" },
-        )
+        Icon(TnIcon.LOCK, tint = colors.accent, size = 16.dp)
+        Text("Covered: they tap to reveal it", style = TnType.small, color = colors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Icon(TnIcon.CLOSE, tint = colors.textMuted, size = 18.dp, contentDescription = "Send without a cover", modifier = Modifier.clickable(role = Role.Button, onClick = actions::clearCover))
     }
 }
@@ -290,7 +282,7 @@ private fun ComposerBanner(state: ChatUiState, actions: ChatActions) {
     val colors = TnTheme.colors
     val (icon, text, onCancel, label) = when (val mode = state.composer) {
         is ComposerMode.Editing -> Banner(TnIcon.PENCIL, "Editing: ${mode.message.body}", actions::cancelEdit, "Cancel edit")
-        is ComposerMode.Replying -> Banner(TnIcon.REPLY, "Replying to: ${mode.to.cover ?: mode.to.body.ifEmpty { mode.to.attachment?.name ?: "Attachment" }}", actions::cancelReply, "Cancel reply")
+        is ComposerMode.Replying -> Banner(TnIcon.REPLY, "Replying to: ${if (mode.to.isCovered) "Covered message" else mode.to.body.ifEmpty { mode.to.attachment?.name ?: "Attachment" }}", actions::cancelReply, "Cancel reply")
         ComposerMode.Idle -> return
     }
     HorizontalDivider(thickness = Dp.Hairline, color = colors.hairline)
@@ -456,24 +448,15 @@ private fun ChatDialogs(state: ChatUiState, actions: ChatActions) {
     OptionsMenu(
         isVisible = overlay is ChatOverlay.Attach,
         title = "Attach",
-        options = remember(actions) {
+        options = remember(actions, state.isCoverOn) {
             listOf(
                 MenuOption("media", TnIcon.IMAGE, "Photos & Videos", onClick = actions::attachMedia),
                 MenuOption("file", TnIcon.FOLDER, "Files & Documents", onClick = actions::attachFile),
                 MenuOption("voice", TnIcon.MIC, "Voice message", onClick = actions::startVoiceMessage),
-                MenuOption("cover", TnIcon.EYE, "Cover message", onClick = actions::openCoverSheet),
+                MenuOption("cover", TnIcon.LOCK, if (state.isCoverOn) "Cover message · on" else "Cover message", onClick = actions::toggleCover),
             )
         },
         onClose = actions::closeAttachSheet,
-    )
-    CoverModal(
-        isVisible = overlay is ChatOverlay.Cover,
-        value = state.coverDraft,
-        suggestions = state.coverSuggestions,
-        onChange = actions::setCoverDraft,
-        onPick = actions::pickCover,
-        onCancel = actions::cancelCover,
-        onConfirm = actions::confirmCover,
     )
     RevealCodeModal(
         code = (overlay as? ChatOverlay.RevealCode)?.code,

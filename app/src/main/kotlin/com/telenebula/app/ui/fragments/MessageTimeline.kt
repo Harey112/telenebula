@@ -131,7 +131,7 @@ fun MessageTimeline(
                     repliedPreview = replyPreviews[item.msg.id],
                     linkRanges = linkRanges[item.msg.id].orEmpty(),
                     transferPct = transferProgress[item.msg.id]?.toFloat(),
-                    cover = item.msg.cover?.takeIf { it.isNotBlank() && item.msg.id !in revealedIds && !item.msg.isDeleted },
+                    isCovered = item.msg.isCovered && !item.msg.isDeleted && item.msg.id !in revealedIds,
                     isExpanded = expandedMessageId == item.msg.id,
                     showSeenAvatar = seenAvatarMessageId == item.msg.id,
                     peerName = peerName,

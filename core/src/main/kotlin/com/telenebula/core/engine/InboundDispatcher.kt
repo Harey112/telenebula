@@ -137,7 +137,7 @@ internal class InboundDispatcher(private val engine: Engine) {
         // only a message we had not seen may raise a notification: a queue that re-sends until it
         // is acked will redeliver one whose ack was lost, and re-notifying for it every time the
         // peer reappears would be the queue shouting at the user
-        if (isNew) notifyMessage(c.fromIp, c.envelope.from.name, CoverText.of(c.envelope) ?: body)
+        if (isNew) notifyMessage(c.fromIp, c.envelope.from.name, if (c.envelope.covered == true) COVERED_PREVIEW else body)
         return true
     }
 
@@ -227,7 +227,7 @@ internal class InboundDispatcher(private val engine: Engine) {
                 direction = MessageDirection.IN,
                 body = envelope.body.orEmpty(),
                 ts = if (envelope.ts > 0) envelope.ts else System.currentTimeMillis(),
-                cover = CoverText.of(envelope),
+                isCovered = envelope.covered == true,
                 status = MessageStatus.RECEIVED,
                 kind = kind,
                 attachment = attachment,
@@ -239,7 +239,7 @@ internal class InboundDispatcher(private val engine: Engine) {
     }
 
     private fun previewOf(message: ChatMessage): String =
-        message.cover ?: message.body.ifEmpty { message.attachment?.name ?: "Attachment" }
+        if (message.isCovered) COVERED_PREVIEW else message.body.ifEmpty { message.attachment?.name ?: "Attachment" }
 
     fun notifyMessage(fromIp: String, announcedName: String, preview: String) {
         val context = notificationContext(fromIp, announcedName)
@@ -291,6 +291,9 @@ internal class InboundDispatcher(private val engine: Engine) {
     companion object {
         /** mute_until: 0 = not muted, -1 = muted forever, else epoch ms */
         const val MUTE_FOREVER = -1L
+
+        /** what a notification says about a covered message, matching the chat list's own line */
+        const val COVERED_PREVIEW = "Covered message"
 
         fun isMutedAt(muteUntil: Long, nowMs: Long): Boolean = muteUntil == MUTE_FOREVER || muteUntil > nowMs
     }

@@ -131,7 +131,7 @@ internal object Schema {
             "seen_reported" to "seen_reported INTEGER NOT NULL DEFAULT 0",
             "expire_secs" to "expire_secs INTEGER",
             "expires_at" to "expires_at INTEGER",
-            "cover_text" to "cover_text TEXT",
+            "covered" to "covered INTEGER NOT NULL DEFAULT 0",
         )
         for ((column, ddl) in messageAdditions) {
             if (column !in messageColumns) addColumn(db, "messages", ddl)

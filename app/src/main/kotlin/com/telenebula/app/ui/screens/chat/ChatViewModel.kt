@@ -94,8 +94,6 @@ import kotlin.random.Random
 
 enum class PingResult { ONLINE, REACHABLE, OFFLINE }
 
-private val COVER_SUGGESTIONS = listOf("ok", "👍", "See you tomorrow")
-
 /** The recording bar's face: still recording, or a stopped clip that can be heard, discarded or sent. */
 class VoiceBar(val isRecording: Boolean, val label: String, val isPreviewPlaying: Boolean)
 
@@ -111,7 +109,6 @@ sealed interface ChatOverlay {
     data object None : ChatOverlay
     class Menu(val menu: MessageMenuState) : ChatOverlay
     data object Attach : ChatOverlay
-    data object Cover : ChatOverlay
     class RevealCode(val code: String, val entry: String) : ChatOverlay
     class Forward(val contacts: List<ForwardTarget>) : ChatOverlay
 }
@@ -162,10 +159,8 @@ data class ChatUiState(
     val isTypingIndicatorOn: Boolean = true,
     val quickReactions: List<String> = emptyList(),
     val draft: String = "",
-    /** the line every message sent from here goes out under, until it is cleared */
-    val cover: String? = null,
-    val coverDraft: String = "",
-    val coverSuggestions: List<String> = COVER_SUGGESTIONS,
+    /** every message sent from here goes out covered, until it is turned off */
+    val isCoverOn: Boolean = false,
     /** covered messages opened in this chat; leaving it covers them again */
     val revealedIds: Set<String> = emptySet(),
     val canSend: Boolean = false,
@@ -187,11 +182,7 @@ interface ChatActions {
     fun sendVoiceMessage()
     fun toggleVoicePreview()
     fun toggleVoice(msg: ChatMessage)
-    fun openCoverSheet()
-    fun setCoverDraft(value: String)
-    fun pickCover(value: String)
-    fun confirmCover()
-    fun cancelCover()
+    fun toggleCover()
     fun clearCover()
     fun setRevealCode(value: String)
     fun cancelReveal()
@@ -277,7 +268,6 @@ class ChatViewModel(
         data object None : LocalOverlay
         class Menu(val id: String) : LocalOverlay
         data object Attach : LocalOverlay
-        data object Cover : LocalOverlay
         class RevealCode(val id: String, val code: String) : LocalOverlay
         class Forward(val id: String) : LocalOverlay
     }
@@ -295,8 +285,7 @@ class ChatViewModel(
         val error: String? = null,
         val voice: VoiceDraft? = null,
         val voiceElapsedMs: Long = 0,
-        val cover: String? = null,
-        val coverDraft: String = "",
+        val isCoverOn: Boolean = false,
         val revealed: Set<String> = emptySet(),
         /** one answered gate opens the rest of this chat's covers */
         val isGateOpen: Boolean = false,
@@ -391,10 +380,9 @@ class ChatViewModel(
         val overlay = when (val o = l.overlay) {
             LocalOverlay.None -> ChatOverlay.None
             is LocalOverlay.Menu -> d.byId[o.id]?.let {
-                ChatOverlay.Menu(menuFor(it, d.view.actions[it.id].orEmpty(), isArchived, !it.cover.isNullOrBlank() && it.id !in l.revealed))
+                ChatOverlay.Menu(menuFor(it, d.view.actions[it.id].orEmpty(), isArchived, it.isCovered && it.id !in l.revealed))
             } ?: ChatOverlay.None
             LocalOverlay.Attach -> ChatOverlay.Attach
-            LocalOverlay.Cover -> ChatOverlay.Cover
             is LocalOverlay.RevealCode -> ChatOverlay.RevealCode(o.code, l.codeEntry)
             is LocalOverlay.Forward -> ChatOverlay.Forward(forward)
         }
@@ -448,8 +436,7 @@ class ChatViewModel(
             isTypingIndicatorOn = contact?.privacy?.sendTypingIndicators ?: p.sendTypingIndicators,
             quickReactions = p.quickReactions,
             draft = l.draft,
-            cover = l.cover,
-            coverDraft = l.coverDraft,
+            isCoverOn = l.isCoverOn,
             revealedIds = l.revealed,
             canSend = l.draft.isNotBlank() && !isBlocked && !isArchived && running,
             composer = composer,
@@ -574,8 +561,8 @@ class ChatViewModel(
         viewModelScope.launch {
             when (val c = l.composer) {
                 is LocalComposer.Editing -> core.editMessage(c.id, body)
-                is LocalComposer.Replying -> core.sendText(peerIp, body, c.id, l.cover)
-                LocalComposer.Idle -> core.sendText(peerIp, body, null, l.cover)
+                is LocalComposer.Replying -> core.sendText(peerIp, body, c.id, l.isCoverOn)
+                LocalComposer.Idle -> core.sendText(peerIp, body, null, l.isCoverOn)
             }
         }
     }
@@ -616,7 +603,7 @@ class ChatViewModel(
                             width = picked.file.width,
                             height = picked.file.height,
                         )
-                        core.sendAttachment(peerIp, stored.absolutePath, meta, replyTo, local.value.cover)
+                        core.sendAttachment(peerIp, stored.absolutePath, meta, replyTo, local.value.isCoverOn)
                         local.update { it.copy(composer = LocalComposer.Idle) }
                     }
                 }
@@ -723,7 +710,7 @@ class ChatViewModel(
         val replyTo = (local.value.composer as? LocalComposer.Replying)?.id
         viewModelScope.launch {
             val meta = MessageAttachment(name = AttachmentStore.VOICE_FILE_NAME, mime = AttachmentStore.VOICE_MIME, size = clip.file.length(), durationMs = clip.durationMs)
-            core.sendAttachment(peerIp, clip.file.absolutePath, meta, replyTo, local.value.cover)
+            core.sendAttachment(peerIp, clip.file.absolutePath, meta, replyTo, local.value.isCoverOn)
             local.update { it.copy(composer = LocalComposer.Idle) }
         }
     }
@@ -760,21 +747,9 @@ class ChatViewModel(
 
     // --- covers ---
 
-    override fun openCoverSheet() = local.update { it.copy(overlay = LocalOverlay.Cover, coverDraft = it.cover.orEmpty()) }
+    override fun toggleCover() = local.update { it.copy(isCoverOn = !it.isCoverOn, overlay = LocalOverlay.None) }
 
-    override fun setCoverDraft(value: String) = local.update { it.copy(coverDraft = value.take(MAX_COVER_CHARS)) }
-
-    override fun pickCover(value: String) = local.update { it.copy(cover = value, overlay = LocalOverlay.None, coverDraft = "") }
-
-    override fun confirmCover() {
-        val text = local.value.coverDraft.trim()
-        if (text.isEmpty()) return
-        local.update { it.copy(cover = text, overlay = LocalOverlay.None, coverDraft = "") }
-    }
-
-    override fun cancelCover() = local.update { it.copy(overlay = LocalOverlay.None, coverDraft = "") }
-
-    override fun clearCover() = local.update { it.copy(cover = null) }
+    override fun clearCover() = local.update { it.copy(isCoverOn = false) }
 
     override fun setRevealCode(value: String) {
         val pending = local.value.overlay as? LocalOverlay.RevealCode ?: return
@@ -792,7 +767,7 @@ class ChatViewModel(
     override fun cancelReveal() = local.update { it.copy(overlay = LocalOverlay.None, codeEntry = "") }
 
     private fun isCovered(msg: ChatMessage): Boolean =
-        !msg.cover.isNullOrBlank() && !msg.isDeleted && msg.id !in local.value.revealed
+        msg.isCovered && !msg.isDeleted && msg.id !in local.value.revealed
 
     /** What this chat asks before a cover comes off; the global setting when the chat has no answer of its own. */
     private fun revealGate(): CoverRevealGate {
@@ -1135,8 +1110,6 @@ class ChatViewModel(
     /** the player id a clip under review uses, so no bubble mistakes it for its own message */
     const val VOICE_PREVIEW_ID = "voice-preview"
 
-    /** the core caps a cover at the same length before it goes on the wire */
-    const val MAX_COVER_CHARS = 120
     const val CODE_DIGITS = 4
 
         /** anything shorter is a slip of the finger, not a message */

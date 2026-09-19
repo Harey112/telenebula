@@ -62,10 +62,9 @@ class ChatProjection(private val peerIp: String, private val cachedContact: (Str
             val replyTo = msg.replyToId ?: continue
             val replied = view.replySources[replyTo] ?: continue
             val name = if (replied.direction == MessageDirection.OUT) "You" else contact?.let(ContactLabels::chatLabel) ?: replied.peerIp
-            val cover = replied.cover?.takeIf { it.isNotBlank() }
             val snippet = when {
                 replied.isDeleted -> "Message deleted"
-                cover != null -> cover
+                replied.isCovered -> "Covered message"
                 else -> replied.body.ifEmpty { replied.attachment?.name ?: "Attachment" }
             }
             previews[msg.id] = ReplyPreview(name, snippet)

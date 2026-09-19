@@ -28,7 +28,7 @@ internal class MessagesDao(db: SqlDb, lock: ReentrantLock, private val contacts:
             """
             INSERT OR IGNORE INTO messages
               (id, peer_ip, direction, body, ts, status, read, kind, attachment_json, edited, deleted,
-               reactions_json, reply_to_id, seen_at, expire_secs, expires_at, cover_text)
+               reactions_json, reply_to_id, seen_at, expire_secs, expires_at, covered)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
             listOf(
@@ -48,7 +48,7 @@ internal class MessagesDao(db: SqlDb, lock: ReentrantLock, private val contacts:
                 message.seenAt,
                 message.expireSecs,
                 message.expiresAt,
-                message.cover?.takeIf { it.isNotBlank() },
+                message.isCovered,
             ),
         )
     }
@@ -264,7 +264,7 @@ internal class MessagesDao(db: SqlDb, lock: ReentrantLock, private val contacts:
 
     fun wipeDeletedContent(messageId: String) = locked {
         db.update(
-            "UPDATE messages SET body = '', attachment_json = NULL, reactions_json = '{}', cover_text = NULL WHERE id = ? AND deleted = 1",
+            "UPDATE messages SET body = '', attachment_json = NULL, reactions_json = '{}', covered = 0 WHERE id = ? AND deleted = 1",
             listOf(messageId),
         )
         Unit
@@ -376,7 +376,7 @@ internal class MessagesDao(db: SqlDb, lock: ReentrantLock, private val contacts:
               END AS name,
               CASE
                 WHEN m.deleted = 1 THEN 'Message deleted'
-                WHEN m.cover_text IS NOT NULL AND m.cover_text != '' THEN m.cover_text
+                WHEN m.covered = 1 THEN 'Covered message'
                 WHEN m.kind = 'image' THEN 'Photo'
                 WHEN m.kind = 'video' THEN 'Video'
                 WHEN m.kind = 'file' AND m.attachment_json LIKE '%"mime":"audio/%' THEN 'Voice message'
