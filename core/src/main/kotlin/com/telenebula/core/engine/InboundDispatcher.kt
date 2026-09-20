@@ -63,12 +63,22 @@ internal class InboundDispatcher(private val engine: Engine) {
         EnvelopeType.ATT_OFFER -> Spec(touchesContact = false, acksById = false) { engine.attachments.handleOffer(it.envelope, it.fromIp, it.link); false }
         EnvelopeType.ATT_ACCEPT -> Spec(touchesContact = false, acksById = true) { engine.sending.onAccept(it.envelope, it.fromIp) }
         EnvelopeType.ATT_DECLINE -> Spec(touchesContact = false, acksById = true) { c ->
-            engine.sending.onDecline(c.envelope, c.fromIp).also { done -> if (done) announceRows(c.fromIp, c.envelope.targetId) }
+            engine.sending.onDecline(c.envelope, c.fromIp).also { done ->
+                if (done) {
+                    announceRows(c.fromIp, c.envelope.targetId)
+                    notifyTransferOutcome(c, c.envelope.reason ?: TransferManager.DECLINED)
+                }
+            }
         }
         EnvelopeType.ATT_CANCEL -> Spec(touchesContact = false, acksById = true) { engine.attachments.onCancel(it.envelope, it.fromIp) }
         EnvelopeType.ATT_BEGIN -> Spec(touchesContact = false, acksById = false) { engine.attachments.handleBegin(it.envelope, it.fromIp, it.link); false }
         EnvelopeType.ATT_CHUNK -> Spec(touchesContact = false, acksById = false) { engine.attachments.handleChunk(it.envelope, it.fromIp, it.link); false }
-        EnvelopeType.ATT_ERROR -> Spec(touchesContact = false, acksById = true) { engine.sending.onError(it.envelope, it.fromIp) }
+        EnvelopeType.ATT_ERROR -> Spec(touchesContact = false, acksById = true) { c ->
+            engine.sending.onError(c.envelope, c.fromIp).also { done ->
+                // only a choice the person made is worth telling the sender about; a protocol refusal is not
+                if (done && c.envelope.reason == TransferManager.CANCELLED) notifyTransferOutcome(c, TransferManager.CANCELLED)
+            }
+        }
         EnvelopeType.REACT -> Spec(touchesContact = true, acksById = true, run = InboundDispatcher::onReact)
         EnvelopeType.EDIT -> Spec(touchesContact = true, acksById = true, run = InboundDispatcher::onEdit)
         EnvelopeType.DELETE -> Spec(touchesContact = true, acksById = true, run = InboundDispatcher::onDelete)
@@ -241,6 +251,28 @@ internal class InboundDispatcher(private val engine: Engine) {
     private fun previewOf(message: ChatMessage): String =
         if (message.isCovered) COVERED_PREVIEW else message.body.ifEmpty { message.attachment?.name ?: "Attachment" }
 
+    /** The peer answered a file of ours; silent for anything that is not the person's own decision. */
+    private fun notifyTransferOutcome(c: InboundContext, reason: String) {
+        val summary = when (reason) {
+            TransferManager.DECLINED -> "Declined your file"
+            TransferManager.NO_SPACE -> "Has no room for your file"
+            TransferManager.CANCELLED -> "Stopped receiving your file"
+            else -> return
+        }
+        val fileName = c.envelope.targetId?.let { store.getMessage(it) }?.attachment?.name ?: return
+        val context = notificationContext(c.fromIp, c.envelope.from.name)
+        engine.events.emit(
+            CoreEvent.TransferOutcome(
+                ip = c.fromIp,
+                name = context.name,
+                summary = summary,
+                fileName = fileName,
+                isMuted = context.isMuted,
+                notifications = context.notifications,
+            ),
+        )
+    }
+
     fun notifyMessage(fromIp: String, announcedName: String, preview: String) {
         val context = notificationContext(fromIp, announcedName)
         engine.events.emit(
@@ -294,6 +326,23 @@ internal class InboundDispatcher(private val engine: Engine) {
 
         /** what a notification says about a covered message, matching the chat list's own line */
         const val COVERED_PREVIEW = "Covered message"
+
+        /** One line for an attachment, as the chat list names it: the caption if there is one, else the kind. */
+        fun attachmentPreview(mime: String, name: String, body: String, isCovered: Boolean): String = when {
+            isCovered -> COVERED_PREVIEW
+            body.isNotEmpty() -> body
+            mime.startsWith("audio/") -> "Voice message"
+            mime.startsWith("image/") -> "Photo"
+            mime.startsWith("video/") -> "Video"
+            else -> "File: $name"
+        }
+
+        fun sizeLabel(bytes: Long): String = when {
+            bytes >= 1L shl 30 -> "%.1f GB".format(bytes / (1L shl 30).toDouble())
+            bytes >= 1L shl 20 -> "%.1f MB".format(bytes / (1L shl 20).toDouble())
+            bytes >= 1L shl 10 -> "%d KB".format(bytes / (1L shl 10))
+            else -> "$bytes B"
+        }
 
         fun isMutedAt(muteUntil: Long, nowMs: Long): Boolean = muteUntil == MUTE_FOREVER || muteUntil > nowMs
     }

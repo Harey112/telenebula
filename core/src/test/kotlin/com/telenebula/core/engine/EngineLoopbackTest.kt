@@ -214,6 +214,27 @@ class EngineLoopbackTest {
     }
 
     @Test
+    fun `an offer is announced by its file, and a landed clip by what it is`() = runBlocking {
+        val (a, b) = pair()
+        offered(a, b, "holiday.bin")
+        waitFor("the offer to be announced") { b.events.any { it is CoreEvent.MessageReceived && "holiday.bin" in it.preview } }
+
+        val source = File(scratch, "alice/attachments/note.m4a").apply { writeBytes(ByteArray(2_048)) }
+        a.engine.outbox.sendAttachment(b.ip, source.path, MessageAttachment(name = "Voice message.m4a", mime = "audio/mp4", size = 2_048, durationMs = 1_500), null)
+        waitFor("the clip to be announced as a voice message") { b.events.any { it is CoreEvent.MessageReceived && it.preview == "Voice message" } }
+    }
+
+    @Test
+    fun `the receiver's answer to a file reaches the sender as an outcome`() = runBlocking {
+        val (a, b) = pair()
+        val id = offered(a, b, "declined.bin")
+        b.engine.attachments.answerOffer(id, accept = false, freeBytes = 0)
+        waitFor("the sender to be told") {
+            a.events.any { it is CoreEvent.TransferOutcome && it.fileName == "declined.bin" && it.summary == "Declined your file" }
+        }
+    }
+
+    @Test
     fun `a text message is delivered, acked and announced`() = runBlocking {
         val (a, b) = pair()
         a.engine.outbox.sendText(b.ip, "hello over the overlay", null)
@@ -429,6 +450,7 @@ class EngineLoopbackTest {
 
         assertEquals(MessageStatus.CANCELLED, b.store.getMessage(id)?.status)
         assertEquals(0L, b.store.transferReceived(id))
+        assertTrue("the receiver's own cancel is not blamed on the sender", id in b.store.getChatView(a.ip, 10).cancelledByMe)
         waitFor("the sender to hear about it") {
             a.store.getAction(id)?.status == MessageActionStatus.CANCELLED
         }

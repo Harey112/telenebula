@@ -162,6 +162,21 @@ class StoreTest {
     }
 
     @Test
+    fun `a transfer this side cancelled is told apart from one the sender withdrew`() {
+        val store = store()
+        store.upsertContact("fd::1", "alice")
+        val file = MessageAttachment(name = "a.bin", mime = "application/octet-stream", size = 10)
+        store.insertMessage(message("mine").copy(kind = MessageKind.FILE, status = MessageStatus.CANCELLED, attachment = file))
+        store.insertMessage(message("theirs", ts = 2).copy(kind = MessageKind.FILE, status = MessageStatus.CANCELLED, attachment = file))
+        store.upsertTransfer("mine", "fd::1", isIncoming = true, state = Wire.TransferState.RECEIVING, size = 10)
+        store.upsertTransfer("theirs", "fd::1", isIncoming = true, state = Wire.TransferState.RECEIVING, size = 10)
+        store.setTransferState("mine", Wire.TransferState.CANCELLED, MessagesDao.CANCELLED_BY_RECEIVER)
+        store.setTransferState("theirs", Wire.TransferState.CANCELLED)
+
+        assertEquals(setOf("mine"), store.getChatView("fd::1", 10).cancelledByMe)
+    }
+
+    @Test
     fun `changing a contact address moves its history and merges a duplicate`() {
         val store = store()
         store.upsertContact("fd::1", "alice")

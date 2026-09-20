@@ -64,6 +64,8 @@ fun MessageTimeline(
     transferProgress: Map<String, Double>,
     /** messages whose cover has been lifted for as long as this chat stays open */
     revealedIds: Set<String>,
+    /** incoming transfers this device cancelled itself */
+    cancelledByMe: Set<String>,
     textSizeSp: Float,
     isCompact: Boolean,
     expandedMessageId: String?,
@@ -132,6 +134,7 @@ fun MessageTimeline(
                     linkRanges = linkRanges[item.msg.id].orEmpty(),
                     transferPct = transferProgress[item.msg.id]?.toFloat(),
                     isCovered = item.msg.isCovered && !item.msg.isDeleted && item.msg.id !in revealedIds,
+                    isCancelledByMe = item.msg.id in cancelledByMe,
                     isExpanded = expandedMessageId == item.msg.id,
                     showSeenAvatar = seenAvatarMessageId == item.msg.id,
                     peerName = peerName,
