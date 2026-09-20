@@ -66,6 +66,7 @@ data class ChatSettingsUiState(
     val typingIndicators: PrivacyChoice = PrivacyChoice.DEFAULT,
     val blockScreenshots: PrivacyChoice = PrivacyChoice.DEFAULT,
     val revealGateKey: String = CoverGates.DEFAULT_KEY,
+    val openMenuKey: String? = null,
     val disappearSeconds: Int = 0,
     val failedCount: Int = 0,
     /** actions still waiting to reach this peer */
@@ -114,7 +115,7 @@ class ChatSettingsViewModel(
     private val notices: NoticeCenter,
     private val navigator: Navigator,
 ) : ViewModel() {
-    private data class Local(val isDisappearMenuOpen: Boolean = false)
+    private data class Local(val isDisappearMenuOpen: Boolean = false, val openMenu: String? = null)
 
     private class Content(val failed: Int, val media: List<ChatMessage>, val mediaCount: Int, val links: List<ChatLink>, val linksCount: Int)
 
@@ -148,6 +149,7 @@ class ChatSettingsViewModel(
         typingIndicators = PrivacyChoice.of(contact?.privacy?.sendTypingIndicators),
         blockScreenshots = PrivacyChoice.of(contact?.privacy?.blockScreenshots),
         revealGateKey = CoverGates.keyOf(contact?.privacy?.revealGate),
+        openMenuKey = l.openMenu,
         disappearSeconds = contact?.disappearSeconds ?: 0,
         failedCount = c.failed,
         queuedCount = queue?.queued ?: 0,
@@ -173,6 +175,10 @@ class ChatSettingsViewModel(
     val coverGateOptions: List<SelectOption> = CoverGates.options(appLock.canUseDeviceAuth(), withDefault = true)
 
     fun setRevealGate(key: String) = privacy { it.copy(revealGate = CoverGates.of(key)) }
+
+    fun openMenu(key: String) = local.update { it.copy(openMenu = key) }
+
+    fun closeMenu() = local.update { it.copy(openMenu = null) }
 
     private fun privacy(transform: (ContactPrivacyPrefs) -> ContactPrivacyPrefs) {
         val s = uiState.value

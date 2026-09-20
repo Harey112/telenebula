@@ -8,10 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -29,23 +25,21 @@ import com.telenebula.app.ui.theme.TnType
 /** One choice of a [SelectMenuRow]. */
 data class SelectOption(val key: String, val label: String)
 
-/** Title on the left, the current choice on the right; tapping the row opens the choices. */
+/** Title on the left, the current choice on the right; tapping it opens that row's [SelectMenu]. */
 @Composable
 fun SelectMenuRow(
     title: String,
     options: List<SelectOption>,
     selectedKey: String,
-    onSelect: (String) -> Unit,
     placeholder: String = "Choose",
+    onClick: () -> Unit,
 ) {
     val colors = TnTheme.colors
-    var isOpen by remember { mutableStateOf(false) }
-    val selected = options.firstOrNull { it.key == selectedKey }
-    val value = selected?.label ?: placeholder
+    val value = options.firstOrNull { it.key == selectedKey }?.label ?: placeholder
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Button) { isOpen = true }
+            .clickable(role = Role.Button, onClick = onClick)
             .defaultMinSize(minHeight = TnRow.height)
             .padding(horizontal = TnSpace.lg, vertical = TnSpace.sm)
             .semantics { contentDescription = "$title: $value" },
@@ -54,15 +48,31 @@ fun SelectMenuRow(
     ) {
         Text(title, style = TnType.body, color = colors.text, modifier = Modifier.weight(1f))
         Text(value, style = TnType.body, color = colors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Icon(TnIcon.CHEVRON_DOWN, tint = colors.textMuted, size = 16.dp)
+        Icon(TnIcon.CHEVRON_RIGHT, tint = colors.textMuted, size = 16.dp)
     }
+}
+
+/**
+ * The choices of a [SelectMenuRow], over the whole screen like the app's other menus. A screen
+ * draws it beside its body, never inside it: the body scrolls, and a menu measured against a
+ * scrolling column would be laid out inside the row that opened it.
+ */
+@Composable
+fun SelectMenu(
+    title: String,
+    options: List<SelectOption>,
+    selectedKey: String,
+    isVisible: Boolean,
+    onSelect: (String) -> Unit,
+    onClose: () -> Unit,
+) {
     OptionsMenu(
-        isVisible = isOpen,
+        isVisible = isVisible,
         title = title,
-        onClose = { isOpen = false },
+        onClose = onClose,
         options = options.map { option ->
             MenuOption(option.key, if (option.key == selectedKey) TnIcon.CHECK else TnIcon.CIRCLE, option.label) {
-                isOpen = false
+                onClose()
                 onSelect(option.key)
             }
         },

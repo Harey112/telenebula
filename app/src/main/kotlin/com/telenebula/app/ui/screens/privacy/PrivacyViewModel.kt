@@ -14,6 +14,7 @@ import com.telenebula.core.model.CoverRevealGate
 import com.telenebula.core.model.Prefs
 import com.telenebula.core.model.Profile
 import com.telenebula.app.ui.shared.CoverGates
+import com.telenebula.app.ui.shared.OpenMenu
 import com.telenebula.app.ui.shared.key
 import com.telenebula.app.ui.shared.uiState
 import java.time.Instant
@@ -35,6 +36,7 @@ data class PrivacyUiState(
     val blockedCount: Int = 0,
     val certFingerprint: String = "",
     val certExpiry: String = "",
+    val openMenuKey: String? = null,
 )
 
 class PrivacyViewModel(
@@ -47,12 +49,18 @@ class PrivacyViewModel(
     private val canUseAppLock = appLock.canUseDeviceAuth()
     private val blockedCount = core.contacts.map(::blocked)
 
-    val uiState: StateFlow<PrivacyUiState> = combine(prefs.prefs, runtime.profile, blockedCount, ::buildState)
-        .uiState(viewModelScope, buildState(prefs.prefs.value, runtime.profile.value, blocked(core.contacts.value)))
+    private val menus = OpenMenu()
+
+    val uiState: StateFlow<PrivacyUiState> = combine(prefs.prefs, runtime.profile, blockedCount, menus.key, ::buildState)
+        .uiState(viewModelScope, buildState(prefs.prefs.value, runtime.profile.value, blocked(core.contacts.value), null))
+
+    fun openMenu(key: String) = menus.open(key)
+
+    fun closeMenu() = menus.close()
 
     private fun blocked(contacts: List<Contact>?): Int = contacts.orEmpty().count { it.isBlocked }
 
-    private fun buildState(p: Prefs, profile: Profile?, blocked: Int): PrivacyUiState = PrivacyUiState(
+    private fun buildState(p: Prefs, profile: Profile?, blocked: Int, openMenuKey: String?): PrivacyUiState = PrivacyUiState(
         isAppLockEnabled = p.isAppLockEnabled,
         canUseAppLock = canUseAppLock,
         appLockAfterKey = p.appLockAfterSec.toString(),
@@ -63,6 +71,7 @@ class PrivacyViewModel(
         blockedCount = blocked,
         certFingerprint = profile?.certFingerprint.orEmpty(),
         certExpiry = profile?.certNotAfter?.let(::formatExpiry).orEmpty(),
+        openMenuKey = openMenuKey,
     )
 
     val appLockAfterOptions: List<SelectOption> = listOf(

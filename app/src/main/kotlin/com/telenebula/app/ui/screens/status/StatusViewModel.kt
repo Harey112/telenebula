@@ -6,6 +6,7 @@ import com.telenebula.app.nav.Navigator
 import com.telenebula.app.platform.PrefsRepository
 import com.telenebula.app.runtime.AppRuntime
 import com.telenebula.app.ui.fragments.SelectOption
+import com.telenebula.app.ui.shared.OpenMenu
 import com.telenebula.app.ui.shared.uiState
 import com.telenebula.core.model.PresencePrefs
 import java.text.DateFormat
@@ -24,6 +25,7 @@ data class StatusUiState(
     val pauseKey: String = "0",
     val pauseNote: String? = null,
     val seenAs: String = "",
+    val openMenuKey: String? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -42,10 +44,16 @@ class StatusViewModel(private val prefs: PrefsRepository, runtime: AppRuntime, p
         }
     }
 
-    val uiState: StateFlow<StatusUiState> = combine(presence, runtime.tunnelRunning, ::build)
-        .uiState(viewModelScope, build(prefs.prefs.value.presence, runtime.tunnelRunning.value))
+    private val menus = OpenMenu()
 
-    private fun build(p: PresencePrefs, running: Boolean): StatusUiState {
+    val uiState: StateFlow<StatusUiState> = combine(presence, runtime.tunnelRunning, menus.key, ::build)
+        .uiState(viewModelScope, build(prefs.prefs.value.presence, runtime.tunnelRunning.value, null))
+
+    fun openMenu(key: String) = menus.open(key)
+
+    fun closeMenu() = menus.close()
+
+    private fun build(p: PresencePrefs, running: Boolean, openMenuKey: String?): StatusUiState {
         val now = System.currentTimeMillis()
         val isPaused = p.isShared && p.pausedUntil > now
         return StatusUiState(
@@ -57,6 +65,7 @@ class StatusViewModel(private val prefs: PrefsRepository, runtime: AppRuntime, p
                 p.isSharingAt(now) -> "Online while you use the app, reachable otherwise"
                 else -> "Reachable"
             },
+            openMenuKey = openMenuKey,
         )
     }
 

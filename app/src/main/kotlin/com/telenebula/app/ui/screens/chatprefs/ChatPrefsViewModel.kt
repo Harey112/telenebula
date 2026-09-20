@@ -10,8 +10,10 @@ import com.telenebula.app.ui.fragments.SelectOption
 import com.telenebula.core.model.ChatTextSize
 import com.telenebula.core.model.MessageDensity
 import com.telenebula.core.model.Prefs
+import com.telenebula.app.ui.shared.OpenMenu
 import com.telenebula.app.ui.shared.uiState
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 data class ChatPrefsUiState(
@@ -19,6 +21,7 @@ data class ChatPrefsUiState(
     val densityKey: String = MessageDensity.COMFORTABLE.name,
     val isEnterToSend: Boolean = false,
     val quickReactions: List<String> = emptyList(),
+    val openMenuKey: String? = null,
 )
 
 class ChatPrefsViewModel(
@@ -26,17 +29,24 @@ class ChatPrefsViewModel(
     private val sheets: SheetCenter,
     private val navigator: Navigator,
 ) : ViewModel() {
-    val uiState: StateFlow<ChatPrefsUiState> = prefs.prefs.map(::build)
-        .uiState(viewModelScope, build(prefs.prefs.value))
+    private val menus = OpenMenu()
+
+    val uiState: StateFlow<ChatPrefsUiState> = combine(prefs.prefs, menus.key, ::build)
+        .uiState(viewModelScope, build(prefs.prefs.value, null))
+
+    fun openMenu(key: String) = menus.open(key)
+
+    fun closeMenu() = menus.close()
 
     val textSizeOptions = ChatTextSize.entries.map { SelectOption(it.name, it.name.lowercase()) }
     val densityOptions = MessageDensity.entries.map { SelectOption(it.name, it.name.lowercase()) }
 
-    private fun build(p: Prefs) = ChatPrefsUiState(
+    private fun build(p: Prefs, openMenuKey: String?) = ChatPrefsUiState(
         textSizeKey = p.chatTextSize.name,
         densityKey = p.messageDensity.name,
         isEnterToSend = p.isEnterToSend,
         quickReactions = p.quickReactions,
+        openMenuKey = openMenuKey,
     )
 
     fun setChatTextSize(key: String) = prefs.update { it.copy(chatTextSize = ChatTextSize.valueOf(key)) }

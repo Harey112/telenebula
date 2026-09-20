@@ -9,6 +9,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.telenebula.app.ui.fragments.InfoField
 import com.telenebula.app.ui.fragments.Screen
 import com.telenebula.app.ui.fragments.Section
+import com.telenebula.app.ui.fragments.SelectMenu
 import com.telenebula.app.ui.fragments.SelectMenuRow
 import com.telenebula.app.ui.fragments.SwitchRow
 import com.telenebula.app.ui.icons.TnIcon
@@ -33,7 +34,7 @@ fun StatusScreen(viewModel: StatusViewModel) {
                     subtitle = if (state.isActive) "Contacts see “online” while you use the app" else "Contacts only see “reachable”",
                 )
             }
-            row { SelectMenuRow("Pause for", viewModel.pauseOptions, state.pauseKey, viewModel::setPause) }
+            row { SelectMenuRow("Pause for", viewModel.pauseOptions, state.pauseKey) { viewModel.openMenu(PAUSE) } }
             state.pauseNote?.let { note ->
                 row { Text(note, style = TnType.small, color = TnTheme.colors.textMuted, modifier = Modifier.padding(horizontal = TnSpace.lg, vertical = TnSpace.sm)) }
             }
@@ -42,4 +43,7 @@ fun StatusScreen(viewModel: StatusViewModel) {
             row { InfoField("Contacts see you as", state.seenAs) }
         }
     }
+    SelectMenu("Pause for", viewModel.pauseOptions, state.pauseKey, state.openMenuKey == PAUSE, viewModel::setPause, viewModel::closeMenu)
 }
+
+private const val PAUSE = "pause"

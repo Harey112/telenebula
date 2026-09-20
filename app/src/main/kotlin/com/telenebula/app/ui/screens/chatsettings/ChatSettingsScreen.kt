@@ -30,6 +30,7 @@ import com.telenebula.app.ui.fragments.RowTone
 import com.telenebula.app.ui.fragments.Screen
 import com.telenebula.app.ui.fragments.ScreenHeader
 import com.telenebula.app.ui.fragments.Section
+import com.telenebula.app.ui.fragments.SelectMenu
 import com.telenebula.app.ui.fragments.SelectMenuRow
 import com.telenebula.app.ui.fragments.SelectMenuRow
 import com.telenebula.app.ui.fragments.SettingRow
@@ -77,10 +78,10 @@ fun ChatSettingsScreen(viewModel: ChatSettingsViewModel) {
             row { SettingRow(TnIcon.SEND, "Queued actions", subtitle = state.queueLabel, onClick = viewModel::sendQueuedNow) }
         }
         Section(title = "Privacy") {
-            row { SelectMenuRow("Send read receipts", viewModel.privacyOptions, state.readReceipts.key, viewModel::setReadReceipts) }
-            row { SelectMenuRow("Send typing indicator", viewModel.privacyOptions, state.typingIndicators.key, viewModel::setTypingIndicators) }
-            row { SelectMenuRow("Block screenshots", viewModel.privacyOptions, state.blockScreenshots.key, viewModel::setBlockScreenshots) }
-            row { SelectMenuRow("Reveal covered messages", viewModel.coverGateOptions, state.revealGateKey, viewModel::setRevealGate) }
+            row { SelectMenuRow("Send read receipts", viewModel.privacyOptions, state.readReceipts.key) { viewModel.openMenu(READ_RECEIPTS) } }
+            row { SelectMenuRow("Send typing indicator", viewModel.privacyOptions, state.typingIndicators.key) { viewModel.openMenu(TYPING) } }
+            row { SelectMenuRow("Block screenshots", viewModel.privacyOptions, state.blockScreenshots.key) { viewModel.openMenu(SCREENSHOTS) } }
+            row { SelectMenuRow("Reveal covered messages", viewModel.coverGateOptions, state.revealGateKey) { viewModel.openMenu(REVEAL_GATE) } }
         }
         Section(title = "Media") {
             if (state.mediaPreview.isEmpty()) {
@@ -122,4 +123,13 @@ fun ChatSettingsScreen(viewModel: ChatSettingsViewModel) {
     }
     val menu = remember(state.disappearSeconds) { viewModel.disappearMenu(state.disappearSeconds) }
     OptionsMenu(isVisible = state.isDisappearMenuOpen, options = menu, onClose = viewModel::closeDisappearMenu, title = "Disappearing messages · ${state.disappearLabel}")
+    SelectMenu("Send read receipts", viewModel.privacyOptions, state.readReceipts.key, state.openMenuKey == READ_RECEIPTS, viewModel::setReadReceipts, viewModel::closeMenu)
+    SelectMenu("Send typing indicator", viewModel.privacyOptions, state.typingIndicators.key, state.openMenuKey == TYPING, viewModel::setTypingIndicators, viewModel::closeMenu)
+    SelectMenu("Block screenshots", viewModel.privacyOptions, state.blockScreenshots.key, state.openMenuKey == SCREENSHOTS, viewModel::setBlockScreenshots, viewModel::closeMenu)
+    SelectMenu("Reveal covered messages", viewModel.coverGateOptions, state.revealGateKey, state.openMenuKey == REVEAL_GATE, viewModel::setRevealGate, viewModel::closeMenu)
 }
+
+private const val READ_RECEIPTS = "read-receipts"
+private const val TYPING = "typing"
+private const val SCREENSHOTS = "screenshots"
+private const val REVEAL_GATE = "reveal-gate"
