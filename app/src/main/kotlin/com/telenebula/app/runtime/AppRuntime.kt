@@ -143,7 +143,11 @@ class AppRuntime(
                 is ProfileLoad.Loaded -> load.profile
             }
             mutableState.value = if (profile == null) RuntimeState.NeedsSetup else RuntimeState.Ready(profile)
-            if (profile == null) return@launch
+            if (profile == null) {
+                // a boot receiver may have started the service before there was anything to serve
+                core.stopBackgroundService()
+                return@launch
+            }
             // the UI is up now; network start continues here and reports through notices
             startRuntime(profile)
             if (loaded.autoCleanOrphans) core.clearOrphanAttachments()
@@ -183,16 +187,13 @@ class AppRuntime(
         connectTunnel(profile)
     }.also { lastStart = it }
 
-    /** Boot or an update started the process; [done] releases the broadcast once the runtime has come up. */
-    fun onSystemStart(done: () -> Unit) {
-        scope.launch {
-            try {
-                bootJob?.join()
-                lastStart?.join()
-            } finally {
-                done()
-            }
-        }
+    /**
+     * Boot or an update started the process. The service is what keeps it alive while [boot]
+     * finishes, and these are the two broadcasts the system lets start one from the background —
+     * so it is started here and now, inside that allowance, and nothing is waited for.
+     */
+    fun onSystemStart() {
+        core.startBackgroundService()
     }
 
     /** Our pong says "online" only while a screen is showing and the Status setting allows it; a pause ends on time. */
