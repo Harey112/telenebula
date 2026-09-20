@@ -39,7 +39,7 @@ import com.telenebula.app.ui.fragments.ErrorBanner
 import com.telenebula.app.ui.fragments.Screen
 import com.telenebula.app.ui.fragments.SearchHeader
 import com.telenebula.app.ui.fragments.SelectOption
-import com.telenebula.app.ui.fragments.SelectRow
+import com.telenebula.app.ui.fragments.SelectMenuRow
 import com.telenebula.app.ui.icons.Icon
 import com.telenebula.app.ui.icons.TnIcon
 import com.telenebula.app.ui.theme.TnRow
@@ -105,8 +105,8 @@ private fun FilterToggle(isOpen: Boolean, isActive: Boolean, onToggle: () -> Uni
 
 @Composable
 private fun FilterPanel(state: CallsUiState, filterOptions: List<SelectOption>, sortOptions: List<SelectOption>, actions: CallsActions) {
-    SelectRow("Show", filterOptions, state.filter.key, actions::setFilter)
-    SelectRow("Sort by", sortOptions, state.sort.key, actions::setSort)
+    SelectMenuRow("Show", filterOptions, state.filter.key, actions::setFilter)
+    SelectMenuRow("Sort by", sortOptions, state.sort.key, actions::setSort)
 }
 
 @Composable
