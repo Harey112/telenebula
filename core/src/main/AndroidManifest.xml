@@ -2,12 +2,22 @@
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
   <application>
+    <!--
+      dataSync is capped at six hours a day from API 35 and the system kills the app when the cap
+      is reached, so from API 34 the service runs as specialUse instead; older releases have no cap
+      and keep the type they always used.
+    -->
     <service
       android:name="com.telenebula.core.service.TnCoreService"
       android:exported="false"
-      android:foregroundServiceType="dataSync" />
+      android:foregroundServiceType="dataSync|specialUse">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="Keeps the nebula tunnel and the messaging engine connected while the app is in the background" />
+    </service>
     <receiver
       android:name="com.telenebula.core.notify.MessageActionReceiver"
       android:exported="false" />
