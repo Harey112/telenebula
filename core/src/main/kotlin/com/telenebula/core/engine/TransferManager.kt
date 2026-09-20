@@ -130,12 +130,17 @@ internal class TransferManager(private val engine: Engine) {
         }
 
         store.upsertTransfer(envelope.id, fromIp, isIncoming = true, state = Wire.TransferState.OFFERED, size = size)
-        store.insertMessage(
+        val isNew = store.insertMessage(
             incomingMessage(envelope, fromIp, name, mime, size, MessageStatus.OFFERED),
         )
         // the ack is a delivery receipt for the offer, never an acceptance of it
         engine.transport.sendAck(link, envelope.id)
         engine.events.chatChanged(fromIp)
+        // an offer waits on the person, so it is announced like a message; a re-offer of one already shown is not
+        if (isNew) {
+            val preview = if (envelope.covered == true) InboundDispatcher.COVERED_PREVIEW else "Wants to send you $name (${InboundDispatcher.sizeLabel(size)})"
+            engine.inbound.notifyMessage(fromIp, envelope.from.name, preview)
+        }
     }
 
     /**
@@ -347,7 +352,7 @@ internal class TransferManager(private val engine: Engine) {
         engine.transport.sendAck(link, transferId)
         engine.events.messagesChanged(fromIp, listOf(transferId))
         val covered = store.getMessage(transferId)?.isCovered == true
-        engine.inbound.notifyMessage(fromIp, "", if (covered) InboundDispatcher.COVERED_PREVIEW else done.body.ifEmpty { "Attachment" })
+        engine.inbound.notifyMessage(fromIp, "", InboundDispatcher.attachmentPreview(done.mime, done.name, done.body, covered))
     }
 
     // --- control frames from the peer ---

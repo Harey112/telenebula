@@ -36,6 +36,17 @@ class MessageNotificationRouter(
                         event.notifications,
                     )
                 }
+                is CoreEvent.TransferOutcome -> if (event.ip.isNotEmpty() && shouldPost(event.ip)) {
+                    MessageNotifications.postTransferOutcome(
+                        context,
+                        event.ip,
+                        event.name.ifEmpty { event.ip },
+                        event.summary,
+                        event.fileName,
+                        event.isMuted,
+                        event.notifications,
+                    )
+                }
                 is CoreEvent.ReactionReceived -> if (event.ip.isNotEmpty() && shouldPost(event.ip)) {
                     MessageNotifications.postReaction(
                         context,

@@ -31,6 +31,17 @@ sealed interface CoreEvent {
         val notifications: ContactNotificationPrefs?,
     ) : CoreEvent
 
+    /** The other side answered a file of ours: declined it, had no room, or stopped receiving it. */
+    data class TransferOutcome(
+        val ip: String,
+        val name: String,
+        /** what happened, without the file: "Declined your file" */
+        val summary: String,
+        val fileName: String,
+        val isMuted: Boolean,
+        val notifications: ContactNotificationPrefs?,
+    ) : CoreEvent
+
     data class ReactionReceived(
         val ip: String,
         val name: String,

@@ -65,6 +65,21 @@ object MessageNotifications {
     append(context, ip, name, text, settings)
   }
 
+  /** The peer's answer to a file of ours; the file's name is content, so the preview setting decides whether it shows. */
+  fun postTransferOutcome(
+    context: Context,
+    ip: String,
+    name: String,
+    summary: String,
+    fileName: String,
+    isMuted: Boolean,
+    overrides: ContactNotificationPrefs?,
+  ) {
+    val settings = NotificationPrefsStore.resolve(context, overrides)
+    if (!settings.enabled || isMuted) return
+    append(context, ip, name, if (settings.preview) "$summary $fileName" else summary, settings)
+  }
+
   private fun append(
     context: Context,
     ip: String,

@@ -477,7 +477,20 @@ internal class MessagesDao(db: SqlDb, lock: ReentrantLock, private val contacts:
             for (source in rows) replySources[source.id] = source
         }
 
-        return ChatView(contact = contact, messages = messages, actions = actions, replySources = replySources)
+        // the transfer row keeps who ended it: a reason of "cancelled" is written only by this side's own cancel
+        val cancelledIn = messages.filter { it.direction == MessageDirection.IN && it.status == MessageStatus.CANCELLED }
+        val cancelledByMe = LinkedHashSet<String>()
+        for (chunk in cancelledIn.chunked(VIEW_CHUNK)) {
+            cancelledByMe += db.query(
+                """
+                SELECT transfer_id FROM attachment_transfers
+                WHERE transfer_id IN (${placeholders(chunk.size)}) AND direction = 'in' AND reason = ?
+                """.trimIndent(),
+                chunk.map { it.id } + CANCELLED_BY_RECEIVER,
+            ) { it.string(0) }
+        }
+
+        return ChatView(contact = contact, messages = messages, actions = actions, replySources = replySources, cancelledByMe = cancelledByMe)
     }
 
     private fun writeReactions(messageId: String, reactions: Map<String, String>) {
@@ -487,6 +500,9 @@ internal class MessagesDao(db: SqlDb, lock: ReentrantLock, private val contacts:
     companion object {
         const val CHUNK = 200
         private const val VIEW_CHUNK = 100
+
+        /** the reason TransferManager.cancelIncoming writes; the sender's withdrawal writes none */
+        const val CANCELLED_BY_RECEIVER = "cancelled"
 
         /** http(s) URLs in free text, in order, with trailing punctuation trimmed. */
         fun extractUrls(text: String): List<String> {

@@ -165,6 +165,8 @@ data class ChatUiState(
     val isCoverOn: Boolean = false,
     /** covered messages opened in this chat; leaving it covers them again */
     val revealedIds: Set<String> = emptySet(),
+    /** incoming transfers this device cancelled, so the bubble does not blame the sender */
+    val cancelledByMe: Set<String> = emptySet(),
     val canSend: Boolean = false,
     val composer: ComposerMode = ComposerMode.Idle,
     val isSearching: Boolean = false,
@@ -439,6 +441,7 @@ class ChatViewModel(
             draft = l.draft,
             isCoverOn = l.isCoverOn,
             revealedIds = l.revealed,
+            cancelledByMe = d.view.cancelledByMe,
             canSend = l.draft.isNotBlank() && !isBlocked && !isArchived && running,
             composer = composer,
             isSearching = l.isSearching,

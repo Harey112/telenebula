@@ -226,6 +226,7 @@ private fun MessageList(state: ChatUiState, actions: ChatActions, modifier: Modi
             linkRanges = state.linkRanges,
             transferProgress = state.transferProgress,
             revealedIds = state.revealedIds,
+            cancelledByMe = state.cancelledByMe,
             textSizeSp = state.textSizeSp,
             isCompact = state.isCompact,
             expandedMessageId = state.expandedMessageId,

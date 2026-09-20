@@ -12,6 +12,8 @@ data class ChatView(
     val actions: Map<String, List<MessageAction>> = emptyMap(),
     /** id of every message referenced by a replyToId → the source message */
     val replySources: Map<String, ChatMessage> = emptyMap(),
+    /** incoming transfers this device cancelled; the row alone cannot tell them from ones the sender withdrew */
+    val cancelledByMe: Set<String> = emptySet(),
 )
 
 /** A place in one chat's history: the chat orders by (ts, id), so this names one row exactly. */

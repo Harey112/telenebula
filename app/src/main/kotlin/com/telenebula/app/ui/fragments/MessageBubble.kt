@@ -266,6 +266,8 @@ fun MessageBubble(
     transferPct: Float?,
     /** the whole message is behind a lock until it is revealed */
     isCovered: Boolean,
+    /** an incoming transfer this device stopped, as opposed to one the sender withdrew */
+    isCancelledByMe: Boolean,
     /** tap-opened details row: time, edited, seen, every action */
     isExpanded: Boolean,
     /** this is the most recent message the peer has seen — show their avatar */
@@ -418,7 +420,7 @@ fun MessageBubble(
                 } else if (msg.status.hasNoFile) {
                     val what = when {
                         msg.status == MessageStatus.DECLINED -> "Declined"
-                        mine -> "Cancelled"
+                        mine || isCancelledByMe -> "Cancelled"
                         else -> "Cancelled by $peerName"
                     }
                     Text(
