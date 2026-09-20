@@ -72,6 +72,7 @@ data class ChatSettingsUiState(
     /** actions still waiting to reach this peer */
     val queuedCount: Int = 0,
     val isPeerReachable: Boolean = true,
+    val isPeerSending: Boolean = false,
     val nextProbeInMs: Long? = null,
     val mediaPreview: List<ChatMessage> = emptyList(),
     val mediaCount: Int = 0,
@@ -96,7 +97,7 @@ data class ChatSettingsUiState(
     val queueLabel: String
         get() = when {
             queuedCount == 0 -> "Nothing waiting — tap to check anyway"
-            isPeerReachable -> "$queuedCount waiting · sending now"
+            isPeerSending -> "$queuedCount waiting · sending now"
             nextProbeInMs != null -> "$queuedCount waiting · next try in ${Format.seconds((nextProbeInMs / 1000).toInt().coerceAtLeast(1))}"
             else -> "$queuedCount waiting — tap to send now"
         }
@@ -154,6 +155,7 @@ class ChatSettingsViewModel(
         failedCount = c.failed,
         queuedCount = queue?.queued ?: 0,
         isPeerReachable = queue?.isReachable ?: true,
+        isPeerSending = queue?.isDraining == true,
         nextProbeInMs = queue?.nextProbeInMs,
         mediaPreview = c.media,
         mediaCount = c.mediaCount,

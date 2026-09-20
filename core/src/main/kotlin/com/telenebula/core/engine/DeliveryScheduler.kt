@@ -33,8 +33,8 @@ import kotlin.random.Random
 internal class DeliveryScheduler(private val engine: Engine) {
     private val schedules = ConcurrentHashMap<String, PeerSchedule>()
 
-    /** when we last heard anything from a peer; reachability that costs no probe */
-    private val lastHeardAt = ConcurrentHashMap<String, Long>()
+    /** when a round trip of ours last answered; the only reachability that lets a drain skip its probe */
+    private val lastAnsweredAt = ConcurrentHashMap<String, Long>()
 
     /**
      * Wakes the timer before its next due time; conflated, because one wake is as good as ten.
@@ -57,21 +57,20 @@ internal class DeliveryScheduler(private val engine: Engine) {
     fun kick(peerIp: String) {
         val ip = Ip.normalize(peerIp)
         if (ip.isEmpty()) return
-        schedules[ip]?.let { if (it.isDraining) it.wokenWhileDraining = true else it.onReachable(now()) }
+        schedules[ip]?.let { if (it.isDraining) it.wokenWhileDraining = true else it.tryAt(now()) }
         wake.trySend(Unit)
     }
 
     /**
-     * Something arrived from this peer. It is proof of reachability, so the drain that follows
-     * skips its own probe — and it resets the ladder, which is how a peer that has been away for
-     * days is served the instant it says anything at all.
+     * Something arrived from this peer: it is there, so the ladder resets and the drain runs now.
+     * It does not excuse that drain from its own probe — a frame proves the peer reached us, not
+     * that we can reach it, and only a round trip of ours says a queue may move.
      */
     fun onPeerHeard(peerIp: String) {
         val ip = Ip.normalize(peerIp)
         if (ip.isEmpty()) return
-        rememberHeard(ip)
         val schedule = schedules[ip] ?: return
-        schedule.onReachable(now())
+        schedule.onAnswered(now())
         wake.trySend(Unit)
     }
 
@@ -80,12 +79,17 @@ internal class DeliveryScheduler(private val engine: Engine) {
      * not merely report: it proves the peer is there, so whatever is queued goes now instead of
      * waiting out the rung the peer had climbed to.
      */
-    fun onProbeSucceeded(peerIp: String) = onPeerHeard(peerIp)
+    fun onProbeSucceeded(peerIp: String) {
+        val ip = Ip.normalize(peerIp)
+        if (ip.isEmpty()) return
+        rememberAnswered(ip)
+        onPeerHeard(ip)
+    }
 
     fun onTunnelUp() {
         val stamp = now()
         // jittered, or every peer that went away when the tunnel dropped comes back on one tick
-        for (schedule in schedules.values) schedule.onReachable(stamp + Random.nextLong(TUNNEL_SPREAD_MS))
+        for (schedule in schedules.values) schedule.tryAt(stamp + Random.nextLong(TUNNEL_SPREAD_MS))
         wake.trySend(Unit)
     }
 
@@ -95,6 +99,7 @@ internal class DeliveryScheduler(private val engine: Engine) {
      * never resets.
      */
     fun onTunnelDown() {
+        for (schedule in schedules.values) schedule.onTunnelLost()
         for (ip in engine.peers.keys.toList()) engine.transport.evict(ip)
         emitAll()
         wake.trySend(Unit)
@@ -102,7 +107,7 @@ internal class DeliveryScheduler(private val engine: Engine) {
 
     fun forget(peerIp: String) {
         val ip = Ip.normalize(peerIp)
-        lastHeardAt.remove(ip)
+        lastAnsweredAt.remove(ip)
         val schedule = schedules[ip] ?: return
         if (schedule.isDraining) schedule.isForgotten = true else schedules.remove(ip)
     }
@@ -142,7 +147,7 @@ internal class DeliveryScheduler(private val engine: Engine) {
                 engine.events.peerQueue(schedule.snapshot(now(), true).copy(queued = 0))
             }
         }
-        purgeHeard()
+        purgeAnswered()
 
         val stamp = now()
         var soonest = Long.MAX_VALUE
@@ -203,8 +208,8 @@ internal class DeliveryScheduler(private val engine: Engine) {
             emit(schedule)
             return
         }
-        schedule.onReachable(now())
-        rememberHeard(ip)
+        schedule.onAnswered(now())
+        rememberAnswered(ip)
 
         var pass = 0
         var movedAnything = false
@@ -262,18 +267,18 @@ internal class DeliveryScheduler(private val engine: Engine) {
     // --- reachability memory ---
 
     private fun isFresh(ip: String): Boolean {
-        val heard = lastHeardAt[ip] ?: return false
-        return now() - heard < Limits.PEER_FRESH_MS
+        val answered = lastAnsweredAt[ip] ?: return false
+        return now() - answered < Limits.PEER_FRESH_MS
     }
 
-    private fun rememberHeard(ip: String) {
-        lastHeardAt[ip] = now()
-        if (lastHeardAt.size > Limits.PEER_FRESH_CACHE) purgeHeard()
+    private fun rememberAnswered(ip: String) {
+        lastAnsweredAt[ip] = now()
+        if (lastAnsweredAt.size > Limits.PEER_FRESH_CACHE) purgeAnswered()
     }
 
-    private fun purgeHeard() {
+    private fun purgeAnswered() {
         val deadline = now() - Limits.PEER_FRESH_MS
-        for ((ip, at) in lastHeardAt.entries.toList()) if (at < deadline) lastHeardAt.remove(ip, at)
+        for ((ip, at) in lastAnsweredAt.entries.toList()) if (at < deadline) lastAnsweredAt.remove(ip, at)
     }
 
     // --- events ---

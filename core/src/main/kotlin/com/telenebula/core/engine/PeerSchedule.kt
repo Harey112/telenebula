@@ -43,13 +43,25 @@ internal class PeerSchedule(val ip: String) {
     }
 
     /**
-     * Any proof of life — a probe that answered, a frame that arrived, a ping the user asked for —
-     * puts the peer back on the fast end and makes it due at once.
+     * Proof of life — a probe that answered, a frame that arrived, a ping the user asked for. Only
+     * this says the peer is reachable: everything else may bring the next attempt forward, but
+     * whether anyone is there is something the peer has to tell us.
      */
-    fun onReachable(nowMs: Long) {
+    fun onAnswered(nowMs: Long) {
         isReachable = true
         stepIndex = 0
         dueAtMs = nowMs
+    }
+
+    /** Try again at [atMs], from the fast end of the ladder, without claiming anybody answered. */
+    fun tryAt(atMs: Long) {
+        stepIndex = 0
+        dueAtMs = atMs
+    }
+
+    /** Our tunnel went away, so what the last probe proved is stale; the peer's own ladder is untouched. */
+    fun onTunnelLost() {
+        isReachable = false
     }
 
     /**

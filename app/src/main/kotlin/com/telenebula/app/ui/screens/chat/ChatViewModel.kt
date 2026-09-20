@@ -122,6 +122,8 @@ data class ChatUiState(
     val isTunnelOn: Boolean = false,
     /** the peer answered its last probe: what is queued is moving rather than waiting for it */
     val isPeerReachable: Boolean = true,
+    /** a worker is probing or draining this peer right now — the only thing "sending" may mean */
+    val isPeerSending: Boolean = false,
     /** actions still waiting to reach this peer */
     val queuedCount: Int = 0,
     val isPinging: Boolean = false,
@@ -400,6 +402,7 @@ class ChatViewModel(
             isTunnelOn = running,
             // no entry means nothing is queued for this peer, so nothing is waiting on it
             isPeerReachable = queue?.isReachable ?: true,
+            isPeerSending = queue?.isDraining == true,
             queuedCount = queue?.queued ?: 0,
             isPinging = l.isPinging,
             // the answer says whether the peer is there; what the pong said about them refines it

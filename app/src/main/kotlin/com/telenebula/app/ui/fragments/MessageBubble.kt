@@ -189,7 +189,7 @@ private fun liveSummary(
     actions: List<MessageAction>,
     runningId: String?,
     sendProgress: Float?,
-    isPeerReachable: Boolean,
+    isPeerSending: Boolean,
 ): LiveSummary? {
     if (actions.isEmpty()) return null
     val parts = ArrayList<String>(4)
@@ -204,7 +204,7 @@ private fun liveSummary(
             when {
                 running.type == MessageActionType.SEND && sendProgress != null ->
                     "sending… ${(sendProgress * 100).roundToInt()}%"
-                isPeerReachable -> "${running.verb()}…"
+                isPeerSending -> "${running.verb()}…"
                 else -> "${running.label()} on queue"
             },
         )
@@ -232,10 +232,10 @@ private fun ReceivingProgress(fraction: Float, style: androidx.compose.ui.text.T
 }
 
 @Composable
-private fun ActionIndicator(action: MessageAction, isRunning: Boolean, isPeerReachable: Boolean) {
+private fun ActionIndicator(action: MessageAction, isRunning: Boolean, isPeerSending: Boolean) {
     val colors = TnTheme.colors
     when (action.status) {
-        MessageActionStatus.PENDING -> if (isRunning && isPeerReachable) Spinner(size = 11.dp) else Icon(TnIcon.HOURGLASS, tint = colors.textMuted, size = 11.dp)
+        MessageActionStatus.PENDING -> if (isRunning && isPeerSending) Spinner(size = 11.dp) else Icon(TnIcon.HOURGLASS, tint = colors.textMuted, size = 11.dp)
         // parked on an offer: nothing is being attempted, so no spinner
         MessageActionStatus.WAITING -> Icon(TnIcon.HOURGLASS, tint = colors.textMuted, size = 11.dp)
         MessageActionStatus.FAILED -> Icon(TnIcon.CLOSE, tint = colors.danger, size = 12.dp)
@@ -271,8 +271,8 @@ fun MessageBubble(
     /** this is the most recent message the peer has seen — show their avatar */
     showSeenAvatar: Boolean,
     peerName: String,
-    /** the peer answered its last probe; what is queued is moving rather than waiting */
-    isPeerReachable: Boolean,
+    /** a worker is on this peer right now, so what is queued is actually moving */
+    isPeerSending: Boolean,
     onClick: (ChatMessage) -> Unit,
     onLongClick: (ChatMessage) -> Unit,
     onReply: (ChatMessage) -> Unit,
@@ -295,7 +295,7 @@ fun MessageBubble(
     val inkMuted = lerp(ink, bubbleColor, 0.35f)
     val inkSurface = lerp(ink, bubbleColor, 0.88f)
     val runningId = remember(actions) { ActionQueue.runningActionId(actions) }
-    val live = remember(actions, runningId, transferPct, isPeerReachable) { liveSummary(actions, runningId, transferPct, isPeerReachable) }
+    val live = remember(actions, runningId, transferPct, isPeerSending) { liveSummary(actions, runningId, transferPct, isPeerSending) }
     // an incoming file has no actions of its own, so its progress is read off the message
     val receivingPct = transferPct?.takeIf { !mine && msg.status == MessageStatus.RECEIVING }
     val isSendCancelled = actions.any { it.type == MessageActionType.SEND && it.status == MessageActionStatus.CANCELLED }
@@ -555,7 +555,7 @@ fun MessageBubble(
                 receivingPct = receivingPct,
                 isExpanded = isExpanded,
                 isMine = mine,
-                isPeerReachable = isPeerReachable,
+                isPeerSending = isPeerSending,
                 modifier = Modifier.widthIn(max = maxBubbleWidth()).padding(top = 3.dp, start = if (mine) 0.dp else 6.dp, end = if (mine) 6.dp else 0.dp),
             )
             if (showSeenAvatar) {
@@ -576,7 +576,7 @@ private fun BubbleDetails(
     receivingPct: Float?,
     isExpanded: Boolean,
     isMine: Boolean,
-    isPeerReachable: Boolean,
+    isPeerSending: Boolean,
     modifier: Modifier,
 ) {
     if (!isExpanded && live == null && receivingPct == null) return
@@ -585,9 +585,9 @@ private fun BubbleDetails(
     FlowRow(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (isExpanded) {
             if (actions.size > MAX_INDICATORS) Text("…", style = style, color = colors.textMuted)
-            for (a in actions.takeLast(MAX_INDICATORS)) ActionIndicator(a, a.id == runningId, isPeerReachable)
+            for (a in actions.takeLast(MAX_INDICATORS)) ActionIndicator(a, a.id == runningId, isPeerSending)
         } else if (live != null) {
-            for (a in actions) if (a.status in UNSETTLED) ActionIndicator(a, a.id == runningId, isPeerReachable)
+            for (a in actions) if (a.status in UNSETTLED) ActionIndicator(a, a.id == runningId, isPeerSending)
         }
         if (live != null) Text(live.text, style = style, color = if (live.hasFailure) colors.danger else colors.textMuted)
         if (receivingPct != null) ReceivingProgress(receivingPct, style)
