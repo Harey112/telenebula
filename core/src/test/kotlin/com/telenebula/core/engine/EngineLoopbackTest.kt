@@ -203,6 +203,17 @@ class EngineLoopbackTest {
     }
 
     @Test
+    fun `a reply to a peer that just wrote is still probed before it goes`() = runBlocking {
+        val (a, b) = pair()
+        b.engine.outbox.sendText(a.ip, "are you there", null)
+        waitFor("their message to arrive") { a.store.getMessages(b.ip, 10).isNotEmpty() }
+
+        // hearing from them is not a round trip of ours: the reply leaves only once our probe answers
+        a.engine.outbox.sendText(b.ip, "yes", null)
+        waitFor("the reply to land") { b.store.getMessages(a.ip, 10).any { it.body == "yes" } }
+    }
+
+    @Test
     fun `a text message is delivered, acked and announced`() = runBlocking {
         val (a, b) = pair()
         a.engine.outbox.sendText(b.ip, "hello over the overlay", null)

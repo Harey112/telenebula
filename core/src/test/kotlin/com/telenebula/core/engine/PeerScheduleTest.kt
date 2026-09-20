@@ -50,7 +50,7 @@ class PeerScheduleTest {
                 s.onSilent(now)
                 now = s.dueAtMs
             }
-            s.onReachable(now)
+            s.onAnswered(now)
             assertTrue("rung $rungs is due at once", s.isDue(now))
             assertTrue(s.isReachable)
             // and the next silence starts from the first rung again, not where it left off
@@ -72,8 +72,40 @@ class PeerScheduleTest {
         assertNull(s.snapshot(0, isTunnelUp = true).nextProbeInMs)
 
         // and work arriving wakes it again
-        s.onReachable(5_000)
+        s.onAnswered(5_000)
         assertTrue(s.isDue(5_000))
+    }
+
+    /**
+     * Reachability is something the peer says, never something we assume: the chat prints "sending"
+     * off this flag, and a peer that is plainly off must not be described as receiving anything.
+     */
+    @Test
+    fun `bringing an attempt forward says nothing about whether the peer is there`() {
+        val s = schedule()
+        s.onSilent(0)
+        assertFalse(s.isReachable)
+
+        // the tunnel came back, or something was queued: try now, but nobody has answered yet
+        s.tryAt(1_000)
+        assertFalse("nothing answered, so nothing is reachable", s.isReachable)
+        assertTrue(s.isDue(1_000))
+        // and it is back at the fast end, so the next silence starts from the first rung
+        s.onSilent(1_000)
+        assertEquals(Limits.PING_BACKOFF_MS[1], s.dueAtMs - 1_000)
+    }
+
+    @Test
+    fun `losing the tunnel makes what the last probe proved stale, without punishing the peer`() {
+        val s = schedule()
+        s.onAnswered(0)
+        assertTrue(s.isReachable)
+
+        s.onTunnelLost()
+        assertFalse(s.isReachable)
+        // our outage, not theirs: the ladder stays where it was
+        assertEquals(0, s.stepIndex)
+        assertTrue(s.isDue(0))
     }
 
     @Test
@@ -114,7 +146,7 @@ class PeerScheduleTest {
         assertFalse(away.isReachable)
         assertEquals(Limits.PING_BACKOFF_MS[1], away.nextProbeInMs)
 
-        s.onReachable(1_000)
+        s.onAnswered(1_000)
         assertTrue(s.snapshot(1_000, isTunnelUp = true).isReachable)
         // the tunnel being down is not the peer's fault and is reported apart from reachability
         assertFalse(s.snapshot(1_000, isTunnelUp = false).isTunnelUp)

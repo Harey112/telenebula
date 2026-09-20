@@ -45,9 +45,9 @@ internal object Limits {
     const val DRAIN_WORKERS = 4
 
     /**
-     * A frame from a peer newer than this is proof enough that it is there, so the drain skips its
-     * own probe. It is what makes a reply typed into an open chat leave with no round trip in
-     * front of it, and what lets a manual ping turn straight into a send.
+     * How long a round trip of ours stands as proof that the peer is there. Only a pong we waited
+     * for counts: a frame the peer sent proves it reached us, not that we can reach it, so the
+     * queue never moves on that alone. It is what lets a manual ping turn straight into a send.
      */
     const val PEER_FRESH_MS = 10_000L
 
@@ -77,7 +77,7 @@ internal object Limits {
      */
     const val MAX_PENDING_PER_PEER = 500
 
-    /** Reachability timestamps held in memory; the oldest go first once the map is this big. */
+    /** Answered-probe timestamps held in memory; the oldest go first once the map is this big. */
     const val PEER_FRESH_CACHE = 128
 
     /** The scheduler never sleeps longer than this, so a missed wake-up heals itself. */

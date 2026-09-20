@@ -69,8 +69,8 @@ fun MessageTimeline(
     expandedMessageId: String?,
     seenAvatarMessageId: String?,
     peerName: String,
-    /** the peer answered its last probe: queued work is moving rather than waiting for it */
-    isPeerReachable: Boolean,
+    /** a worker is on this peer right now, so queued work is actually moving */
+    isPeerSending: Boolean,
     onClick: (ChatMessage) -> Unit,
     onLongClick: (ChatMessage) -> Unit,
     onReply: (ChatMessage) -> Unit,
@@ -135,7 +135,7 @@ fun MessageTimeline(
                     isExpanded = expandedMessageId == item.msg.id,
                     showSeenAvatar = seenAvatarMessageId == item.msg.id,
                     peerName = peerName,
-                    isPeerReachable = isPeerReachable,
+                    isPeerSending = isPeerSending,
                     onClick = onClick,
                     onLongClick = onLongClick,
                     onReply = onReply,

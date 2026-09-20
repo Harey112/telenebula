@@ -231,7 +231,7 @@ private fun MessageList(state: ChatUiState, actions: ChatActions, modifier: Modi
             expandedMessageId = state.expandedMessageId,
             seenAvatarMessageId = state.seenAvatarMessageId,
             peerName = state.peerName,
-            isPeerReachable = state.isPeerReachable,
+            isPeerSending = state.isPeerSending,
             onClick = actions::toggleMessageDetails,
             onLongClick = actions::openMessageMenu,
             onReply = actions::beginReply,
