@@ -26,14 +26,25 @@ import com.telenebula.core.notify.MessageActionReceiver
  */
 class TnCoreService : Service() {
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    if (!goForeground()) {
+      // The allowance for this type is spent, or we were started from the background with no
+      // exemption. Stopping is the honest answer: the app asks again the next time it is opened,
+      // and the alternative the platform offers is killing the process.
+      isRunning = false
+      stopSelf()
+      return START_NOT_STICKY
+    }
     isRunning = true
-    if (goForeground()) return START_STICKY
-    // The allowance for this type is spent, or we were started from the background with no
-    // exemption. Stopping is the honest answer: the app asks again the next time it is opened,
-    // and the alternative the platform offers is killing the process.
-    isRunning = false
-    stopSelf()
-    return START_NOT_STICKY
+    if (isStopRequested) {
+      // a stop that arrived while the start was still queued: honoured now that the foreground
+      // obligation is met, since stopping before that point is what the system crashes an app for
+      isStopRequested = false
+      isRunning = false
+      stopForeground(STOP_FOREGROUND_REMOVE)
+      stopSelf()
+      return START_NOT_STICKY
+    }
+    return START_STICKY
   }
 
   /**
@@ -84,10 +95,17 @@ class TnCoreService : Service() {
     const val ONGOING_ID = 4201
     const val ACTION_TOGGLE_TUNNEL = "com.telenebula.core.TOGGLE_TUNNEL"
 
+    /** True only once startForeground has been accepted; a start still queued is not running. */
     @Volatile var isRunning = false
     @Volatile var isTunnelRunning = false
 
+    /** A stop asked for between startForegroundService and startForeground; the service honours it itself. */
+    @Volatile private var isStopRequested = false
+
+    /** Idempotent: a service already in the foreground is not asked for again. */
     fun start(context: Context) {
+      isStopRequested = false
+      if (isRunning) return
       val intent = Intent(context, TnCoreService::class.java)
       try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -100,7 +118,17 @@ class TnCoreService : Service() {
       }
     }
 
+    /**
+     * Stops the service — but never by stopService() while a start is still queued: bringing a
+     * service down between startForegroundService and startForeground is a crash, not a stop.
+     * Until the service is in the foreground the request is left for it to carry out itself.
+     */
     fun stop(context: Context) {
+      if (!isRunning) {
+        isStopRequested = true
+        return
+      }
+      isStopRequested = false
       context.stopService(Intent(context, TnCoreService::class.java))
     }
 
