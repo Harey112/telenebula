@@ -52,8 +52,13 @@ data class InAppNotificationPrefs(val vibrate: Boolean = false)
 data class QuietHours(
     val enabled: Boolean = false,
     val fromHour: Int = 22,
+    val fromMinute: Int = 0,
     val toHour: Int = 7,
-)
+    val toMinute: Int = 0,
+) {
+    val fromMinuteOfDay: Int get() = fromHour * 60 + fromMinute
+    val toMinuteOfDay: Int get() = toHour * 60 + toMinute
+}
 
 /** Only ever quieter than the system: ringer mode and Do Not Disturb still apply on top. */
 @Serializable

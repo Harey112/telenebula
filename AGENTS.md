@@ -184,8 +184,10 @@ easier to read.
 - **Material3 is a primitive supplier only**: `Text`, `Switch`, `Slider`, `HorizontalDivider`,
   `CircularProgressIndicator`, `Icon`/`IconButton`, and the theme's `MaterialTheme` wrapper. No
   `Scaffold`, `TopAppBar`, `NavigationBar`, `Card`, `Button`, `AlertDialog`, `ModalBottomSheet`.
+  `TimePicker` is the one exception, for quiet hours: a clock dial is worth more than a hand-built
+  copy of one, and it is drawn inside the app's own overlay, themed from the tokens.
 - Shared building blocks: `Screen` + `ScreenHeader`, `Section` (titled surface, hairlines between
-  rows), `SettingRow`/`SwitchRow` (icon tile + `RowTone`, never a colour), `SelectRow`, `InfoField`,
+  rows), `SettingRow`/`SwitchRow` (icon tile + `RowTone`, never a colour), `SelectMenuRow`, `InfoField`,
   `TnTextField`, `SearchBar`, `PrimaryButton`, `Collapsible`, `Avatar`, `ErrorBanner`. New screens
   compose these instead of restyling.
 - Icons come from `TnIcon` (lucide, generated); no other icon set.

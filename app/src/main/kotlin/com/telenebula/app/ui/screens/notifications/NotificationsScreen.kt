@@ -2,13 +2,12 @@ package com.telenebula.app.ui.screens.notifications
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.telenebula.app.ui.fragments.Screen
 import com.telenebula.app.ui.fragments.Section
-import com.telenebula.app.ui.fragments.SelectOption
-import com.telenebula.app.ui.fragments.SelectMenu
-import com.telenebula.app.ui.fragments.SelectMenuRow
+import com.telenebula.app.ui.fragments.TimePickerModal
+import com.telenebula.app.ui.fragments.ValueRow
+import com.telenebula.app.ui.fragments.formatTime
 import com.telenebula.app.ui.fragments.SettingRow
 import com.telenebula.app.ui.fragments.SwitchRow
 import com.telenebula.app.ui.icons.TnIcon
@@ -17,7 +16,6 @@ import com.telenebula.app.ui.icons.TnIcon
 fun NotificationsScreen(viewModel: NotificationsViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val n = state.prefs
-    val hourOptions = remember { List(24) { h -> SelectOption(h.toString(), "%02d:00".format(h)) } }
     Screen(title = "Notifications and sounds", onBack = viewModel::goBack) {
         Section(title = "Messages") {
             row { SwitchRow(TnIcon.CHATS, "Show notifications", n.messages.enabled, { viewModel.update { it.copy(messages = it.messages.copy(enabled = !it.messages.enabled)) } }) }
@@ -39,8 +37,8 @@ fun NotificationsScreen(viewModel: NotificationsViewModel) {
         Section(title = "Quiet hours") {
             row { SwitchRow(TnIcon.CLOCK, "Quiet hours", n.quietHours.enabled, { viewModel.update { it.copy(quietHours = it.quietHours.copy(enabled = !it.quietHours.enabled)) } }, subtitle = "Silence message alerts in this window; calls still ring") }
             if (n.quietHours.enabled) {
-                row { SelectMenuRow("From", hourOptions, n.quietHours.fromHour.toString()) { viewModel.openMenu(QUIET_FROM) } }
-                row { SelectMenuRow("To", hourOptions, n.quietHours.toHour.toString()) { viewModel.openMenu(QUIET_TO) } }
+                row { ValueRow("From", formatTime(n.quietHours.fromHour, n.quietHours.fromMinute)) { viewModel.openMenu(QUIET_FROM) } }
+                row { ValueRow("To", formatTime(n.quietHours.toHour, n.quietHours.toMinute)) { viewModel.openMenu(QUIET_TO) } }
             }
         }
         Section(title = "System", footnote = "These settings only make alerts quieter. Your phone’s sound profile and Do Not Disturb are always respected.") {
@@ -49,8 +47,28 @@ fun NotificationsScreen(viewModel: NotificationsViewModel) {
             row { SettingRow(TnIcon.RETRY, "Reset to defaults", onClick = viewModel::resetToDefaults) }
         }
     }
-    SelectMenu("From", hourOptions, n.quietHours.fromHour.toString(), state.openMenuKey == QUIET_FROM, viewModel::setQuietFrom, viewModel::closeMenu)
-    SelectMenu("To", hourOptions, n.quietHours.toHour.toString(), state.openMenuKey == QUIET_TO, viewModel::setQuietTo, viewModel::closeMenu)
+    TimePickerModal(
+        isVisible = state.openMenuKey == QUIET_FROM,
+        title = "Quiet hours start",
+        hour = n.quietHours.fromHour,
+        minute = n.quietHours.fromMinute,
+        onCancel = viewModel::closeMenu,
+        onConfirm = { hour, minute ->
+            viewModel.closeMenu()
+            viewModel.setQuietFrom(hour, minute)
+        },
+    )
+    TimePickerModal(
+        isVisible = state.openMenuKey == QUIET_TO,
+        title = "Quiet hours end",
+        hour = n.quietHours.toHour,
+        minute = n.quietHours.toMinute,
+        onCancel = viewModel::closeMenu,
+        onConfirm = { hour, minute ->
+            viewModel.closeMenu()
+            viewModel.setQuietTo(hour, minute)
+        },
+    )
 }
 
 private const val QUIET_FROM = "quiet-from"
