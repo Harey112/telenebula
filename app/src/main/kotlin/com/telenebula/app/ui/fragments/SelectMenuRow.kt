@@ -34,8 +34,13 @@ fun SelectMenuRow(
     placeholder: String = "Choose",
     onClick: () -> Unit,
 ) {
+    ValueRow(title, options.firstOrNull { it.key == selectedKey }?.label ?: placeholder, onClick)
+}
+
+/** Title on the left, a value on the right, and a tap that opens whatever changes it. */
+@Composable
+fun ValueRow(title: String, value: String, onClick: () -> Unit) {
     val colors = TnTheme.colors
-    val value = options.firstOrNull { it.key == selectedKey }?.label ?: placeholder
     Row(
         modifier = Modifier
             .fillMaxWidth()

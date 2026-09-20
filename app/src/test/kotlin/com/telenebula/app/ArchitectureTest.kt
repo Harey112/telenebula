@@ -32,6 +32,8 @@ class ArchitectureTest {
     private val material3Allowed = setOf(
         "Text", "Switch", "SwitchDefaults", "Slider", "SliderDefaults", "HorizontalDivider", "CircularProgressIndicator",
         "Icon", "IconButton", "MaterialTheme", "LocalContentColor", "LocalTextStyle", "lightColorScheme", "darkColorScheme",
+        // the clock face for quiet hours, the one piece of chrome worth more than a hand-built copy
+        "TimePicker", "TimePickerDefaults", "rememberTimePickerState", "ExperimentalMaterial3Api",
     )
 
     @Test

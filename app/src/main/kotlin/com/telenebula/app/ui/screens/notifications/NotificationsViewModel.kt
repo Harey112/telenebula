@@ -25,8 +25,8 @@ class NotificationsViewModel(private val prefs: PrefsRepository, private val ope
     fun closeMenu() = menus.close()
 
     fun update(transform: (NotificationPrefs) -> NotificationPrefs) = prefs.update { it.copy(notifications = transform(it.notifications)) }
-    fun setQuietFrom(key: String) = key.toIntOrNull()?.let { h -> update { it.copy(quietHours = it.quietHours.copy(fromHour = h)) } } ?: Unit
-    fun setQuietTo(key: String) = key.toIntOrNull()?.let { h -> update { it.copy(quietHours = it.quietHours.copy(toHour = h)) } } ?: Unit
+    fun setQuietFrom(hour: Int, minute: Int) = update { it.copy(quietHours = it.quietHours.copy(fromHour = hour, fromMinute = minute)) }
+    fun setQuietTo(hour: Int, minute: Int) = update { it.copy(quietHours = it.quietHours.copy(toHour = hour, toMinute = minute)) }
     fun openTunnelNotificationSettings() = openWith.openChannelSettings(TnCoreService.CHANNEL_ID)
     fun openSystemSettings() = openWith.openAppNotificationSettings()
     fun resetToDefaults() = prefs.update { it.copy(notifications = NotificationPrefs()) }

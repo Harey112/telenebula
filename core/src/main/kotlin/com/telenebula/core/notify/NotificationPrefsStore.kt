@@ -4,6 +4,7 @@ import android.content.Context
 import com.telenebula.core.CoreJson
 import com.telenebula.core.model.ContactNotificationPrefs
 import com.telenebula.core.model.NotificationPrefs
+import com.telenebula.core.model.QuietHours
 import java.util.Calendar
 import kotlinx.serialization.SerializationException
 
@@ -74,7 +75,14 @@ object NotificationPrefsStore {
     private fun isQuietHours(prefs: NotificationPrefs): Boolean {
         val q = prefs.quietHours
         if (!q.enabled) return false
-        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        return if (q.fromHour <= q.toHour) hour >= q.fromHour && hour < q.toHour else hour >= q.fromHour || hour < q.toHour
+        val now = Calendar.getInstance()
+        return isQuietAt(q, now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE))
+    }
+
+    /** The window is half-open, and one that ends before it starts wraps midnight. */
+    fun isQuietAt(q: QuietHours, minuteOfDay: Int): Boolean {
+        val from = q.fromMinuteOfDay
+        val to = q.toMinuteOfDay
+        return if (from <= to) minuteOfDay >= from && minuteOfDay < to else minuteOfDay >= from || minuteOfDay < to
     }
 }
