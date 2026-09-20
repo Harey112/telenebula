@@ -90,24 +90,6 @@ fun SettingRow(
     }
 }
 
-/** A [SettingRow] whose current choice sits on its right, the way a select does; tapping it opens the choices. */
-@Composable
-fun SelectMenuRow(
-    icon: TnIcon,
-    title: String,
-    value: String,
-    onClick: () -> Unit,
-    tone: RowTone = RowTone.DEFAULT,
-) {
-    val colors = TnTheme.colors
-    SettingRow(icon, title, onClick = onClick, tone = tone) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TnSpace.xs)) {
-            Text(value, style = TnType.body, color = colors.textMuted)
-            Icon(TnIcon.CHEVRON_DOWN, tint = colors.textMuted, size = 16.dp)
-        }
-    }
-}
-
 @Composable
 fun SwitchRow(
     icon: TnIcon,

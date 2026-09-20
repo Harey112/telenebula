@@ -2,16 +2,14 @@ package com.telenebula.app.ui.screens.privacy
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.telenebula.app.nav.Blocked
 import com.telenebula.app.ui.fragments.InfoField
-import com.telenebula.app.ui.fragments.OptionsMenu
 import com.telenebula.app.ui.fragments.RowTone
 import com.telenebula.app.ui.fragments.Screen
 import com.telenebula.app.ui.fragments.Section
 import com.telenebula.app.ui.fragments.SelectMenuRow
-import com.telenebula.app.ui.fragments.SelectRow
+import com.telenebula.app.ui.fragments.SelectMenuRow
 import com.telenebula.app.ui.fragments.SettingRow
 import com.telenebula.app.ui.fragments.SwitchRow
 import com.telenebula.app.ui.icons.TnIcon
@@ -37,17 +35,15 @@ fun PrivacyScreen(viewModel: PrivacyViewModel) {
                 )
             }
             if (state.isAppLockEnabled && state.canUseAppLock) {
-                row { SelectRow("Lock after leaving the app", viewModel.appLockAfterOptions, state.appLockAfterKey, viewModel::setAppLockAfter) }
+                row { SelectMenuRow("Lock after leaving the app", viewModel.appLockAfterOptions, state.appLockAfterKey, viewModel::setAppLockAfter) }
             }
         }
         Section(title = "Privacy") {
             row { SwitchRow(TnIcon.EYE, "Send read receipts", state.sendReadReceipts, viewModel::toggleReadReceipts, subtitle = "Let contacts see when you have read their messages") }
             row { SwitchRow(TnIcon.PENCIL, "Send typing indicators", state.sendTypingIndicators, viewModel::toggleTypingIndicators, subtitle = "Show contacts when you are typing") }
             row { SwitchRow(TnIcon.LOCK, "Block screenshots", state.isScreenshotBlocked, viewModel::toggleScreenshotBlock, subtitle = "Hide the app from screen capture and recents") }
-            row { SelectMenuRow(TnIcon.LOCK, "Reveal covered messages", state.coverGateLabel, viewModel::openCoverGateMenu) }
+            row { SelectMenuRow("Reveal covered messages", viewModel.coverGateOptions, state.coverGateKey, viewModel::setCoverGate) }
         }
-        val gateMenu = remember(state.coverGate) { viewModel.coverGateMenu(state.coverGate) }
-        OptionsMenu(isVisible = state.isCoverGateMenuOpen, options = gateMenu, onClose = viewModel::closeCoverGateMenu, title = "Reveal covered messages · ${state.coverGateLabel}")
         Section(title = "Blocked", footnote = "Peers are authenticated by your nebula CA; only devices holding a certificate it signed can reach this app at all.") {
             row {
                 SettingRow(

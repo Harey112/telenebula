@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.telenebula.app.ui.fragments.Screen
 import com.telenebula.app.ui.fragments.Section
-import com.telenebula.app.ui.fragments.SelectRow
+import com.telenebula.app.ui.fragments.SelectMenuRow
 import com.telenebula.app.ui.fragments.SwitchRow
 import com.telenebula.app.ui.icons.TnIcon
 import com.telenebula.app.ui.theme.TnSpace
@@ -38,8 +38,8 @@ fun ChatPrefsScreen(viewModel: ChatPrefsViewModel) {
     val emojiStyle = remember { TextStyle(fontSize = 24.sp) }
     Screen(title = "Chats", onBack = viewModel::goBack) {
         Section(title = "Reading") {
-            row { SelectRow("Text size", viewModel.textSizeOptions, prefs.textSizeKey, viewModel::setChatTextSize) }
-            row { SelectRow("Message density", viewModel.densityOptions, prefs.densityKey, viewModel::setDensity) }
+            row { SelectMenuRow("Text size", viewModel.textSizeOptions, prefs.textSizeKey, viewModel::setChatTextSize) }
+            row { SelectMenuRow("Message density", viewModel.densityOptions, prefs.densityKey, viewModel::setDensity) }
         }
         Section(title = "Sending") {
             row { SwitchRow(TnIcon.SEND, "Enter to send", prefs.isEnterToSend, viewModel::toggleEnterToSend, subtitle = "Off keeps Enter as a new line") }

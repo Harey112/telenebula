@@ -5,7 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.telenebula.app.ui.fragments.Screen
 import com.telenebula.app.ui.fragments.Section
-import com.telenebula.app.ui.fragments.SelectRow
+import com.telenebula.app.ui.fragments.SelectMenuRow
 import com.telenebula.app.ui.fragments.SettingRow
 import com.telenebula.app.ui.fragments.SwitchRow
 import com.telenebula.app.ui.icons.TnIcon
@@ -17,7 +17,7 @@ fun ChatNotificationsScreen(viewModel: ChatNotificationsViewModel) {
     Screen(title = "Notifications and sounds", onBack = viewModel::goBack) {
         Section(title = state.title) {
             row { SwitchRow(if (state.isEnabled) TnIcon.BELL else TnIcon.BELL_OFF, "Notifications", state.isEnabled, viewModel::toggleEnabled, subtitle = state.muteStatus) }
-            if (state.isEnabled) row { SelectRow("Mute for", viewModel.muteOptions, "", viewModel::muteFor) }
+            if (state.isEnabled) row { SelectMenuRow("Mute for", viewModel.muteOptions, "", viewModel::muteFor) }
         }
         Section(title = "Messages") {
             row { SwitchRow(TnIcon.SETTINGS, "Customize for this contact", state.isCustomized, viewModel::toggleCustomized, subtitle = if (state.isCustomized) "Using these settings" else "Using the global settings") }

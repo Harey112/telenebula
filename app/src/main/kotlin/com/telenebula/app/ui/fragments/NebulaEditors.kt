@@ -85,7 +85,7 @@ fun ConfigFieldList(
                     specOptions != null -> {
                         val options = remember(specOptions) { specOptions.map { SelectOption(it.key, it.label) } }
                         Column(modifier = Modifier.bleed(TnSpace.lg)) {
-                            SelectRow(spec.label, options, draft.values[spec.path] ?: options.firstOrNull()?.key ?: "") { onValue(spec.path, it) }
+                            SelectMenuRow(spec.label, options, draft.values[spec.path] ?: options.firstOrNull()?.key ?: "", { onValue(spec.path, it) })
                         }
                     }
                     else -> TnTextField(
@@ -188,11 +188,11 @@ fun FirewallRuleEditor(
         rules.forEachIndexed { index, rule ->
             key(rule.id) {
                 EditorCard("Rule ${index + 1}", removeLabel = "Remove rule ${index + 1}", onRemove = { onRemove(rule.id) }) {
-                    SelectRowBleed("Protocol", PROTO_OPTIONS, rule.proto.key) { k -> onUpdate(rule.copy(proto = FirewallProto.entries.first { it.key == k })) }
+                    SelectMenuRowBleed("Protocol", PROTO_OPTIONS, rule.proto.key) { k -> onUpdate(rule.copy(proto = FirewallProto.entries.first { it.key == k })) }
                     if (rule.proto != FirewallProto.ICMP) {
                         TnTextField(rule.port, { onUpdate(rule.copy(port = it)) }, label = "Port (any, 80, 200-901, fragment)", isMono = true, hasAutoCapitalize = false)
                     }
-                    SelectRowBleed("Match", MATCH_OPTIONS, rule.match.key) { k -> onUpdate(rule.copy(match = FirewallMatch.entries.first { it.key == k })) }
+                    SelectMenuRowBleed("Match", MATCH_OPTIONS, rule.match.key) { k -> onUpdate(rule.copy(match = FirewallMatch.entries.first { it.key == k })) }
                     TnTextField(rule.value, { onUpdate(rule.copy(value = it)) }, label = matchLabel(rule.match), isMono = true, hasAutoCapitalize = false)
                     TnTextField(rule.localCidr, { onUpdate(rule.copy(localCidr = it)) }, label = "Local CIDR (optional, for unsafe routes)", isMono = true, hasAutoCapitalize = false)
                     TnTextField(rule.caName, { onUpdate(rule.copy(caName = it)) }, label = "Issuing CA name (optional)", hasAutoCapitalize = false)
@@ -213,8 +213,8 @@ private fun matchLabel(match: FirewallMatch): String = when (match) {
 }
 
 @Composable
-private fun SelectRowBleed(title: String, options: List<SelectOption>, selectedKey: String, onSelect: (String) -> Unit) {
-    Column(modifier = Modifier.bleed(TnSpace.md)) { SelectRow(title, options, selectedKey, onSelect) }
+private fun SelectMenuRowBleed(title: String, options: List<SelectOption>, selectedKey: String, onSelect: (String) -> Unit) {
+    Column(modifier = Modifier.bleed(TnSpace.md)) { SelectMenuRow(title, options, selectedKey, onSelect) }
 }
 
 /** tun.unsafe_routes: subnets reachable through a nebula node that carries them in its certificate. */

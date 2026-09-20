@@ -7,7 +7,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.telenebula.app.ui.fragments.Screen
 import com.telenebula.app.ui.fragments.Section
 import com.telenebula.app.ui.fragments.SelectOption
-import com.telenebula.app.ui.fragments.SelectRow
+import com.telenebula.app.ui.fragments.SelectMenuRow
 import com.telenebula.app.ui.fragments.SettingRow
 import com.telenebula.app.ui.fragments.SwitchRow
 import com.telenebula.app.ui.icons.TnIcon
@@ -37,8 +37,8 @@ fun NotificationsScreen(viewModel: NotificationsViewModel) {
         Section(title = "Quiet hours") {
             row { SwitchRow(TnIcon.CLOCK, "Quiet hours", n.quietHours.enabled, { viewModel.update { it.copy(quietHours = it.quietHours.copy(enabled = !it.quietHours.enabled)) } }, subtitle = "Silence message alerts in this window; calls still ring") }
             if (n.quietHours.enabled) {
-                row { SelectRow("From", hourOptions, n.quietHours.fromHour.toString(), viewModel::setQuietFrom) }
-                row { SelectRow("To", hourOptions, n.quietHours.toHour.toString(), viewModel::setQuietTo) }
+                row { SelectMenuRow("From", hourOptions, n.quietHours.fromHour.toString(), viewModel::setQuietFrom) }
+                row { SelectMenuRow("To", hourOptions, n.quietHours.toHour.toString(), viewModel::setQuietTo) }
             }
         }
         Section(title = "System", footnote = "These settings only make alerts quieter. Your phone’s sound profile and Do Not Disturb are always respected.") {

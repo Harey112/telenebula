@@ -31,7 +31,7 @@ import com.telenebula.app.ui.fragments.Screen
 import com.telenebula.app.ui.fragments.ScreenHeader
 import com.telenebula.app.ui.fragments.Section
 import com.telenebula.app.ui.fragments.SelectMenuRow
-import com.telenebula.app.ui.fragments.SelectRow
+import com.telenebula.app.ui.fragments.SelectMenuRow
 import com.telenebula.app.ui.fragments.SettingRow
 import com.telenebula.app.ui.icons.Icon
 import com.telenebula.app.ui.icons.TnIcon
@@ -77,10 +77,10 @@ fun ChatSettingsScreen(viewModel: ChatSettingsViewModel) {
             row { SettingRow(TnIcon.SEND, "Queued actions", subtitle = state.queueLabel, onClick = viewModel::sendQueuedNow) }
         }
         Section(title = "Privacy") {
-            row { SelectRow("Send read receipts", viewModel.privacyOptions, state.readReceipts.key, viewModel::setReadReceipts) }
-            row { SelectRow("Send typing indicator", viewModel.privacyOptions, state.typingIndicators.key, viewModel::setTypingIndicators) }
-            row { SelectRow("Block screenshots", viewModel.privacyOptions, state.blockScreenshots.key, viewModel::setBlockScreenshots) }
-            row { SelectMenuRow(TnIcon.LOCK, "Reveal covered messages", state.revealGateLabel, viewModel::openRevealGateMenu) }
+            row { SelectMenuRow("Send read receipts", viewModel.privacyOptions, state.readReceipts.key, viewModel::setReadReceipts) }
+            row { SelectMenuRow("Send typing indicator", viewModel.privacyOptions, state.typingIndicators.key, viewModel::setTypingIndicators) }
+            row { SelectMenuRow("Block screenshots", viewModel.privacyOptions, state.blockScreenshots.key, viewModel::setBlockScreenshots) }
+            row { SelectMenuRow("Reveal covered messages", viewModel.coverGateOptions, state.revealGateKey, viewModel::setRevealGate) }
         }
         Section(title = "Media") {
             if (state.mediaPreview.isEmpty()) {
@@ -122,6 +122,4 @@ fun ChatSettingsScreen(viewModel: ChatSettingsViewModel) {
     }
     val menu = remember(state.disappearSeconds) { viewModel.disappearMenu(state.disappearSeconds) }
     OptionsMenu(isVisible = state.isDisappearMenuOpen, options = menu, onClose = viewModel::closeDisappearMenu, title = "Disappearing messages · ${state.disappearLabel}")
-    val gateMenu = remember(state.revealGate) { viewModel.revealGateMenu(state.revealGate) }
-    OptionsMenu(isVisible = state.isRevealGateMenuOpen, options = gateMenu, onClose = viewModel::closeRevealGateMenu, title = "Reveal covered messages · ${state.revealGateLabel}")
 }
