@@ -8,6 +8,7 @@ import com.telenebula.app.ui.fragments.InfoField
 import com.telenebula.app.ui.fragments.RowTone
 import com.telenebula.app.ui.fragments.Screen
 import com.telenebula.app.ui.fragments.Section
+import com.telenebula.app.ui.fragments.SelectMenu
 import com.telenebula.app.ui.fragments.SelectMenuRow
 import com.telenebula.app.ui.fragments.SelectMenuRow
 import com.telenebula.app.ui.fragments.SettingRow
@@ -35,14 +36,14 @@ fun PrivacyScreen(viewModel: PrivacyViewModel) {
                 )
             }
             if (state.isAppLockEnabled && state.canUseAppLock) {
-                row { SelectMenuRow("Lock after leaving the app", viewModel.appLockAfterOptions, state.appLockAfterKey, viewModel::setAppLockAfter) }
+                row { SelectMenuRow("Lock after leaving the app", viewModel.appLockAfterOptions, state.appLockAfterKey) { viewModel.openMenu(LOCK_AFTER) } }
             }
         }
         Section(title = "Privacy") {
             row { SwitchRow(TnIcon.EYE, "Send read receipts", state.sendReadReceipts, viewModel::toggleReadReceipts, subtitle = "Let contacts see when you have read their messages") }
             row { SwitchRow(TnIcon.PENCIL, "Send typing indicators", state.sendTypingIndicators, viewModel::toggleTypingIndicators, subtitle = "Show contacts when you are typing") }
             row { SwitchRow(TnIcon.LOCK, "Block screenshots", state.isScreenshotBlocked, viewModel::toggleScreenshotBlock, subtitle = "Hide the app from screen capture and recents") }
-            row { SelectMenuRow("Reveal covered messages", viewModel.coverGateOptions, state.coverGateKey, viewModel::setCoverGate) }
+            row { SelectMenuRow("Reveal covered messages", viewModel.coverGateOptions, state.coverGateKey) { viewModel.openMenu(COVER_GATE) } }
         }
         Section(title = "Blocked", footnote = "Peers are authenticated by your nebula CA; only devices holding a certificate it signed can reach this app at all.") {
             row {
@@ -56,4 +57,9 @@ fun PrivacyScreen(viewModel: PrivacyViewModel) {
             }
         }
     }
+    SelectMenu("Lock after leaving the app", viewModel.appLockAfterOptions, state.appLockAfterKey, state.openMenuKey == LOCK_AFTER, viewModel::setAppLockAfter, viewModel::closeMenu)
+    SelectMenu("Reveal covered messages", viewModel.coverGateOptions, state.coverGateKey, state.openMenuKey == COVER_GATE, viewModel::setCoverGate, viewModel::closeMenu)
 }
+
+private const val LOCK_AFTER = "lock-after"
+private const val COVER_GATE = "cover-gate"

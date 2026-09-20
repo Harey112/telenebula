@@ -13,14 +13,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -85,7 +89,7 @@ fun ConfigFieldList(
                     specOptions != null -> {
                         val options = remember(specOptions) { specOptions.map { SelectOption(it.key, it.label) } }
                         Column(modifier = Modifier.bleed(TnSpace.lg)) {
-                            SelectMenuRow(spec.label, options, draft.values[spec.path] ?: options.firstOrNull()?.key ?: "", { onValue(spec.path, it) })
+                            ExpandingSelectRow(spec.label, options, draft.values[spec.path] ?: options.firstOrNull()?.key ?: "") { onValue(spec.path, it) }
                         }
                     }
                     else -> TnTextField(
@@ -214,7 +218,62 @@ private fun matchLabel(match: FirewallMatch): String = when (match) {
 
 @Composable
 private fun SelectMenuRowBleed(title: String, options: List<SelectOption>, selectedKey: String, onSelect: (String) -> Unit) {
-    Column(modifier = Modifier.bleed(TnSpace.md)) { SelectMenuRow(title, options, selectedKey, onSelect) }
+    Column(modifier = Modifier.bleed(TnSpace.md)) { ExpandingSelectRow(title, options, selectedKey, onSelect) }
+}
+
+/**
+ * The editor's own select: it opens under the row rather than over the screen, because these
+ * fields sit inside a collapsible inside a scrolling screen, where a menu drawn over everything
+ * would have to be hoisted through both of the screens that host the editor.
+ */
+@Composable
+private fun ExpandingSelectRow(title: String, options: List<SelectOption>, selectedKey: String, onSelect: (String) -> Unit) {
+    val colors = TnTheme.colors
+    var isOpen by remember { mutableStateOf(false) }
+    val value = options.firstOrNull { it.key == selectedKey }?.label ?: ""
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(role = Role.Button) { isOpen = !isOpen }
+                .padding(horizontal = TnSpace.lg, vertical = TnSpace.md)
+                .semantics { contentDescription = "$title: $value" },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(TnSpace.md),
+        ) {
+            Text(title, style = TnType.body, color = colors.text, modifier = Modifier.weight(1f))
+            Text(value, style = TnType.body, color = colors.textMuted)
+            Icon(if (isOpen) TnIcon.CHEVRON_DOWN else TnIcon.CHEVRON_RIGHT, tint = colors.textMuted, size = 16.dp)
+        }
+        if (isOpen) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = TnSpace.lg, end = TnSpace.lg, bottom = TnSpace.sm)
+                    .clip(RoundedCornerShape(TnRadius.md))
+                    .background(colors.surfaceRaised),
+            ) {
+                for (option in options) {
+                    val isSelected = option.key == selectedKey
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(role = Role.Button) {
+                                isOpen = false
+                                onSelect(option.key)
+                            }
+                            .padding(horizontal = TnSpace.md, vertical = TnSpace.sm)
+                            .semantics { selected = isSelected },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(TnSpace.sm),
+                    ) {
+                        Text(option.label, style = TnType.body, color = if (isSelected) colors.accent else colors.text, modifier = Modifier.weight(1f))
+                        if (isSelected) Icon(TnIcon.CHECK, tint = colors.accent, size = 16.dp)
+                    }
+                }
+            }
+        }
+    }
 }
 
 /** tun.unsafe_routes: subnets reachable through a nebula node that carries them in its certificate. */

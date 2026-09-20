@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.telenebula.app.ui.fragments.Screen
 import com.telenebula.app.ui.fragments.Section
+import com.telenebula.app.ui.fragments.SelectMenu
 import com.telenebula.app.ui.fragments.SelectMenuRow
 import com.telenebula.app.ui.fragments.SettingRow
 import com.telenebula.app.ui.fragments.SwitchRow
@@ -17,7 +18,7 @@ fun ChatNotificationsScreen(viewModel: ChatNotificationsViewModel) {
     Screen(title = "Notifications and sounds", onBack = viewModel::goBack) {
         Section(title = state.title) {
             row { SwitchRow(if (state.isEnabled) TnIcon.BELL else TnIcon.BELL_OFF, "Notifications", state.isEnabled, viewModel::toggleEnabled, subtitle = state.muteStatus) }
-            if (state.isEnabled) row { SelectMenuRow("Mute for", viewModel.muteOptions, "", viewModel::muteFor) }
+            if (state.isEnabled) row { SelectMenuRow("Mute for", viewModel.muteOptions, "", placeholder = "Choose") { viewModel.openMenu(MUTE_FOR) } }
         }
         Section(title = "Messages") {
             row { SwitchRow(TnIcon.SETTINGS, "Customize for this contact", state.isCustomized, viewModel::toggleCustomized, subtitle = if (state.isCustomized) "Using these settings" else "Using the global settings") }
@@ -37,4 +38,7 @@ fun ChatNotificationsScreen(viewModel: ChatNotificationsViewModel) {
             row { SettingRow(TnIcon.RETRY, "Reset to global settings", onClick = viewModel::resetToGlobal) }
         }
     }
+    SelectMenu("Mute for", viewModel.muteOptions, "", state.openMenuKey == MUTE_FOR, viewModel::muteFor, viewModel::closeMenu)
 }
+
+private const val MUTE_FOR = "mute-for"

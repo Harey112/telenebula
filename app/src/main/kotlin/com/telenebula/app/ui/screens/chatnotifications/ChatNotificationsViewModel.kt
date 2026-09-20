@@ -11,8 +11,10 @@ import com.telenebula.core.CoreClient
 import com.telenebula.core.model.Contact
 import com.telenebula.core.model.ContactFlagsPatch
 import com.telenebula.core.model.ContactNotificationPrefs
+import com.telenebula.app.ui.shared.OpenMenu
 import com.telenebula.app.ui.shared.uiState
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -21,15 +23,22 @@ data class ChatNotificationsUiState(
     val isEnabled: Boolean = true,
     val muteStatus: String = "",
     val prefs: ContactNotificationPrefs = ContactNotificationPrefs(),
+    val openMenuKey: String? = null,
 ) {
     val isCustomized: Boolean get() = !prefs.useGlobal
 }
 
 class ChatNotificationsViewModel(private val ip: String, private val core: CoreClient, private val navigator: Navigator) : ViewModel() {
-    val uiState: StateFlow<ChatNotificationsUiState> = core.contactFlow(ip).map(::build)
-        .uiState(viewModelScope, build(core.cachedContact(ip)))
+    private val menus = OpenMenu()
 
-    private fun build(contact: Contact?): ChatNotificationsUiState {
+    val uiState: StateFlow<ChatNotificationsUiState> = combine(core.contactFlow(ip), menus.key, ::build)
+        .uiState(viewModelScope, build(core.cachedContact(ip), null))
+
+    fun openMenu(key: String) = menus.open(key)
+
+    fun closeMenu() = menus.close()
+
+    private fun build(contact: Contact?, openMenuKey: String?): ChatNotificationsUiState {
         val muteUntil = contact?.muteUntil ?: 0L
         return ChatNotificationsUiState(
             title = contact?.let(ContactLabels::chatLabel) ?: ip,
@@ -40,6 +49,7 @@ class ChatNotificationsViewModel(private val ip: String, private val core: CoreC
                 else -> "Notifications on"
             },
             prefs = contact?.notifications ?: ContactNotificationPrefs(),
+            openMenuKey = openMenuKey,
         )
     }
 

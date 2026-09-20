@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.telenebula.app.ui.fragments.Screen
 import com.telenebula.app.ui.fragments.Section
+import com.telenebula.app.ui.fragments.SelectMenu
 import com.telenebula.app.ui.fragments.SelectMenuRow
 import com.telenebula.app.ui.fragments.SwitchRow
 import com.telenebula.app.ui.icons.TnIcon
@@ -38,8 +39,8 @@ fun ChatPrefsScreen(viewModel: ChatPrefsViewModel) {
     val emojiStyle = remember { TextStyle(fontSize = 24.sp) }
     Screen(title = "Chats", onBack = viewModel::goBack) {
         Section(title = "Reading") {
-            row { SelectMenuRow("Text size", viewModel.textSizeOptions, prefs.textSizeKey, viewModel::setChatTextSize) }
-            row { SelectMenuRow("Message density", viewModel.densityOptions, prefs.densityKey, viewModel::setDensity) }
+            row { SelectMenuRow("Text size", viewModel.textSizeOptions, prefs.textSizeKey) { viewModel.openMenu(TEXT_SIZE) } }
+            row { SelectMenuRow("Message density", viewModel.densityOptions, prefs.densityKey) { viewModel.openMenu(DENSITY) } }
         }
         Section(title = "Sending") {
             row { SwitchRow(TnIcon.SEND, "Enter to send", prefs.isEnterToSend, viewModel::toggleEnterToSend, subtitle = "Off keeps Enter as a new line") }
@@ -65,4 +66,9 @@ fun ChatPrefsScreen(viewModel: ChatPrefsViewModel) {
             }
         }
     }
+    SelectMenu("Text size", viewModel.textSizeOptions, prefs.textSizeKey, prefs.openMenuKey == TEXT_SIZE, viewModel::setChatTextSize, viewModel::closeMenu)
+    SelectMenu("Message density", viewModel.densityOptions, prefs.densityKey, prefs.openMenuKey == DENSITY, viewModel::setDensity, viewModel::closeMenu)
 }
+
+private const val TEXT_SIZE = "text-size"
+private const val DENSITY = "density"

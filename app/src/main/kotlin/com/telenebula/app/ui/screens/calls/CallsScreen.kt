@@ -39,6 +39,7 @@ import com.telenebula.app.ui.fragments.ErrorBanner
 import com.telenebula.app.ui.fragments.Screen
 import com.telenebula.app.ui.fragments.SearchHeader
 import com.telenebula.app.ui.fragments.SelectOption
+import com.telenebula.app.ui.fragments.SelectMenu
 import com.telenebula.app.ui.fragments.SelectMenuRow
 import com.telenebula.app.ui.icons.Icon
 import com.telenebula.app.ui.icons.TnIcon
@@ -74,7 +75,12 @@ fun CallsScreen(viewModel: CallsViewModel) {
             CallList(state, viewModel)
         }
     }
+    SelectMenu("Show", viewModel.filterOptions, state.filter.key, state.openMenuKey == SHOW, viewModel::setFilter, viewModel::closeMenu)
+    SelectMenu("Sort by", viewModel.sortOptions, state.sort.key, state.openMenuKey == SORT, viewModel::setSort, viewModel::closeMenu)
 }
+
+private const val SHOW = "show"
+private const val SORT = "sort"
 
 @Composable
 private fun SelectionBar(count: Int, onClear: () -> Unit, onDelete: () -> Unit) {
@@ -105,8 +111,8 @@ private fun FilterToggle(isOpen: Boolean, isActive: Boolean, onToggle: () -> Uni
 
 @Composable
 private fun FilterPanel(state: CallsUiState, filterOptions: List<SelectOption>, sortOptions: List<SelectOption>, actions: CallsActions) {
-    SelectMenuRow("Show", filterOptions, state.filter.key, actions::setFilter)
-    SelectMenuRow("Sort by", sortOptions, state.sort.key, actions::setSort)
+    SelectMenuRow("Show", filterOptions, state.filter.key) { actions.openMenu(SHOW) }
+    SelectMenuRow("Sort by", sortOptions, state.sort.key) { actions.openMenu(SORT) }
 }
 
 @Composable

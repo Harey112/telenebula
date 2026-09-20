@@ -65,6 +65,7 @@ data class CallsUiState(
     val filter: CallFilter = CallFilter.ALL,
     val sort: CallSort = CallSort.NEWEST,
     val isFilterPanelOpen: Boolean = false,
+    val openMenuKey: String? = null,
     /** long-pressed rows; non-empty means the list is in selection mode */
     val selectedIds: Set<String> = emptySet(),
 ) {
@@ -83,6 +84,8 @@ interface CallsActions {
     fun toggleFilterPanel()
     fun setFilter(key: String)
     fun setSort(key: String)
+    fun openMenu(key: String)
+    fun closeMenu()
     fun tapRow(id: String, peerIp: String)
     fun longPressRow(id: String)
     fun clearSelection()
@@ -105,6 +108,7 @@ class CallsViewModel(
         val filter: CallFilter = CallFilter.ALL,
         val sort: CallSort = CallSort.NEWEST,
         val isFilterPanelOpen: Boolean = false,
+        val openMenu: String? = null,
         val selected: Set<String> = emptySet(),
     )
 
@@ -143,6 +147,7 @@ class CallsViewModel(
             filter = l.filter,
             sort = l.sort,
             isFilterPanelOpen = l.isFilterPanelOpen,
+            openMenuKey = l.openMenu,
             // a row deleted or filtered out of view cannot stay selected
             selectedIds = if (l.selected.isEmpty()) l.selected else sorted.mapTo(HashSet()) { it.id }.apply { retainAll(l.selected) },
         )
@@ -178,6 +183,10 @@ class CallsViewModel(
     override fun setFilter(key: String) = local.update { it.copy(filter = CallFilter.fromKey(key)) }
 
     override fun setSort(key: String) = local.update { it.copy(sort = CallSort.fromKey(key)) }
+
+    override fun openMenu(key: String) = local.update { it.copy(openMenu = key) }
+
+    override fun closeMenu() = local.update { it.copy(openMenu = null) }
 
     override fun tapRow(id: String, peerIp: String) {
         if (uiState.value.isSelecting) toggleSelected(id) else navigator.push(Contact(peerIp))
