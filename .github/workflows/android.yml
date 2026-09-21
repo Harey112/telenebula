@@ -34,6 +34,112 @@ jobs:
       - name: Build
         run: ./gradlew --no-daemon --console=plain lint testDebugUnitTest
 
+  testbuild:
+    # A signed build to install over an existing one, without publishing anything. Run it from
+    # the Actions tab; the APK arrives as an artifact on the run, and no release or tag is made.
+    name: Test APK (no release)
+    if: github.event_name == 'workflow_dispatch'
+    needs: [checks]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # the version is named after the last tag
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-37.2 build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Name this build
+        id: build
+        run: |
+          set -eu
+          # a prerelease of the next minor: above the last release, below the version it leads to,
+          # so the in-app update check does not offer what is already installed
+          latest="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || echo v0.0.0)"
+          base="${latest#v}"
+          base="${base%%-*}"
+          major="${base%%.*}"
+          rest="${base#*.}"
+          minor="${rest%%.*}"
+          version="${major}.$((minor + 1)).0-test.${GITHUB_RUN_NUMBER}"
+          code=$(( ( $(date +%s) - 1704067200 ) / 60 ))
+          {
+            echo "version=$version"
+            echo "code=$code"
+          } >> "$GITHUB_OUTPUT"
+          echo "building $version ($code) from ${GITHUB_REF_NAME}"
+
+      # the secrets context is not allowed in `if`, so the shell decides
+      - name: Keystores from secrets
+        run: |
+          if [ -n "$TN_DEBUG_KEYSTORE_B64" ]; then
+            echo "$TN_DEBUG_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/debug.keystore"
+            echo "TN_DEBUG_KEYSTORE_FILE=$RUNNER_TEMP/debug.keystore" >> "$GITHUB_ENV"
+          fi
+          if [ -n "$TN_KEYSTORE_B64" ]; then
+            echo "$TN_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "TN_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No TN_KEYSTORE_B64 secret; this APK is debug-signed and will not install over a released build."
+            echo "TN_ALLOW_DEBUG_SIGNED_RELEASE=1" >> "$GITHUB_ENV"
+          fi
+        env:
+          TN_DEBUG_KEYSTORE_B64: ${{ secrets.TN_DEBUG_KEYSTORE_B64 }}
+          TN_KEYSTORE_B64: ${{ secrets.TN_KEYSTORE_B64 }}
+
+      - name: Size Gradle for the runner
+        run: |
+          mkdir -p ~/.gradle
+          printf 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8\nkotlin.daemon.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m\norg.gradle.workers.max=4\n' > ~/.gradle/gradle.properties
+      # lint and the tests already ran in the checks job this one depends on
+      - name: Build
+        run: ./gradlew --no-daemon --console=plain assembleRelease
+        env:
+          TN_VERSION_CODE: ${{ steps.build.outputs.code }}
+          TN_VERSION_NAME: ${{ steps.build.outputs.version }}
+          TN_KEYSTORE_PASSWORD: ${{ secrets.TN_KEYSTORE_PASSWORD }}
+          TN_KEY_ALIAS: ${{ secrets.TN_KEY_ALIAS }}
+          TN_KEY_PASSWORD: ${{ secrets.TN_KEY_PASSWORD }}
+          TN_DEBUG_KEYSTORE_PASSWORD: ${{ secrets.TN_DEBUG_KEYSTORE_PASSWORD }}
+          TN_DEBUG_KEY_ALIAS: ${{ secrets.TN_DEBUG_KEY_ALIAS }}
+          TN_DEBUG_KEY_PASSWORD: ${{ secrets.TN_DEBUG_KEY_PASSWORD }}
+
+      - name: Name the APKs after the build
+        run: |
+          set -eu
+          mkdir -p dist
+          version='${{ steps.build.outputs.version }}'
+          for abi in arm64-v8a universal; do
+            src="app/build/outputs/apk/release/app-$abi-release.apk"
+            [ -f "$src" ] || { echo "missing $src"; exit 1; }
+            cp "$src" "dist/telenebula-$version-$abi.apk"
+          done
+          ( cd dist && sha256sum ./*.apk > SHA256SUMS.txt )
+          ls -l dist
+
+      # one artifact per ABI, so a phone downloads only the file it can install
+      - uses: actions/upload-artifact@v4
+        with:
+          name: telenebula-${{ steps.build.outputs.version }}-arm64-v8a
+          path: |
+            dist/telenebula-${{ steps.build.outputs.version }}-arm64-v8a.apk
+            dist/SHA256SUMS.txt
+          retention-days: 14
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: telenebula-${{ steps.build.outputs.version }}-universal
+          path: |
+            dist/telenebula-${{ steps.build.outputs.version }}-universal.apk
+            dist/SHA256SUMS.txt
+          retention-days: 14
+          if-no-files-found: error
+
   release:
     name: Release APKs
     if: startsWith(github.ref, 'refs/tags/v')
