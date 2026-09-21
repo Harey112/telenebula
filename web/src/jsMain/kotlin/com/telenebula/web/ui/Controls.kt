@@ -16,15 +16,6 @@ fun section(title: String? = null, footnote: String? = null, build: HTMLElement.
     return s
 }
 
-/** Where a setting actually takes effect, said on the row rather than left to be guessed. */
-/** Where a setting takes effect. A core setting is the same in every profile; only a profile setting differs. */
-enum class Where(val label: String, val cls: String) {
-    PHONE("Phone only", ""),
-    BROWSER("Dex only", "browser"),
-    BOTH("Same everywhere", ""),
-    PER_PROFILE("Per profile", "profile"),
-}
-
 // --- the controls themselves, so a row and a table cell never build one two different ways ------
 
 fun switchControl(ariaLabel: String, checked: Boolean, isEnabled: Boolean = true, onChange: (Boolean) -> Unit): HTMLElement {
@@ -63,19 +54,17 @@ fun colorControl(ariaLabel: String, value: String, isEnabled: Boolean = true, on
     return div("cell-pair").add(span("mono color-hex", input.value), input)
 }
 
-private fun rowShell(label: String, sub: String?, cls: String = "", where: Where? = null): Pair<HTMLElement, HTMLElement> {
+private fun rowShell(label: String, sub: String?, cls: String = ""): Pair<HTMLElement, HTMLElement> {
     val control = div("row-control")
-    val labelRow = div("row-label", label)
-    if (where != null) labelRow.add(span("row-scope ${where.cls}", where.label))
     val row = div("row $cls").add(
-        div("row-text").add(labelRow, if (sub != null) div("row-sub", sub) else null),
+        div("row-text").add(div("row-label", label), if (sub != null) div("row-sub", sub) else null),
         control,
     )
     return row to control
 }
 
-fun switchRow(label: String, sub: String? = null, checked: Boolean, isEnabled: Boolean = true, where: Where? = null, onChange: (Boolean) -> Unit): HTMLElement {
-    val (row, control) = rowShell(label, sub, where = where)
+fun switchRow(label: String, sub: String? = null, checked: Boolean, isEnabled: Boolean = true, onChange: (Boolean) -> Unit): HTMLElement {
+    val (row, control) = rowShell(label, sub)
     control.add(switchControl(label, checked, isEnabled, onChange))
     if (!isEnabled) row.classList.add("disabled")
     return row
@@ -83,30 +72,30 @@ fun switchRow(label: String, sub: String? = null, checked: Boolean, isEnabled: B
 
 data class Choice(val key: String, val label: String)
 
-fun selectRow(label: String, sub: String? = null, options: List<Choice>, selected: String, isEnabled: Boolean = true, where: Where? = null, onChange: (String) -> Unit): HTMLElement {
-    val (row, control) = rowShell(label, sub, where = where)
+fun selectRow(label: String, sub: String? = null, options: List<Choice>, selected: String, isEnabled: Boolean = true, onChange: (String) -> Unit): HTMLElement {
+    val (row, control) = rowShell(label, sub)
     control.add(selectControl(label, options, selected, isEnabled, onChange))
     if (!isEnabled) row.classList.add("disabled")
     return row
 }
 
-fun infoRow(label: String, value: String, isMono: Boolean = false, isWrapped: Boolean = false, where: Where? = null): HTMLElement {
-    val (row, control) = rowShell(label, null, "row-info", where)
+fun infoRow(label: String, value: String, isMono: Boolean = false, isWrapped: Boolean = false): HTMLElement {
+    val (row, control) = rowShell(label, null, "row-info")
     val v = div("row-value" + (if (isMono) " mono" else "") + (if (isWrapped) " wrap" else ""), value.ifEmpty { "—" })
     control.add(v)
     return row
 }
 
-fun actionRow(label: String, sub: String? = null, button: String, isDanger: Boolean = false, isEnabled: Boolean = true, where: Where? = null, onClick: () -> Unit): HTMLElement {
-    val (row, control) = rowShell(label, sub, where = where)
+fun actionRow(label: String, sub: String? = null, button: String, isDanger: Boolean = false, isEnabled: Boolean = true, onClick: () -> Unit): HTMLElement {
+    val (row, control) = rowShell(label, sub)
     val b = button("btn" + if (isDanger) " btn-danger" else "", button, { onClick() }, text = button)
     if (!isEnabled) b.setAttribute("disabled", "disabled")
     control.add(b)
     return row
 }
 
-fun textRow(label: String, sub: String? = null, value: String, placeholder: String = "", where: Where? = null, onCommit: (String) -> Unit): HTMLElement {
-    val (row, control) = rowShell(label, sub, where = where)
+fun textRow(label: String, sub: String? = null, value: String, placeholder: String = "", onCommit: (String) -> Unit): HTMLElement {
+    val (row, control) = rowShell(label, sub)
     val input = el("input", "text-input") {
         setAttribute("type", "text")
         setAttribute("placeholder", placeholder)
@@ -118,15 +107,9 @@ fun textRow(label: String, sub: String? = null, value: String, placeholder: Stri
     return row
 }
 
-fun colorRow(label: String, sub: String? = null, value: String, where: Where? = null, onChange: (String) -> Unit): HTMLElement {
-    val (row, control) = rowShell(label, sub, where = where)
-    control.add(colorControl(label, value, onChange = onChange))
-    return row
-}
-
 /** `input type=time` gives the browser's own clock; the phone stores the two numbers. */
-fun timeRow(label: String, hour: Int, minute: Int, isEnabled: Boolean = true, where: Where? = null, onChange: (Int, Int) -> Unit): HTMLElement {
-    val (row, control) = rowShell(label, null, where = where)
+fun timeRow(label: String, hour: Int, minute: Int, isEnabled: Boolean = true, onChange: (Int, Int) -> Unit): HTMLElement {
+    val (row, control) = rowShell(label, null)
     val input = el("input", "text-input time-input") {
         setAttribute("type", "time")
         setAttribute("aria-label", label)
@@ -170,7 +153,7 @@ fun textField(label: String, value: String, placeholder: String = "", type: Stri
 }
 
 /** A three-way "follow the phone / on / off", which is how a per-chat override reads. */
-fun triStateRow(label: String, sub: String? = null, value: Boolean?, where: Where? = null, onChange: (Boolean?) -> Unit): HTMLElement =
+fun triStateRow(label: String, sub: String? = null, value: Boolean?, onChange: (Boolean?) -> Unit): HTMLElement =
     selectRow(
         label,
         sub,
@@ -180,7 +163,6 @@ fun triStateRow(label: String, sub: String? = null, value: Boolean?, where: Wher
             true -> "on"
             false -> "off"
         },
-        where = where,
     ) { key ->
         onChange(
             when (key) {
@@ -197,21 +179,14 @@ fun statGrid(vararg pairs: Pair<String, String>): HTMLElement {
     return g
 }
 
-// --- what this browser does instead, shown under the setting it belongs to ---------------------
+// --- settings this browser may hold its own value for -------------------------------------------
 
-/** The key the browser's own control uses for "whatever the app is set to". */
+/** The key the control uses for "whatever the app is set to". */
 const val FOLLOW_APP = ""
 
-/** A setting and, beneath it, the browser's own value for it, as one group with one border. */
-fun withSurface(parent: HTMLElement, control: HTMLElement): HTMLElement =
-    div("row-group").add(
-        parent,
-        div("row-surface").add(div("row-surface-label", "Dex profile"), div("row-control").add(control)),
-    )
-
 /**
- * The browser's own control. "Follow app" comes first and names what it resolves to, so the value
- * in force is readable without switching away from it; null means the browser sets nothing itself.
+ * The control for a setting this browser may hold its own value for. "Follow app" comes first and
+ * names what it resolves to, so the value in force is readable without switching away from it.
  */
 fun followSelect(
     setting: String,
@@ -222,7 +197,7 @@ fun followSelect(
     onChange: (String?) -> Unit,
 ): HTMLElement {
     val all = listOf(Choice(FOLLOW_APP, "Follow app ($inherited)")) + options
-    return selectControl("$setting, this browser", all, selected ?: FOLLOW_APP, isEnabled) { key ->
+    return selectControl(setting, all, selected ?: FOLLOW_APP, isEnabled) { key ->
         onChange(key.takeIf { it != FOLLOW_APP })
     }
 }
@@ -236,3 +211,39 @@ fun followSwitch(setting: String, inherited: Boolean, selected: Boolean?, isEnab
         selected?.let { if (it) "on" else "off" },
         isEnabled,
     ) { key -> onChange(key?.let { it == "on" }) }
+
+fun followSelectRow(
+    label: String,
+    sub: String? = null,
+    inherited: String,
+    options: List<Choice>,
+    selected: String?,
+    isEnabled: Boolean = true,
+    onChange: (String?) -> Unit,
+): HTMLElement {
+    val (row, control) = rowShell(label, sub)
+    control.add(followSelect(label, inherited, options, selected, isEnabled, onChange))
+    if (!isEnabled) row.classList.add("disabled")
+    return row
+}
+
+fun followSwitchRow(
+    label: String,
+    sub: String? = null,
+    inherited: Boolean,
+    selected: Boolean?,
+    isEnabled: Boolean = true,
+    onChange: (Boolean?) -> Unit,
+): HTMLElement {
+    val (row, control) = rowShell(label, sub)
+    control.add(followSwitch(label, inherited, selected, isEnabled, onChange))
+    if (!isEnabled) row.classList.add("disabled")
+    return row
+}
+
+/** A row whose control is built by the caller, for the one setting that needs two of them. */
+fun customRow(label: String, sub: String? = null, control: HTMLElement): HTMLElement {
+    val (row, slot) = rowShell(label, sub)
+    slot.add(control)
+    return row
+}

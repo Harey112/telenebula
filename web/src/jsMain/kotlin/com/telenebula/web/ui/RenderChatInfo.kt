@@ -104,7 +104,6 @@ class ChatInfoView(root: HTMLElement, private val actions: Actions) {
                 section("Just for this chat", "Each follows your global setting unless you change it here.") {
                     add(triStateRow("Read receipts", null, p?.sendReadReceipts) { v -> actions.setContactPrivacy(peer, com.telenebula.web.wire.DexContactPrivacy(sendReadReceipts = v, sendTypingIndicators = p?.sendTypingIndicators, blockScreenshots = p?.blockScreenshots, revealGate = p?.revealGate)) })
                     add(triStateRow("Typing indicators", null, p?.sendTypingIndicators) { v -> actions.setContactPrivacy(peer, com.telenebula.web.wire.DexContactPrivacy(sendReadReceipts = p?.sendReadReceipts, sendTypingIndicators = v, blockScreenshots = p?.blockScreenshots, revealGate = p?.revealGate)) })
-                    add(triStateRow("Block screenshots", null, p?.blockScreenshots) { v -> actions.setContactPrivacy(peer, com.telenebula.web.wire.DexContactPrivacy(sendReadReceipts = p?.sendReadReceipts, sendTypingIndicators = p?.sendTypingIndicators, blockScreenshots = v, revealGate = p?.revealGate)) })
                     add(
                         selectRow(
                             "Reveal covered messages with",
@@ -126,8 +125,6 @@ class ChatInfoView(root: HTMLElement, private val actions: Actions) {
                         add(switchRow("Messages", null, n.messages) { v -> actions.setContactNotifications(peer, n.copy(messages = v)) })
                         add(switchRow("Show a preview", null, n.preview) { v -> actions.setContactNotifications(peer, n.copy(preview = v)) })
                         add(switchRow("Sound", null, n.sound) { v -> actions.setContactNotifications(peer, n.copy(sound = v)) })
-                        add(switchRow("Vibrate", null, n.vibrate) { v -> actions.setContactNotifications(peer, n.copy(vibrate = v)) })
-                        add(switchRow("Pop up on screen", null, n.popup) { v -> actions.setContactNotifications(peer, n.copy(popup = v)) })
                         add(switchRow("Reactions", null, n.reactions) { v -> actions.setContactNotifications(peer, n.copy(reactions = v)) })
                         add(switchRow("Calls", null, n.calls) { v -> actions.setContactNotifications(peer, n.copy(calls = v)) })
                     }

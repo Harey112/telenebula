@@ -56,7 +56,6 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         SettingsTab.CHATS -> Icon.CHATS
         SettingsTab.NOTIFICATIONS -> Icon.BELL
         SettingsTab.PRIVACY -> Icon.SHIELD
-        SettingsTab.CALLS -> Icon.CALL
         SettingsTab.NETWORK -> Icon.GLOBE
         SettingsTab.STORAGE -> Icon.DATABASE
         SettingsTab.DIAGNOSTICS -> Icon.ACTIVITY
@@ -99,7 +98,6 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
             SettingsTab.CHATS -> chats(s)
             SettingsTab.NOTIFICATIONS -> notifications(s, next.effective)
             SettingsTab.PRIVACY -> privacy(s, next)
-            SettingsTab.CALLS -> calls(s)
             SettingsTab.NETWORK -> network(s, next)
             SettingsTab.STORAGE -> storage(s, next)
             SettingsTab.DIAGNOSTICS -> diagnostics(next)
@@ -144,19 +142,14 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         }
         content.add(
             section("Identity") {
-                add(infoRow("Node ID (certificate name)", if (a.certName.isEmpty()) "" else "@${a.certName}", where = Where.PHONE))
+                add(infoRow("Node ID (certificate name)", if (a.certName.isEmpty()) "" else "@${a.certName}"))
                 add(infoRow("Overlay address", a.overlayIp, isMono = true))
                 add(infoRow("Overlay networks", a.networks.joinToString(", "), isMono = true, isWrapped = true))
             },
-            section("Certificate", "Renewing the certificate, and setting this phone up, happen on the phone. This is a browser: it never holds the key.") {
+            section("Certificate") {
                 add(infoRow("Status", a.certStatus))
                 add(infoRow("Valid until", a.certNotAfter))
                 add(infoRow("Fingerprint", a.certFingerprint, isMono = true, isWrapped = true))
-            },
-            section("Only on the phone", "Renewing the certificate, resetting the identity, and the About screen's links all need the handset.") {
-                add(infoRow("Renew certificate", "On the phone", where = Where.PHONE))
-                add(infoRow("Reset identity", "On the phone", where = Where.PHONE))
-                add(infoRow("Documentation and reporting a problem", "On the phone, under About", where = Where.PHONE))
             },
             section("Build") {
                 add(infoRow("App version", a.appVersion))
@@ -167,7 +160,7 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         )
     }
 
-    /** What the browser sets for itself is stored on the phone beside the app's, so both are here. */
+    /** What this browser sets for itself is stored on the phone beside the app's own value. */
     private fun surface(s: DexSettings, change: DexProfile.() -> DexProfile) =
         patch(DexSettingsPatch(dexProfile = s.dexProfile.change()))
 
@@ -176,29 +169,18 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
     private fun appearance(s: DexSettings, eff: Effective) {
         val d = s.dexProfile
         content.add(
-            section("Theme", "Each row is the phone's. Leave the browser's own line on Follow app to keep the two the same.") {
+            section("Theme", "Leave a setting on Follow app to keep it the same as the phone.") {
                 add(
-                    withSurface(
-                        selectRow("Appearance", null, THEME_MODES, s.themeMode.name, where = Where.PER_PROFILE) { k -> patch(DexSettingsPatch(themeMode = DexThemeMode.valueOf(k))) },
-                        followSelect("Appearance", labelOf(THEME_MODES, s.themeMode.name), THEME_MODES, d.themeMode?.name) { k ->
-                            surface(s) { copy(themeMode = k?.let { DexThemeMode.valueOf(it) }) }
-                        },
-                    ),
+                    followSelectRow("Appearance", inherited = labelOf(THEME_MODES, s.themeMode.name), options = THEME_MODES, selected = d.themeMode?.name) { k ->
+                        surface(s) { copy(themeMode = k?.let { DexThemeMode.valueOf(it) }) }
+                    },
                 )
                 add(
-                    withSurface(
-                        selectRow("Colour theme", null, THEMES, s.colorTheme, where = Where.PER_PROFILE) { k -> patch(DexSettingsPatch(colorTheme = k)) },
-                        followSelect("Colour theme", labelOf(THEMES, s.colorTheme), THEMES, d.colorTheme) { k -> surface(s) { copy(colorTheme = k) } },
-                    ),
+                    followSelectRow("Colour theme", inherited = labelOf(THEMES, s.colorTheme), options = THEMES, selected = d.colorTheme) { k ->
+                        surface(s) { copy(colorTheme = k) }
+                    },
                 )
-                add(
-                    withSurface(
-                        colorRow("Custom accent", "Used when the colour theme is Custom", s.customAccent, where = Where.PER_PROFILE) { hex ->
-                            patch(DexSettingsPatch(customAccent = hex, colorTheme = "custom"))
-                        },
-                        accentControl(s, eff),
-                    ),
-                )
+                add(customRow("Custom accent", "Used when the colour theme is Custom", accentControl(s, eff)))
             },
             section("Messages") {
                 add(textSizeRow(s))
@@ -216,23 +198,19 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
                 surface(s) { copy(customAccent = if (k == null) null else eff.customAccent) }
             },
         )
-        if (own != null) cell.add(colorControl("Custom accent, this browser", own) { hex -> surface(s) { copy(customAccent = hex) } })
+        if (own != null) cell.add(colorControl("Custom accent colour", own) { hex -> surface(s) { copy(customAccent = hex) } })
         return cell
     }
 
-    private fun textSizeRow(s: DexSettings): HTMLElement = withSurface(
-        selectRow("Text size", null, TEXT_SIZES, s.chatTextSize.name, where = Where.PER_PROFILE) { k -> patch(DexSettingsPatch(chatTextSize = DexTextSize.valueOf(k))) },
-        followSelect("Text size", labelOf(TEXT_SIZES, s.chatTextSize.name), TEXT_SIZES, s.dexProfile.chatTextSize?.name) { k ->
+    private fun textSizeRow(s: DexSettings): HTMLElement =
+        followSelectRow("Text size", inherited = labelOf(TEXT_SIZES, s.chatTextSize.name), options = TEXT_SIZES, selected = s.dexProfile.chatTextSize?.name) { k ->
             surface(s) { copy(chatTextSize = k?.let { DexTextSize.valueOf(it) }) }
-        },
-    )
+        }
 
-    private fun densityRow(s: DexSettings): HTMLElement = withSurface(
-        selectRow("Message density", null, DENSITIES, s.messageDensity.name, where = Where.PER_PROFILE) { k -> patch(DexSettingsPatch(messageDensity = DexDensity.valueOf(k))) },
-        followSelect("Message density", labelOf(DENSITIES, s.messageDensity.name), DENSITIES, s.dexProfile.messageDensity?.name) { k ->
+    private fun densityRow(s: DexSettings): HTMLElement =
+        followSelectRow("Message density", inherited = labelOf(DENSITIES, s.messageDensity.name), options = DENSITIES, selected = s.dexProfile.messageDensity?.name) { k ->
             surface(s) { copy(messageDensity = k?.let { DexDensity.valueOf(it) }) }
-        },
-    )
+        }
 
     private fun chats(s: DexSettings) {
         content.add(
@@ -240,12 +218,12 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
                 add(textSizeRow(s))
                 add(densityRow(s))
                 add(
-                    withSurface(
-                        switchRow("Enter sends the message", "Otherwise Enter starts a new line and Shift+Enter sends", s.isEnterToSend, where = Where.PER_PROFILE) { v ->
-                            patch(DexSettingsPatch(isEnterToSend = v))
-                        },
-                        followSwitch("Enter sends the message", s.isEnterToSend, s.dexProfile.isEnterToSend) { v -> surface(s) { copy(isEnterToSend = v) } },
-                    ),
+                    followSwitchRow(
+                        "Enter sends the message",
+                        "Otherwise Enter starts a new line and Shift+Enter sends",
+                        inherited = s.isEnterToSend,
+                        selected = s.dexProfile.isEnterToSend,
+                    ) { v -> surface(s) { copy(isEnterToSend = v) } },
                 )
             },
         )
@@ -254,7 +232,7 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         for (i in 0 until 6) {
             val emoji = slots.getOrNull(i) ?: "·"
             quick.add(
-                actionRow("Slot ${i + 1}", emoji, button = "Change", where = Where.BOTH) {
+                actionRow("Slot ${i + 1}", emoji, button = "Change") {
                     actions.openDialog(Dialog.EmojiPick(EmojiTarget.Slot(i)))
                 },
             )
@@ -268,53 +246,40 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         val d = s.dexProfile
         fun setNotifications(next: DexNotifications) = patch(DexSettingsPatch(notifications = next))
         content.add(
-            section("Messages", "The phone rings and vibrates; this browser shows a desktop notification. The three below can differ.") {
+            section("Messages", "The first three can differ between the phone and this browser; leave one on Follow app to keep them the same.") {
                 add(
-                    withSurface(
-                        switchRow("Message notifications", null, m.enabled, where = Where.PER_PROFILE) { v -> setNotifications(n.copy(messages = m.copy(enabled = v))) },
-                        followSwitch("Message notifications", m.enabled, d.notificationsEnabled) { v -> surface(s) { copy(notificationsEnabled = v) } },
-                    ),
+                    followSwitchRow("Message notifications", inherited = m.enabled, selected = d.notificationsEnabled) { v ->
+                        surface(s) { copy(notificationsEnabled = v) }
+                    },
                 )
                 add(
-                    withSurface(
-                        switchRow("Show a preview", "Put the message itself in the notification", m.preview, isEnabled = m.enabled, where = Where.PER_PROFILE) { v ->
-                            setNotifications(n.copy(messages = m.copy(preview = v)))
-                        },
-                        followSwitch("Show a preview", m.preview, d.notificationPreview, isEnabled = eff.notificationsEnabled) { v -> surface(s) { copy(notificationPreview = v) } },
-                    ),
+                    followSwitchRow(
+                        "Show a preview",
+                        "Put the message itself in the notification",
+                        inherited = m.preview,
+                        selected = d.notificationPreview,
+                        isEnabled = eff.notificationsEnabled,
+                    ) { v -> surface(s) { copy(notificationPreview = v) } },
                 )
                 add(
-                    withSurface(
-                        switchRow("Sound", "The phone plays its tone; the browser plays a short beep", m.sound, isEnabled = m.enabled, where = Where.PER_PROFILE) { v ->
-                            setNotifications(n.copy(messages = m.copy(sound = v)))
-                        },
-                        followSwitch("Sound", m.sound, d.notificationSound, isEnabled = eff.notificationsEnabled) { v -> surface(s) { copy(notificationSound = v) } },
-                    ),
+                    followSwitchRow(
+                        "Sound",
+                        "A short beep in this browser",
+                        inherited = m.sound,
+                        selected = d.notificationSound,
+                        isEnabled = eff.notificationsEnabled,
+                    ) { v -> surface(s) { copy(notificationSound = v) } },
                 )
-                add(switchRow("Show who sent it", null, m.showSender, isEnabled = m.enabled, where = Where.PHONE) { v -> setNotifications(n.copy(messages = m.copy(showSender = v))) })
-                add(switchRow("Vibrate", null, m.vibrate, isEnabled = m.enabled, where = Where.PHONE) { v -> setNotifications(n.copy(messages = m.copy(vibrate = v))) })
-                add(switchRow("Pop up on screen", null, m.popup, isEnabled = m.enabled, where = Where.PHONE) { v -> setNotifications(n.copy(messages = m.copy(popup = v))) })
-                add(switchRow("Announce reactions", null, m.reactions, isEnabled = m.enabled, where = Where.PHONE) { v -> setNotifications(n.copy(messages = m.copy(reactions = v))) })
+                add(switchRow("Show who sent it", null, m.showSender, isEnabled = m.enabled) { v -> setNotifications(n.copy(messages = m.copy(showSender = v))) })
+                add(switchRow("Announce reactions", null, m.reactions, isEnabled = m.enabled) { v -> setNotifications(n.copy(messages = m.copy(reactions = v))) })
             },
-            section("Calls") {
-                add(switchRow("Ring for calls", null, n.calls.ring, where = Where.PHONE) { v -> setNotifications(n.copy(calls = n.calls.copy(ring = v))) })
-                add(switchRow("Vibrate while ringing", null, n.calls.vibrate, isEnabled = n.calls.ring, where = Where.PHONE) { v -> setNotifications(n.copy(calls = n.calls.copy(vibrate = v))) })
-                add(switchRow("Missed call notification", null, n.calls.missedNotification, where = Where.PHONE) { v -> setNotifications(n.copy(calls = n.calls.copy(missedNotification = v))) })
-            },
-            section("In the app") {
-                add(switchRow("Vibrate for the chat you are reading", null, n.inApp.vibrate, where = Where.PHONE) { v -> setNotifications(n.copy(inApp = DexInAppNotifications(vibrate = v))) })
-            },
-            section("Quiet hours", "While quiet hours are on, the phone stays silent; messages still arrive.") {
-                add(switchRow("Quiet hours", null, n.quietHours.enabled, where = Where.PHONE) { v -> setNotifications(n.copy(quietHours = n.quietHours.copy(enabled = v))) })
-                add(timeRow("From", n.quietHours.fromHour, n.quietHours.fromMinute, isEnabled = n.quietHours.enabled, where = Where.PHONE) { h, mi -> setNotifications(n.copy(quietHours = n.quietHours.copy(fromHour = h, fromMinute = mi))) })
-                add(timeRow("Until", n.quietHours.toHour, n.quietHours.toMinute, isEnabled = n.quietHours.enabled, where = Where.PHONE) { h, mi -> setNotifications(n.copy(quietHours = n.quietHours.copy(toHour = h, toMinute = mi))) })
-            },
-            section("Only on the phone", "Android's own notification screens, for the tunnel's channel and for the app, open on the handset.") {
-                add(infoRow("Tunnel notification settings", "On the phone", where = Where.PHONE))
-                add(infoRow("Android notification settings", "On the phone", where = Where.PHONE))
+            section("Quiet hours", "While quiet hours are on, notifications stay silent; messages still arrive.") {
+                add(switchRow("Quiet hours", null, n.quietHours.enabled) { v -> setNotifications(n.copy(quietHours = n.quietHours.copy(enabled = v))) })
+                add(timeRow("From", n.quietHours.fromHour, n.quietHours.fromMinute, isEnabled = n.quietHours.enabled) { h, mi -> setNotifications(n.copy(quietHours = n.quietHours.copy(fromHour = h, fromMinute = mi))) })
+                add(timeRow("Until", n.quietHours.toHour, n.quietHours.toMinute, isEnabled = n.quietHours.enabled) { h, mi -> setNotifications(n.copy(quietHours = n.quietHours.copy(toHour = h, toMinute = mi))) })
             },
             section(null, null) {
-                add(actionRow("Reset notifications", "Put every notification setting back to its default", button = "Reset", where = Where.PHONE) { setNotifications(DexNotifications(DexMessageNotifications(), DexCallNotifications(), DexInAppNotifications(), DexQuietHours())) })
+                add(actionRow("Reset notifications", "Put every notification setting back to its default", button = "Reset") { setNotifications(DexNotifications(DexMessageNotifications(), DexCallNotifications(), DexInAppNotifications(), DexQuietHours())) })
             },
         )
     }
@@ -324,22 +289,8 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         val blocked = state.contacts.values.filter { it.isBlocked }.sortedBy { it.label.lowercase() }
         content.add(
             section("What your contacts see") {
-                add(switchRow("Send read receipts", "They see when you have read their message", s.sendReadReceipts, where = Where.BOTH) { v -> patch(DexSettingsPatch(sendReadReceipts = v)) })
-                add(switchRow("Send typing indicators", "They see when you are writing", s.sendTypingIndicators, where = Where.BOTH) { v -> patch(DexSettingsPatch(sendTypingIndicators = v)) })
-            },
-            section("On this phone", "The app lock is the phone's own, so it is set there.") {
-                add(switchRow("Block screenshots", "A browser cannot stop a screenshot; this is the phone\u2019s own window flag", s.isScreenshotBlocked, where = Where.PHONE) { v -> patch(DexSettingsPatch(isScreenshotBlocked = v)) })
-                add(infoRow("App lock", if (s.isAppLockEnabled) "On" else "Off", where = Where.PHONE))
-                add(
-                    selectRow(
-                        "Lock after",
-                        null,
-                        listOf(Choice("0", "Immediately"), Choice("30", "30 seconds"), Choice("60", "1 minute"), Choice("300", "5 minutes"), Choice("900", "15 minutes")),
-                        s.appLockAfterSec.toString(),
-                        isEnabled = s.isAppLockEnabled,
-                        where = Where.PHONE,
-                    ) { key -> key.toIntOrNull()?.let { patch(DexSettingsPatch(appLockAfterSec = it)) } },
-                )
+                add(switchRow("Send read receipts", "They see when you have read their message", s.sendReadReceipts) { v -> patch(DexSettingsPatch(sendReadReceipts = v)) })
+                add(switchRow("Send typing indicators", "They see when you are writing", s.sendTypingIndicators) { v -> patch(DexSettingsPatch(sendTypingIndicators = v)) })
             },
             section(
                 "Covered messages",
@@ -354,13 +305,12 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
                         "Reveal with",
                         null,
                         listOf(
-                            Choice("TAP", "Just tap — phone and browser"),
-                            Choice("ASK", "Ask first — phone and browser"),
-                            Choice("CODE", "A code — phone only"),
-                            Choice("DEVICE", "The phone's lock — phone only"),
+                            Choice("TAP", "Just tap"),
+                            Choice("ASK", "Ask first"),
+                            Choice("CODE", "A code"),
+                            Choice("DEVICE", "The phone's lock"),
                         ),
                         s.coverRevealGate.name,
-                        where = if (isPhoneOnlyGate) Where.PHONE else Where.BOTH,
                     ) { key -> patch(DexSettingsPatch(coverRevealGate = DexRevealGate.valueOf(key))) },
                 )
             },
@@ -384,14 +334,14 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         content.add(
             section("Status", "What a contact sees when they check on you.") {
                 add(
-                    switchRow("Share when I am online", null, isActive, where = Where.BOTH) { _ ->
+                    switchRow("Share when I am online", null, isActive) { _ ->
                         // off while paused means end the pause, not stop sharing
                         val next = if (isPaused) DexPresencePrefs(isShared = true) else DexPresencePrefs(isShared = !p.isShared)
                         patch(DexSettingsPatch(presence = next))
                     },
                 )
                 add(
-                    selectRow("Pause sharing", null, PAUSES, if (isPaused) p.pauseMinutes.toString() else "0", isEnabled = p.isShared, where = Where.BOTH) { key ->
+                    selectRow("Pause sharing", null, PAUSES, if (isPaused) p.pauseMinutes.toString() else "0", isEnabled = p.isShared) { key ->
                         val minutes = key.toIntOrNull() ?: 0
                         val until = if (minutes > 0) now + minutes * 60_000L else 0L
                         patch(DexSettingsPatch(presence = DexPresencePrefs(isShared = true, pauseMinutes = minutes, pausedUntil = until)))
@@ -412,20 +362,12 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         )
     }
 
-    private fun calls(s: DexSettings) {
-        content.add(
-            section("Calls on the phone", "A call this browser holds always uses the machine's own speakers.") {
-                add(switchRow("Video calls start on speaker", "A call this browser holds uses the machine\u2019s own output either way", s.isVideoSpeakerDefault, where = Where.PHONE) { v -> patch(DexSettingsPatch(isVideoSpeakerDefault = v)) })
-            },
-        )
-    }
-
     private fun network(s: DexSettings, state: AppState) {
         val n = state.network
         val a = state.account
         content.add(
             section("Tunnel", "Turning the tunnel on needs the phone's permission the first time; until it is given, the phone has to do it.") {
-                add(switchRow("Nebula tunnel", if (n?.isTunnelOn == true) "Connected" else "Disconnected", n?.isTunnelOn ?: false, where = Where.PHONE) { v -> actions.setTunnel(v) })
+                add(switchRow("Nebula tunnel", if (n?.isTunnelOn == true) "Connected" else "Disconnected", n?.isTunnelOn ?: false) { v -> actions.setTunnel(v) })
                 add(infoRow("Tunnel uptime", if (n == null || !n.isTunnelOn) "" else Format.duration(n.tunnelUptimeMs)))
                 add(infoRow("Messaging engine uptime", if (n == null) "" else Format.duration(n.engineUptimeMs)))
                 add(infoRow("Peers with a live link", n?.connectedCount?.toString().orEmpty()))
@@ -437,8 +379,6 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
                     add(infoRow("Address", a.lighthouseIp, isMono = true))
                     add(infoRow("Underlay", a.lighthouseUnderlay, isMono = true))
                     add(infoRow("Status", n?.lighthouseStatus.orEmpty()))
-                    add(infoRow("Change the lighthouse", "On the phone", where = Where.PHONE))
-                    add(infoRow("Reconnect the tunnel", "On the phone; switching it off and on here does the same", where = Where.PHONE))
                 },
             )
         }
@@ -467,14 +407,12 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
                 add(infoRow("Outbox", if (n == null) "" else "${n.pendingActions} pending · ${n.failedActions} failed"))
             },
             section("Advanced") {
-                add(switchRow("Start when the phone starts", "Also after an update; the tunnel comes up on its own", s.isStartOnBootEnabled, where = Where.PHONE) { v -> patch(DexSettingsPatch(isStartOnBootEnabled = v)) })
-                add(switchRow("Keep the connection in the background", "Dex is served by the phone, so this keeps this browser connected too", s.isBackgroundConnectionEnabled, where = Where.PHONE) { v -> patch(DexSettingsPatch(isBackgroundConnectionEnabled = v)) })
                 add(
-                    selectRow("Nebula log level", null, listOf(Choice("INFO", "Info"), Choice("DEBUG", "Debug")), s.nebulaLogLevel.name, where = Where.PHONE) { key ->
+                    selectRow("Nebula log level", null, listOf(Choice("INFO", "Info"), Choice("DEBUG", "Debug")), s.nebulaLogLevel.name) { key ->
                         patch(DexSettingsPatch(nebulaLogLevel = DexLogLevel.valueOf(key)))
                     },
                 )
-                add(switchRow("Developer mode", null, s.isDeveloperMode, where = Where.BOTH) { v -> patch(DexSettingsPatch(isDeveloperMode = v)) })
+                add(switchRow("Developer mode", null, s.isDeveloperMode) { v -> patch(DexSettingsPatch(isDeveloperMode = v)) })
             },
         )
     }
@@ -487,18 +425,18 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         }
         content.add(statGrid("Messages" to st.messages.toString(), "Contacts" to st.contacts.toString(), "Attachments" to st.attachmentsCount.toString(), "Free space" to Format.bytes(st.freeBytes)))
         content.add(
-            section("On the phone") {
+            section("Stored") {
                 add(infoRow("Database", Format.bytes(st.dbBytes)))
                 add(infoRow("Attachments", "${Format.bytes(st.attachmentsBytes)} · ${st.attachmentsCount} files"))
                 add(infoRow("Partial transfers", "${Format.bytes(st.partialBytes)} · ${st.partialCount} files"))
             },
             section("Tidying up") {
                 add(infoRow("Media no message refers to", "${Format.bytes(st.orphanBytes)} · ${st.orphanCount} files"))
-                add(actionRow("Clean up", "Remove media no message refers to", button = "Clean up", isEnabled = st.orphanCount > 0, where = Where.PHONE) { actions.clearOrphans() })
-                add(switchRow("Clean up automatically", "Every time the app starts", s.autoCleanOrphans, where = Where.PHONE) { v -> patch(DexSettingsPatch(autoCleanOrphans = v)) })
+                add(actionRow("Clean up", "Remove media no message refers to", button = "Clean up", isEnabled = st.orphanCount > 0) { actions.clearOrphans() })
+                add(switchRow("Clean up automatically", "Every time the app starts", s.autoCleanOrphans) { v -> patch(DexSettingsPatch(autoCleanOrphans = v)) })
             },
             section("Danger", "This cannot be undone, and it happens on the phone.") {
-                add(actionRow("Clear all history", "Every message in every chat", button = "Clear", isDanger = true, where = Where.BOTH) { actions.clearAllHistory() })
+                add(actionRow("Clear all history", "Every message in every chat", button = "Clear", isDanger = true) { actions.clearAllHistory() })
             },
         )
     }
@@ -513,7 +451,7 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         content.add(
             section("Outbox") {
                 add(infoRow("Lighthouse", d.lighthouseStatus))
-                add(actionRow("Retry everything that failed", null, button = "Retry", isEnabled = d.failedCount > 0, where = Where.PHONE) { actions.retryFailed("") })
+                add(actionRow("Retry everything that failed", null, button = "Retry", isEnabled = d.failedCount > 0) { actions.retryFailed("") })
             },
         )
         if (d.callTrail.isNotEmpty()) {
@@ -533,7 +471,7 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
             return
         }
         content.add(
-            section("Version", "The phone downloads and installs an update; a browser cannot.") {
+            section("Version") {
                 add(infoRow("Installed", u.appVersion))
                 add(infoRow("Latest", u.latestVersion ?: "Not checked yet"))
                 add(infoRow("Status", if (u.isUpdateAvailable) "An update is available" else "Up to date"))
@@ -541,9 +479,8 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
                 u.lastError?.let { add(infoRow("Last error", it, isWrapped = true)) }
             },
             section("Checking") {
-                add(switchRow("Check daily", null, u.isDailyCheckEnabled, where = Where.PHONE) { v -> patch(DexSettingsPatch(isDailyUpdateCheckEnabled = v)) })
-                add(actionRow("Check now", null, button = "Check", where = Where.PHONE) { actions.checkUpdates() })
-                add(infoRow("Releases page, download and install", "On the phone", where = Where.PHONE))
+                add(switchRow("Check daily", null, u.isDailyCheckEnabled) { v -> patch(DexSettingsPatch(isDailyUpdateCheckEnabled = v)) })
+                add(actionRow("Check now", null, button = "Check") { actions.checkUpdates() })
             },
         )
     }
@@ -551,8 +488,8 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
     private fun dex(s: DexSettings) {
         content.add(
             section("This browser's way in", "Dex is set up on the phone. A browser Dex is serving does not get to change the lock on its own door.") {
-                add(infoRow("Username", s.dexUsername, where = Where.PHONE))
-                add(infoRow("Client limit", s.dexMaxClients.toString(), where = Where.PHONE))
+                add(infoRow("Username", s.dexUsername))
+                add(infoRow("Client limit", s.dexMaxClients.toString()))
                 add(infoRow("Port", if (s.dexPort == 0) "" else s.dexPort.toString(), isMono = true))
             },
         )

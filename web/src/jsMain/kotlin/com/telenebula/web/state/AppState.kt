@@ -46,7 +46,6 @@ enum class SettingsTab(val label: String, val sections: List<String> = emptyList
     CHATS("Chats"),
     NOTIFICATIONS("Notifications"),
     PRIVACY("Privacy"),
-    CALLS("Calls"),
     NETWORK("Network", listOf("network", "account")),
     STORAGE("Storage", listOf("storage")),
     DIAGNOSTICS("Diagnostics", listOf("diagnostics", "network")),

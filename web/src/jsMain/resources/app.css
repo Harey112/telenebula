@@ -256,20 +256,8 @@ svg { display: block; flex: none; }
   .local-video { width: 100px; height: 150px; }
 }
 
-/* ---------- what this browser does instead, subordinate to the setting above it ---------- */
-.row-group { border-bottom: 1px solid var(--hairline); }
-.row-group:last-child { border-bottom: 0; }
-.row-group > .row { border-bottom: 0; padding-bottom: 4px; }
-.row-surface { display: flex; align-items: center; gap: 16px; padding: 0 16px 10px 30px; }
-.row-surface-label { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text-muted); padding-left: 12px; border-left: 2px solid var(--hairline); }
-.row-surface .row-control { flex: 0 1 auto; min-width: 0; max-width: 62%; display: flex; align-items: center; gap: 8px; }
-.row-surface .select { height: 32px; font-size: 13.5px; }
+/* a colour input and its "follow app" choice sit side by side in one control */
 .cell-pair { display: flex; align-items: center; gap: 8px; min-width: 0; }
-
-@media (max-width: 719px) {
-  .row-surface { flex-wrap: wrap; padding-left: 16px; }
-  .row-surface .row-control { width: 100%; max-width: 100%; justify-content: flex-start; }
-}
 
 /* ---------- theme overrides the phone's Appearance screen sets ---------- */
 :root { --accent-light: #5FA3DB; --accent-dark: #7FB7E6; --accent: var(--accent-light); }
@@ -320,9 +308,6 @@ svg { display: block; flex: none; }
 .row-value.mono, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
 .row-value.wrap { white-space: normal; word-break: break-all; text-align: right; }
 .row-label { overflow-wrap: anywhere; }
-.row-scope { flex: none; font-size: 10.5px; letter-spacing: .4px; text-transform: uppercase; padding: 2px 6px; border-radius: 9px; background: var(--surface-raised); color: var(--text-muted); border: 1px solid var(--hairline); }
-.row-scope.browser { color: var(--accent); border-color: var(--accent-soft); background: var(--accent-soft); }
-.row-scope.profile { color: var(--accent); border-color: var(--accent-soft); background: var(--accent-soft); }
 .row-note { color: var(--text-muted); }
 .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 20px; }
