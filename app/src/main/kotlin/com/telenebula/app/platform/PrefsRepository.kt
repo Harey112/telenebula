@@ -31,7 +31,7 @@ class PrefsRepository(
     /** mirrors the notification section to the native cache used while the UI is not running */
     private val mirrorNotifications: (NotificationPrefs) -> Unit,
     /** tells the messaging core, which is what actually stops the receipts going out */
-    private val mirrorReadReceipts: (Boolean) -> Unit = {},
+    private val mirrorReadReceipts: (Boolean, Boolean) -> Unit = { _, _ -> },
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) {
     private val file = File(context.filesDir, FILE_NAME)
@@ -61,7 +61,7 @@ class PrefsRepository(
         }
         mutable.value = loaded
         mirrorNotifications(loaded.core.notifications)
-        mirrorReadReceipts(loaded.app.sendReadReceipts)
+        mirrorReadReceipts(loaded.app.sendReadReceipts, loaded.app.sendReadReceipts || loaded.dex.sendReadReceipts)
         loaded
     }
 
@@ -73,7 +73,9 @@ class PrefsRepository(
         }
         if (next === previous) return
         if (next.core.notifications != previous.core.notifications) mirrorNotifications(next.core.notifications)
-        if (next.app.sendReadReceipts != previous.app.sendReadReceipts) mirrorReadReceipts(next.app.sendReadReceipts)
+        if (next.app.sendReadReceipts != previous.app.sendReadReceipts || next.dex.sendReadReceipts != previous.dex.sendReadReceipts) {
+            mirrorReadReceipts(next.app.sendReadReceipts, next.app.sendReadReceipts || next.dex.sendReadReceipts)
+        }
         writes.tryEmit(next)
     }
 

@@ -149,7 +149,7 @@ class CoreClient internal constructor(
 
     suspend fun coreVersion(): String = withContext(io) { core.version }
 
-    suspend fun setSendReadReceipts(enabled: Boolean) = command { core.setSendReadReceipts(enabled) }
+    suspend fun setSendReadReceipts(app: Boolean, anyProfile: Boolean) = command { core.setSendReadReceipts(app, anyProfile) }
 
     suspend fun setOnline(isOnline: Boolean) = command { core.setOnline(isOnline) }
 
@@ -435,8 +435,8 @@ class CoreClient internal constructor(
     suspend fun deleteCallLogs(ids: List<String>) = command { core.deleteCallLogs(ids) }
 
     /** Also dismisses the chat's system notification: reading in the app ends the thread. */
-    suspend fun markChatRead(peerIp: String) {
-        command { core.markChatRead(peerIp) }
+    suspend fun markChatRead(peerIp: String, sendReceipts: Boolean? = null) {
+        command { core.markChatRead(peerIp, sendReceipts) }
         services.clearChatNotification(peerIp)
     }
 

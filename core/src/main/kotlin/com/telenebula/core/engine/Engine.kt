@@ -70,9 +70,15 @@ internal class Engine(
     val inFlight: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     /** "send read receipts" privacy switch (chats are still marked read locally) */
+    /** the app profile's own answer; the phone's paths use it when no other profile is named */
     val sendReadReceipts = AtomicBoolean(sendReadReceipts)
 
-    fun sendsReadReceiptsTo(peerIp: String): Boolean = store.getContact(peerIp)?.privacy?.sendReadReceipts ?: sendReadReceipts.get()
+    /** true while ANY profile sends receipts, so one profile's queued receipt is not withdrawn by another's setting */
+    val anyProfileSendsReadReceipts = AtomicBoolean(sendReadReceipts)
+
+    /** A contact's own answer wins; otherwise [surfaceSends], which is the profile that read it. */
+    fun sendsReadReceiptsTo(peerIp: String, surfaceSends: Boolean = sendReadReceipts.get()): Boolean =
+        store.getContact(peerIp)?.privacy?.sendReadReceipts ?: surfaceSends
 
     /**
      * Whether the overlay is up. Defaults to true so a caller that never reports it (the tests)

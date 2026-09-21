@@ -93,9 +93,9 @@ internal class Outbox(private val engine: Engine) {
     }
 
     /** One row per message; with receipts off they are flagged anyway, so none is sent later. */
-    fun reportSeen(peerIp: String) {
+    fun reportSeen(peerIp: String, surfaceSends: Boolean = engine.sendReadReceipts.get()) {
         val ip = Ip.normalize(peerIp)
-        if (!engine.sendsReadReceiptsTo(ip)) {
+        if (!engine.sendsReadReceiptsTo(ip, surfaceSends)) {
             store.markSeenReported(store.unreportedSeenIds(ip, Limits.SEEN_BATCH))
             return
         }

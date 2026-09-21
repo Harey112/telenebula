@@ -125,7 +125,9 @@ internal class ActionSender(private val engine: Engine) {
     /** One frame per batch: the ids are read here, and the flag is set only once the peer acked. */
     private suspend fun deliverSeen(action: MessageAction): AttemptResult {
         // flagging them is what stops the next batch carrying them anyway
-        if (!engine.sendsReadReceiptsTo(action.peerIp)) {
+        // the profile that read it already decided; only a contact's own answer, or every profile
+        // turning receipts off, withdraws what is already queued
+        if (!engine.sendsReadReceiptsTo(action.peerIp, engine.anyProfileSendsReadReceipts.get())) {
             val withdrawn = store.unreportedSeenIds(action.peerIp, Limits.SEEN_BATCH)
             store.markSeenReported(withdrawn)
             for (queued in store.pendingSeenActionsFor(withdrawn)) {

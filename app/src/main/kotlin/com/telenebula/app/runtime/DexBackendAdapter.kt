@@ -209,7 +209,8 @@ class DexBackendAdapter(
         if (isOn) core.sendTyping(peer, isTyping)
     }
 
-    override suspend fun markRead(peer: String) = core.markChatRead(peer)
+    // read in the browser, so it is the browser's answer that decides whether the peer is told
+    override suspend fun markRead(peer: String) = core.markChatRead(peer, prefs.prefs.value.dex.sendReadReceipts)
     override suspend fun react(messageId: String, emoji: String) {
         core.reactToMessage(messageId, emoji)
         prefs.recordRecentReaction(emoji)

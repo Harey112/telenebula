@@ -42,7 +42,8 @@ internal interface MessagingCore {
     fun setTunnelState(running: Boolean)
 
     /** Privacy switch: whether read receipts are delivered to peers. */
-    fun setSendReadReceipts(enabled: Boolean)
+    /** [app] is the phone's own answer; [anyProfile] is true while any profile still sends them. */
+    fun setSendReadReceipts(app: Boolean, anyProfile: Boolean)
 
     /** Whether our pong says "online": the app is in use and the user shares that. */
     fun setOnline(isOnline: Boolean)
@@ -139,7 +140,8 @@ internal interface MessagingCore {
     /** What this peer's queue is doing right now, for a screen opening before any event arrives. */
     fun peerQueue(peerIp: String): PeerQueueState
 
-    fun markChatRead(peerIp: String)
+    /** [surfaceSendsReceipts] is the profile that read it; null means the app's own answer. */
+    fun markChatRead(peerIp: String, surfaceSendsReceipts: Boolean? = null)
 
     fun clearHistory(peerIp: String)
 

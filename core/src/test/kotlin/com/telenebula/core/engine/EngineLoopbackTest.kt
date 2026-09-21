@@ -326,6 +326,35 @@ class EngineLoopbackTest {
         waitFor("the receipt the contact setting allows") { a.store.getMessage(second)?.seenAt != null }
     }
 
+    /**
+     * The app and Dex answer the receipt question separately, so the profile that read the chat is
+     * what decides. Reading in one must not be governed by what the other was set to.
+     */
+    @Test
+    fun `the profile that read the chat decides whether the peer is told`() = runBlocking {
+        val (a, b) = pair()
+        // the phone says no, the browser says yes: a read in the browser is still reported
+        b.engine.sendReadReceipts.set(false)
+        b.engine.anyProfileSendsReadReceipts.set(true)
+        a.engine.outbox.sendText(b.ip, "read in the browser", null)
+        waitFor("the message to arrive") { b.store.getMessages(a.ip, 10).isNotEmpty() }
+        val viaDex = b.store.getMessages(a.ip, 10).single().id
+        b.store.markChatRead(a.ip)
+        b.engine.outbox.reportSeen(a.ip, surfaceSends = true)
+        waitFor("the receipt the browser allows") { a.store.getMessage(viaDex)?.seenAt != null }
+
+        // the browser says no: a read there tells the peer nothing, whatever the phone says
+        b.engine.sendReadReceipts.set(true)
+        a.engine.outbox.sendText(b.ip, "read in the browser again", null)
+        waitFor("the second message to arrive") { b.store.getMessages(a.ip, 10).size == 2 }
+        val quiet = b.store.getMessages(a.ip, 10).first { it.id != viaDex }.id
+        b.store.markChatRead(a.ip)
+        b.engine.outbox.reportSeen(a.ip, surfaceSends = false)
+        assertTrue(b.store.getActionsForMessage(quiet).none { it.type == MessageActionType.SEEN })
+        delay(500)
+        assertNull(a.store.getMessage(quiet)?.seenAt)
+    }
+
     @Test
     fun `an edit to a read message is reported as seen again`() = runBlocking {
         val (a, b) = pair()

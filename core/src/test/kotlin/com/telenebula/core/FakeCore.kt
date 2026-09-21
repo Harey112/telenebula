@@ -28,7 +28,7 @@ internal open class FakeCore : MessagingCore {
     override fun start(config: CoreStartConfig) = Unit
     override fun stop() = Unit
     override fun setTunnelState(running: Boolean) = Unit
-    override fun setSendReadReceipts(enabled: Boolean) = Unit
+    override fun setSendReadReceipts(app: Boolean, anyProfile: Boolean) = Unit
 
     override fun setOnline(isOnline: Boolean) = Unit
 
@@ -74,7 +74,7 @@ internal open class FakeCore : MessagingCore {
     override fun queuedActionCount(peerIp: String): Int = 0
     override fun drainNow(peerIp: String) = Unit
     override fun peerQueue(peerIp: String): PeerQueueState = PeerQueueState(ip = peerIp)
-    override fun markChatRead(peerIp: String) = Unit
+    override fun markChatRead(peerIp: String, surfaceSendsReceipts: Boolean?) = Unit
     override fun clearHistory(peerIp: String) = Unit
     override fun clearAllHistory() = Unit
     override fun logCall(log: CallLog) = Unit

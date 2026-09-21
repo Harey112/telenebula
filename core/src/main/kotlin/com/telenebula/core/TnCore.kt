@@ -112,8 +112,9 @@ internal class TnCore(
         engine?.isOnline?.set(isOnline)
     }
 
-    override fun setSendReadReceipts(enabled: Boolean) {
-        engine?.sendReadReceipts?.set(enabled)
+    override fun setSendReadReceipts(app: Boolean, anyProfile: Boolean) {
+        engine?.sendReadReceipts?.set(app)
+        engine?.anyProfileSendsReadReceipts?.set(app || anyProfile)
     }
 
     // --- queries ---
@@ -287,12 +288,12 @@ internal class TnCore(
     }
 
     /** Marks the chat read and, when the engine runs, reports the newly read messages as seen. */
-    override fun markChatRead(peerIp: String) {
+    override fun markChatRead(peerIp: String, surfaceSendsReceipts: Boolean?) {
         val ip = Ip.normalize(peerIp)
         requireStore().markChatRead(ip)
         // announced here, not by the receipt: a manual unread mark or receipts turned off queue none
         engine?.events?.chatChanged(ip)
-        engine?.outbox?.reportSeen(ip)
+        engine?.outbox?.reportSeen(ip, surfaceSendsReceipts ?: engine?.sendReadReceipts?.get() ?: false)
     }
 
     override fun clearHistory(peerIp: String) = requireStore().clearMessages(Ip.normalize(peerIp))

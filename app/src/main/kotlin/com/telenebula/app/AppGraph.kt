@@ -87,7 +87,7 @@ class AppGraph(app: Application) {
     val chatSearch = ChatSearchRequests()
     val vpn = NebulaVpnController(app)
     val nebulaConfig = NebulaConfigRepository()
-    val prefs = PrefsRepository(app, CoreJson, appScope, core::setNotificationPrefs, mirrorReadReceipts = { enabled -> appScope.launch { core.setSendReadReceipts(enabled) } })
+    val prefs = PrefsRepository(app, CoreJson, appScope, core::setNotificationPrefs, mirrorReadReceipts = { app, anyProfile -> appScope.launch { core.setSendReadReceipts(app, anyProfile) } })
     val identity = IdentityStore(app, CoreJson, KeystoreBox())
     val gateway = ActivityGateway()
     /** app-scoped: an Activity recreated while backgrounded (e.g. answering a call from its notification) must not lose a pending request */
