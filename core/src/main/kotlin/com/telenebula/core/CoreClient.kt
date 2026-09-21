@@ -139,7 +139,7 @@ class CoreClient internal constructor(
             overlayIp = profile.overlayIp,
             displayName = profile.certName,
             msgPort = profile.msgPort,
-            sendReadReceipts = prefs.sendReadReceipts,
+            sendReadReceipts = prefs.app.sendReadReceipts,
             appVersion = appVersion,
         )
         withContext(io) { core.start(config) }

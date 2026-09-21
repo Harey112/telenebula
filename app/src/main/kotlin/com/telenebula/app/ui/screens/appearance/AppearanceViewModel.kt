@@ -14,8 +14,8 @@ class AppearanceViewModel(private val prefs: PrefsRepository, private val naviga
     val state: StateFlow<Prefs> = prefs.prefs
     val swatches: List<Color> = ThemeResolver.paletteSwatches()
 
-    fun setMode(mode: ThemeMode) = prefs.update { it.copy(themeMode = mode) }
-    fun setColorTheme(key: String) = prefs.update { it.copy(colorTheme = key) }
-    fun setCustomAccent(color: Color) = prefs.update { it.copy(customAccent = ThemeResolver.toHex(color), colorTheme = ColorThemes.CUSTOM) }
+    fun setMode(mode: ThemeMode) = prefs.update { it.copy(app = it.app.copy(themeMode = mode)) }
+    fun setColorTheme(key: String) = prefs.update { it.copy(app = it.app.copy(colorTheme = key)) }
+    fun setCustomAccent(color: Color) = prefs.update { it.copy(app = it.app.copy(customAccent = ThemeResolver.toHex(color), colorTheme = ColorThemes.CUSTOM)) }
     fun goBack() = navigator.pop()
 }

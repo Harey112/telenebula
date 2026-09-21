@@ -373,7 +373,7 @@ class ChatViewModel(
         val isBlocked = contact?.isBlocked == true
         val isArchived = contact?.isArchived == true
         val now = System.currentTimeMillis()
-        val presenceNow = if (running) p.presence.seenAs(PresenceStore.fresh(peerPresence, now), now) else PeerPresence.OFFLINE
+        val presenceNow = if (running) p.core.presence.seenAs(PresenceStore.fresh(peerPresence, now), now) else PeerPresence.OFFLINE
         val disappear = contact?.disappearSeconds ?: 0
         val composer = when (val c = l.composer) {
             LocalComposer.Idle -> ComposerMode.Idle
@@ -430,15 +430,15 @@ class ChatViewModel(
             transferProgress = progress,
             seenAvatarMessageId = d.seenAvatarMessageId,
             expandedMessageId = l.expandedMessageId,
-            textSizeSp = when (p.chatTextSize) {
+            textSizeSp = when (p.app.chatTextSize) {
                 ChatTextSize.SMALL -> 14f
                 ChatTextSize.MEDIUM -> 15.5f
                 ChatTextSize.LARGE -> 17.5f
             },
-            isCompact = p.messageDensity == MessageDensity.COMPACT,
-            isEnterToSend = p.isEnterToSend,
-            isTypingIndicatorOn = contact?.privacy?.sendTypingIndicators ?: p.sendTypingIndicators,
-            quickReactions = p.quickReactions,
+            isCompact = p.app.messageDensity == MessageDensity.COMPACT,
+            isEnterToSend = p.app.isEnterToSend,
+            isTypingIndicatorOn = contact?.privacy?.sendTypingIndicators ?: p.app.sendTypingIndicators,
+            quickReactions = p.core.quickReactions,
             draft = l.draft,
             isCoverOn = l.isCoverOn,
             revealedIds = l.revealed,
@@ -776,7 +776,7 @@ class ChatViewModel(
 
     /** What this chat asks before a cover comes off; the global setting when the chat has no answer of its own. */
     private fun revealGate(): CoverRevealGate {
-        return CoverGates.effective(core.cachedContact(peerIp)?.privacy?.revealGate, prefs.prefs.value.coverRevealGate, appLock.canUseDeviceAuth())
+        return CoverGates.effective(core.cachedContact(peerIp)?.privacy?.revealGate, prefs.prefs.value.app.coverRevealGate, appLock.canUseDeviceAuth())
     }
 
     private fun revealMessage(msg: ChatMessage) {

@@ -58,8 +58,8 @@ class UpdatesViewModel(
     private val download = MutableStateFlow<Download>(Download.Idle)
     private var downloadJob: Job? = null
 
-    val uiState: StateFlow<UpdatesUiState> = combine(prefs.prefs.map { it.updates }.distinctUntilChanged(), monitor.lastError, download, ::build)
-        .uiState(viewModelScope, build(prefs.prefs.value.updates, monitor.lastError.value, download.value))
+    val uiState: StateFlow<UpdatesUiState> = combine(prefs.prefs.map { it.core.updates }.distinctUntilChanged(), monitor.lastError, download, ::build)
+        .uiState(viewModelScope, build(prefs.prefs.value.core.updates, monitor.lastError.value, download.value))
 
     init {
         monitor.acknowledge()
@@ -76,7 +76,7 @@ class UpdatesViewModel(
         download = d,
     )
 
-    fun toggleDailyCheck() = prefs.update { it.copy(updates = it.updates.copy(isDailyCheckEnabled = !it.updates.isDailyCheckEnabled)) }
+    fun toggleDailyCheck() = prefs.update { it.copy(core = it.core.copy(updates = it.core.updates.copy(isDailyCheckEnabled = !it.core.updates.isDailyCheckEnabled))) }
 
     fun checkForUpdates() {
         viewModelScope.launch {

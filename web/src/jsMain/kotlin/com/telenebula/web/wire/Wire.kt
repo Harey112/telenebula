@@ -264,6 +264,10 @@ data class DexUpdatePrefs(val isDailyCheckEnabled: Boolean = true, val lastCheck
 /** What the Dex profile sets for itself; a null field follows the app profile. Core settings never appear here. */
 @Serializable
 data class DexProfile(
+    val sendReadReceipts: Boolean? = null,
+    val sendTypingIndicators: Boolean? = null,
+    /** never DEVICE: a browser cannot answer the phone's lock, so it resolves to ASK */
+    val coverRevealGate: DexRevealGate? = null,
     val themeMode: DexThemeMode? = null,
     val colorTheme: String? = null,
     val customAccent: String? = null,

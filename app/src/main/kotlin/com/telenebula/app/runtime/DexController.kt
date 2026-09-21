@@ -4,7 +4,7 @@ import com.telenebula.app.notices.NoticeCenter
 import com.telenebula.app.platform.LanAddress
 import com.telenebula.app.platform.LanAddresses
 import com.telenebula.app.platform.PrefsRepository
-import com.telenebula.core.model.DexPrefs
+import com.telenebula.core.model.DexServer as DexServerPrefs
 import com.telenebula.core.model.Profile
 import com.telenebula.dex.DexAssets
 import com.telenebula.dex.DexClient
@@ -70,7 +70,7 @@ class DexController(
 
     val turn = TurnServer(
         scope = scope,
-        configuredPort = prefs.prefs.value.dex.turnPort,
+        configuredPort = prefs.prefs.value.server.turnPort,
         relayAddress = { overlayAddress },
         isOverlayAddress = ::isOverlay,
         io = io,
@@ -89,7 +89,7 @@ class DexController(
     private val addresses = MutableStateFlow<List<LanAddress>>(emptyList())
     private val fingerprint = MutableStateFlow("")
 
-    val status: StateFlow<DexStatus> = combine(prefs.prefs.map { it.dex }.distinctUntilChanged(), server.state, server.clients, addresses, fingerprint) { dex, state, clients, addrs, fp ->
+    val status: StateFlow<DexStatus> = combine(prefs.prefs.map { it.server }.distinctUntilChanged(), server.state, server.clients, addresses, fingerprint) { dex, state, clients, addrs, fp ->
         DexStatus(
             isEnabled = dex.isEnabled,
             isRunning = state is DexServerState.Running,
@@ -100,7 +100,7 @@ class DexController(
             fingerprint = fp,
             clients = clients,
         )
-    }.stateIn(scope, SharingStarted.Eagerly, DexStatus(isEnabled = prefs.prefs.value.dex.isEnabled, port = prefs.prefs.value.dex.port))
+    }.stateIn(scope, SharingStarted.Eagerly, DexStatus(isEnabled = prefs.prefs.value.server.isEnabled, port = prefs.prefs.value.server.port))
 
     private var applied: Applied? = null
 
@@ -108,7 +108,7 @@ class DexController(
 
     init {
         scope.launch {
-            combine(prefs.prefs.map { it.dex }.distinctUntilChanged(), profile) { dex, p -> dex to p }.collect { (dex, p) -> apply(dex, p) }
+            combine(prefs.prefs.map { it.server }.distinctUntilChanged(), profile) { dex, p -> dex to p }.collect { (dex, p) -> apply(dex, p) }
         }
         scope.launch { server.clients.collect(bridge::setClients) }
     }
@@ -121,26 +121,26 @@ class DexController(
     /** Hashes and stores a new password; the server picks the change up through prefs. */
     fun setPassword(password: String) {
         val hash = Passwords.hash(password)
-        prefs.update { it.copy(dex = it.dex.copy(passwordAlgorithm = hash.algorithm, passwordIterations = hash.iterations, passwordSalt = hash.saltB64, passwordHash = hash.hashB64)) }
+        prefs.update { it.copy(server = it.server.copy(passwordAlgorithm = hash.algorithm, passwordIterations = hash.iterations, passwordSalt = hash.saltB64, passwordHash = hash.hashB64)) }
     }
 
-    fun setUsername(username: String) = prefs.update { it.copy(dex = it.dex.copy(username = username.trim())) }
+    fun setUsername(username: String) = prefs.update { it.copy(server = it.server.copy(username = username.trim())) }
 
-    fun setMaxClients(count: Int) = prefs.update { it.copy(dex = it.dex.copy(maxClients = count.coerceIn(1, Limits.MAX_CLIENTS))) }
+    fun setMaxClients(count: Int) = prefs.update { it.copy(server = it.server.copy(maxClients = count.coerceIn(1, Limits.MAX_CLIENTS))) }
 
-    fun setEnabled(isEnabled: Boolean) = prefs.update { it.copy(dex = it.dex.copy(isEnabled = isEnabled)) }
+    fun setEnabled(isEnabled: Boolean) = prefs.update { it.copy(server = it.server.copy(isEnabled = isEnabled)) }
 
-    private fun apply(dex: DexPrefs, profile: Profile?) {
-        val config = configOf(dex)
-        if (!dex.isEnabled || profile == null || config == null) {
+    private fun apply(cfg: DexServerPrefs, profile: Profile?) {
+        val config = configOf(cfg)
+        if (!cfg.isEnabled || profile == null || config == null) {
             stopAll()
             return
         }
         val current = applied
-        if (current != null && current.turnPort == dex.turnPort && current.config.port == config.port) {
+        if (current != null && current.turnPort == cfg.turnPort && current.config.port == config.port) {
             if (current.config != config) {
                 server.update(config)
-                applied = Applied(config, dex.turnPort)
+                applied = Applied(config, cfg.turnPort)
             }
             return
         }
@@ -159,7 +159,7 @@ class DexController(
         turn.start()
         (turn.state.value as? TurnState.Failed)?.let { notices.addWarning(it.message) }
         server.start(config)
-        applied = Applied(config, dex.turnPort)
+        applied = Applied(config, cfg.turnPort)
         refreshAddresses()
     }
 
@@ -170,10 +170,10 @@ class DexController(
         turn.stop()
     }
 
-    private fun configOf(dex: DexPrefs): DexConfig? {
-        if (!dex.hasCredentials) return null
-        val hash = PasswordHash(dex.passwordAlgorithm, dex.passwordIterations, dex.passwordSalt, dex.passwordHash)
-        return DexConfig(port = dex.port, username = dex.username, password = hash, maxClients = dex.maxClients.coerceIn(1, Limits.MAX_CLIENTS))
+    private fun configOf(cfg: DexServerPrefs): DexConfig? {
+        if (!cfg.hasCredentials) return null
+        val hash = PasswordHash(cfg.passwordAlgorithm, cfg.passwordIterations, cfg.passwordSalt, cfg.passwordHash)
+        return DexConfig(port = cfg.port, username = cfg.username, password = hash, maxClients = cfg.maxClients.coerceIn(1, Limits.MAX_CLIENTS))
     }
 
     private fun isOverlay(address: InetAddress): Boolean {

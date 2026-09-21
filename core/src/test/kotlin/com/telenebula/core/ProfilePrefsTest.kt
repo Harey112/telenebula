@@ -1,7 +1,8 @@
 package com.telenebula.core
 
+import com.telenebula.core.model.CorePrefs
 import com.telenebula.core.model.Prefs
-import com.telenebula.core.model.ProfilePrefs
+import com.telenebula.core.model.DexProfile
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.SerialDescriptor
 import org.junit.Assert.assertEquals
@@ -20,6 +21,9 @@ class ProfilePrefsTest {
         (0 until descriptor.elementsCount).map { descriptor.getElementName(it) }.toSet()
 
     private val profileSettings = setOf(
+        "sendReadReceipts",
+        "sendTypingIndicators",
+        "coverRevealGate",
         "themeMode",
         "colorTheme",
         "customAccent",
@@ -33,10 +37,7 @@ class ProfilePrefsTest {
 
     /** Everything a peer, the tunnel, the outbox or the device's own security can observe. */
     private val coreSettings = setOf(
-        "sendReadReceipts",
-        "sendTypingIndicators",
         "presence",
-        "coverRevealGate",
         "isScreenshotBlocked",
         "isAppLockEnabled",
         "appLockAfterSec",
@@ -53,12 +54,12 @@ class ProfilePrefsTest {
 
     @Test
     fun `a profile carries only the settings that describe a screen`() {
-        assertEquals(profileSettings, names(ProfilePrefs.serializer().descriptor))
+        assertEquals(profileSettings, names(DexProfile.serializer().descriptor))
     }
 
     @Test
     fun `no core setting can be given a different value per profile`() {
-        val perProfile = names(ProfilePrefs.serializer().descriptor)
+        val perProfile = names(DexProfile.serializer().descriptor)
         for (setting in coreSettings) {
             assertTrue("$setting is a core setting and must be the same in every profile", setting !in perProfile)
         }
@@ -66,7 +67,7 @@ class ProfilePrefsTest {
 
     @Test
     fun `every core setting still exists on the prefs it belongs to`() {
-        val all = names(Prefs.serializer().descriptor)
+        val all = names(CorePrefs.serializer().descriptor) + names(Prefs.serializer().descriptor)
         for (setting in coreSettings) {
             assertTrue("$setting was renamed or removed; decide whether it is still a core setting", setting in all)
         }

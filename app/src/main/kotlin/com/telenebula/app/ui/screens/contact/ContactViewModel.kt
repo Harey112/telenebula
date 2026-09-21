@@ -147,13 +147,13 @@ class ContactViewModel(
             build(contact, d, running, peerPresence, mine, queues[ip], l)
         }.uiState(
             viewModelScope,
-            build(core.cachedContact(ip), cachedDetails(), runtime.tunnelRunning.value, presence.of(ip), prefs.prefs.value.presence, peerQueues.of(ip), local.value),
+            build(core.cachedContact(ip), cachedDetails(), runtime.tunnelRunning.value, presence.of(ip), prefs.prefs.value.core.presence, peerQueues.of(ip), local.value),
         )
 
     private val link get() = combine(
         runtime.tunnelRunning,
         presence.presence.map { it[ip] }.distinctUntilChanged(),
-        prefs.prefs.map { it.presence }.distinctUntilChanged(),
+        prefs.prefs.map { it.core.presence }.distinctUntilChanged(),
     ) { running, p, mine -> Triple(running, p, mine) }
 
     /** Stats and the host need the tunnel and a query; the recent calls are already in the core's cache. */

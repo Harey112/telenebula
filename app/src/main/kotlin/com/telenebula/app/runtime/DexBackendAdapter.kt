@@ -1,6 +1,5 @@
 package com.telenebula.app.runtime
 
-import com.telenebula.app.platform.AppLock
 import com.telenebula.app.platform.AttachmentStore
 import com.telenebula.app.platform.ActionQueue
 import com.telenebula.app.platform.CertInspector
@@ -43,7 +42,8 @@ import com.telenebula.core.model.MessageStatus
 import com.telenebula.core.model.PeerPresence
 import com.telenebula.core.model.PeerQueueState
 import com.telenebula.core.model.Profile
-import com.telenebula.core.model.ProfilePrefs
+import com.telenebula.core.model.AppProfile
+import com.telenebula.core.model.DexProfile as DexProfilePrefs
 import com.telenebula.dex.DexBackend
 import com.telenebula.dex.DexCallCommand
 import com.telenebula.dex.DexCallEvent
@@ -127,7 +127,6 @@ class DexBackendAdapter(
     private val transfers: TransferProgressStore,
     private val peerQueues: PeerQueueStore,
     private val files: AttachmentStore,
-    private val appLock: AppLock,
     private val calls: DexCallBridge,
     private val vpn: NebulaVpnController,
     private val updateMonitor: UpdateMonitor,
@@ -152,7 +151,7 @@ class DexBackendAdapter(
     override fun contacts(): Flow<List<DexContact>> = core.contactsFlow().map { list -> list.map { it.toContact() } }.distinctUntilChanged()
 
     override fun chat(peer: String): Flow<DexChatView> =
-        combine(core.chatViewFlow(peer), transfers.progress, peerQueues.queues, prefs.prefs.map { it.coverRevealGate }.distinctUntilChanged()) { view, progress, queues, gate ->
+        combine(core.chatViewFlow(peer), transfers.progress, peerQueues.queues, prefs.prefs.map { it.app.coverRevealGate }.distinctUntilChanged()) { view, progress, queues, gate ->
             view.toView(peer, progress, queues[peer], gate)
         }
 
@@ -205,7 +204,8 @@ class DexBackendAdapter(
 
     override fun sendTyping(peer: String, isTyping: Boolean) {
         val contact = core.cachedContact(peer)
-        val isOn = contact?.privacy?.sendTypingIndicators ?: prefs.prefs.value.sendTypingIndicators
+        val isOn = contact?.privacy?.sendTypingIndicators
+            ?: dexProfileValue({ it.sendTypingIndicators }, { it.sendTypingIndicators })
         if (isOn) core.sendTyping(peer, isTyping)
     }
 
@@ -232,31 +232,36 @@ class DexBackendAdapter(
 
     override suspend fun applySettings(patch: DexSettingsPatch) {
         val nextLogLevel = patch.nebulaLogLevel?.toCore()
-        val isLogLevelChanged = nextLogLevel != null && nextLogLevel != prefs.prefs.value.nebulaLogLevel
+        val isLogLevelChanged = nextLogLevel != null && nextLogLevel != prefs.prefs.value.core.nebulaLogLevel
         prefs.update { p ->
             p.copy(
-                themeMode = patch.themeMode?.toCore() ?: p.themeMode,
-                colorTheme = patch.colorTheme?.trim()?.takeIf { it.isNotEmpty() && it.length <= MAX_THEME_CHARS } ?: p.colorTheme,
-                customAccent = patch.customAccent?.takeIf { ACCENT.matches(it) } ?: p.customAccent,
-                chatTextSize = patch.chatTextSize?.toCore() ?: p.chatTextSize,
-                messageDensity = patch.messageDensity?.toCore() ?: p.messageDensity,
-                isEnterToSend = patch.isEnterToSend ?: p.isEnterToSend,
-                isVideoSpeakerDefault = patch.isVideoSpeakerDefault ?: p.isVideoSpeakerDefault,
-                isScreenshotBlocked = patch.isScreenshotBlocked ?: p.isScreenshotBlocked,
-                isBackgroundConnectionEnabled = patch.isBackgroundConnectionEnabled ?: p.isBackgroundConnectionEnabled,
-                isStartOnBootEnabled = patch.isStartOnBootEnabled ?: p.isStartOnBootEnabled,
-                notifications = patch.notifications?.toCore() ?: p.notifications,
-                sendReadReceipts = patch.sendReadReceipts ?: p.sendReadReceipts,
-                sendTypingIndicators = patch.sendTypingIndicators ?: p.sendTypingIndicators,
-                presence = patch.presence?.let { PresencePrefs(isShared = it.isShared, pauseMinutes = it.pauseMinutes, pausedUntil = it.pausedUntil) } ?: p.presence,
-                updates = patch.isDailyUpdateCheckEnabled?.let { p.updates.copy(isDailyCheckEnabled = it) } ?: p.updates,
-                nebulaLogLevel = nextLogLevel ?: p.nebulaLogLevel,
-                isDeveloperMode = patch.isDeveloperMode ?: p.isDeveloperMode,
-                coverRevealGate = patch.coverRevealGate?.toCore() ?: p.coverRevealGate,
-                autoCleanOrphans = patch.autoCleanOrphans ?: p.autoCleanOrphans,
-                appLockAfterSec = patch.appLockAfterSec?.coerceIn(0, MAX_LOCK_DELAY_SEC) ?: p.appLockAfterSec,
-                quickReactions = patch.quickReactions?.takeIf { it.size == p.quickReactions.size && it.all(::isEmoji) } ?: p.quickReactions,
-                dexProfile = patch.dexProfile?.toCore() ?: p.dexProfile,
+                core = p.core.copy(
+                    isScreenshotBlocked = patch.isScreenshotBlocked ?: p.core.isScreenshotBlocked,
+                    isBackgroundConnectionEnabled = patch.isBackgroundConnectionEnabled ?: p.core.isBackgroundConnectionEnabled,
+                    isStartOnBootEnabled = patch.isStartOnBootEnabled ?: p.core.isStartOnBootEnabled,
+                    notifications = patch.notifications?.toCore() ?: p.core.notifications,
+                    presence = patch.presence?.let { PresencePrefs(it.isShared, it.pauseMinutes, it.pausedUntil) } ?: p.core.presence,
+                    updates = patch.isDailyUpdateCheckEnabled?.let { p.core.updates.copy(isDailyCheckEnabled = it) } ?: p.core.updates,
+                    nebulaLogLevel = nextLogLevel ?: p.core.nebulaLogLevel,
+                    isDeveloperMode = patch.isDeveloperMode ?: p.core.isDeveloperMode,
+                    autoCleanOrphans = patch.autoCleanOrphans ?: p.core.autoCleanOrphans,
+                    appLockAfterSec = patch.appLockAfterSec?.coerceIn(0, MAX_LOCK_DELAY_SEC) ?: p.core.appLockAfterSec,
+                    quickReactions = patch.quickReactions?.takeIf { it.size == p.core.quickReactions.size && it.all(::isEmoji) } ?: p.core.quickReactions,
+                ),
+                app = p.app.copy(
+                    sendReadReceipts = patch.sendReadReceipts ?: p.app.sendReadReceipts,
+                    sendTypingIndicators = patch.sendTypingIndicators ?: p.app.sendTypingIndicators,
+                    coverRevealGate = patch.coverRevealGate?.toCore() ?: p.app.coverRevealGate,
+                    themeMode = patch.themeMode?.toCore() ?: p.app.themeMode,
+                    colorTheme = patch.colorTheme?.trim()?.takeIf { it.isNotEmpty() && it.length <= MAX_THEME_CHARS } ?: p.app.colorTheme,
+                    customAccent = patch.customAccent?.takeIf { ACCENT.matches(it) } ?: p.app.customAccent,
+                    chatTextSize = patch.chatTextSize?.toCore() ?: p.app.chatTextSize,
+                    messageDensity = patch.messageDensity?.toCore() ?: p.app.messageDensity,
+                    isEnterToSend = patch.isEnterToSend ?: p.app.isEnterToSend,
+                    isVideoSpeakerDefault = patch.isVideoSpeakerDefault ?: p.app.isVideoSpeakerDefault,
+                ),
+                // the browser's own profile is replaced whole, so clearing one back to "follow the app" is expressible
+                dex = patch.dexProfile?.toCore() ?: p.dex,
             )
         }
         // nebula reads its log level from the site config, which only a reload hands it
@@ -264,7 +269,7 @@ class DexBackendAdapter(
     }
 
     override suspend fun setQuickReaction(slot: Int, emoji: String) {
-        require(slot in prefs.prefs.value.quickReactions.indices) { "No such reaction slot" }
+        require(slot in prefs.prefs.value.core.quickReactions.indices) { "No such reaction slot" }
         require(isEmoji(emoji)) { "Bad reaction" }
         prefs.setQuickReaction(slot, emoji)
     }
@@ -354,10 +359,10 @@ class DexBackendAdapter(
     override fun updates(): Flow<DexUpdates> = combine(prefs.prefs, updateMonitor.isUpdateAvailable, updateMonitor.lastError) { p, hasUpdate, error ->
         DexUpdates(
             appVersion = appVersion,
-            latestVersion = p.updates.latestVersion,
+            latestVersion = p.core.updates.latestVersion,
             isUpdateAvailable = hasUpdate,
-            isDailyCheckEnabled = p.updates.isDailyCheckEnabled,
-            lastCheckedAt = p.updates.lastCheckedAt,
+            isDailyCheckEnabled = p.core.updates.isDailyCheckEnabled,
+            lastCheckedAt = p.core.updates.lastCheckedAt,
             lastError = error,
         )
     }.distinctUntilChanged()
@@ -532,10 +537,18 @@ class DexBackendAdapter(
 
     private val DexRevealGate.canRevealRemotely: Boolean get() = this == DexRevealGate.TAP || this == DexRevealGate.ASK
 
-    private fun gateFor(peer: String): DexRevealGate = gateOf(core.cachedContact(peer), prefs.prefs.value.coverRevealGate)
+    /** What Dex obeys: its own profile where it has an opinion, the app profile otherwise. */
+    private fun <T> dexProfileValue(own: (DexProfilePrefs) -> T?, app: (AppProfile) -> T): T {
+        val p = prefs.prefs.value
+        return own(p.dex) ?: app(p.app)
+    }
+
+    private fun gateFor(peer: String): DexRevealGate =
+        gateOf(core.cachedContact(peer), dexProfileValue({ it.coverRevealGate }, { it.coverRevealGate }))
 
     private fun gateOf(contact: Contact?, fallback: CoverRevealGate): DexRevealGate {
-        return when (CoverGates.effective(contact?.privacy?.revealGate, fallback, appLock.canUseDeviceAuth())) {
+        // a browser can never answer the phone's lock, so DEVICE resolves to ASK for Dex
+        return when (CoverGates.effective(contact?.privacy?.revealGate, fallback, canUseDeviceAuth = false)) {
             CoverRevealGate.TAP -> DexRevealGate.TAP
             CoverRevealGate.ASK -> DexRevealGate.ASK
             CoverRevealGate.CODE -> DexRevealGate.CODE
@@ -555,7 +568,7 @@ class DexBackendAdapter(
         muteUntil = muteUntil,
         addedAt = addedAt,
         lastSeenAt = lastSeenAt,
-        revealGate = gateOf(this, prefs.prefs.value.coverRevealGate),
+        revealGate = gateOf(this, prefs.prefs.value.app.coverRevealGate),
         disappearSeconds = disappearSeconds,
     )
 
@@ -719,45 +732,45 @@ class DexBackendAdapter(
     }
 
     private fun Prefs.toSettings(): DexSettings = DexSettings(
-        themeMode = themeMode.toWire(),
-        colorTheme = colorTheme,
-        customAccent = customAccent,
-        chatTextSize = chatTextSize.toWire(),
-        messageDensity = messageDensity.toWire(),
-        isEnterToSend = isEnterToSend,
-        isVideoSpeakerDefault = isVideoSpeakerDefault,
-        isScreenshotBlocked = isScreenshotBlocked,
-        isBackgroundConnectionEnabled = isBackgroundConnectionEnabled,
-        isStartOnBootEnabled = isStartOnBootEnabled,
+        themeMode = app.themeMode.toWire(),
+        colorTheme = app.colorTheme,
+        customAccent = app.customAccent,
+        chatTextSize = app.chatTextSize.toWire(),
+        messageDensity = app.messageDensity.toWire(),
+        isEnterToSend = app.isEnterToSend,
+        isVideoSpeakerDefault = app.isVideoSpeakerDefault,
+        isScreenshotBlocked = core.isScreenshotBlocked,
+        isBackgroundConnectionEnabled = core.isBackgroundConnectionEnabled,
+        isStartOnBootEnabled = core.isStartOnBootEnabled,
         notifications = DexNotifications(
-            messages = notifications.messages.let {
-                DexMessageNotifications(it.enabled, it.showSender, it.preview, it.sound, it.vibrate, it.popup, it.reactions)
+            messages = core.notifications.messages.let {
+                DexMessageNotifications(app.notificationsEnabled, it.showSender, app.notificationPreview, app.notificationSound, it.vibrate, it.popup, it.reactions)
             },
-            calls = notifications.calls.let { DexCallNotifications(it.ring, it.vibrate, it.missedNotification) },
-            inApp = DexInAppNotifications(notifications.inApp.vibrate),
-            quietHours = notifications.quietHours.let {
+            calls = core.notifications.calls.let { DexCallNotifications(it.ring, it.vibrate, it.missedNotification) },
+            inApp = DexInAppNotifications(core.notifications.inApp.vibrate),
+            quietHours = core.notifications.quietHours.let {
                 DexQuietHours(it.enabled, it.fromHour, it.fromMinute, it.toHour, it.toMinute)
             },
         ),
-        sendReadReceipts = sendReadReceipts,
-        sendTypingIndicators = sendTypingIndicators,
-        presence = DexPresencePrefs(presence.isShared, presence.pauseMinutes, presence.pausedUntil),
-        updates = DexUpdatePrefs(updates.isDailyCheckEnabled, updates.lastCheckedAt, updates.latestVersion),
-        nebulaLogLevel = if (nebulaLogLevel == NebulaLogLevel.DEBUG) DexLogLevel.DEBUG else DexLogLevel.INFO,
-        isDeveloperMode = isDeveloperMode,
-        coverRevealGate = coverRevealGate.toWire(),
-        autoCleanOrphans = autoCleanOrphans,
-        quickReactions = quickReactions,
-        recentReactions = recentReactions,
-        isAppLockEnabled = isAppLockEnabled,
-        appLockAfterSec = appLockAfterSec,
-        dexUsername = dex.username,
-        dexMaxClients = dex.maxClients,
-        dexPort = dex.port,
-        dexProfile = dexProfile.toWire(),
+        sendReadReceipts = app.sendReadReceipts,
+        sendTypingIndicators = app.sendTypingIndicators,
+        presence = DexPresencePrefs(core.presence.isShared, core.presence.pauseMinutes, core.presence.pausedUntil),
+        updates = DexUpdatePrefs(core.updates.isDailyCheckEnabled, core.updates.lastCheckedAt, core.updates.latestVersion),
+        nebulaLogLevel = if (core.nebulaLogLevel == NebulaLogLevel.DEBUG) DexLogLevel.DEBUG else DexLogLevel.INFO,
+        isDeveloperMode = core.isDeveloperMode,
+        coverRevealGate = app.coverRevealGate.toWire(),
+        autoCleanOrphans = core.autoCleanOrphans,
+        quickReactions = core.quickReactions,
+        recentReactions = core.recentReactions,
+        isAppLockEnabled = core.isAppLockEnabled,
+        appLockAfterSec = core.appLockAfterSec,
+        dexUsername = server.username,
+        dexMaxClients = server.maxClients,
+        dexPort = server.port,
+        dexProfile = dex.toWire(),
     )
 
-    private fun ProfilePrefs.toWire(): DexProfile = DexProfile(
+    private fun DexProfilePrefs.toWire(): DexProfile = DexProfile(
         themeMode = themeMode?.toWire(),
         colorTheme = colorTheme,
         customAccent = customAccent,
@@ -769,7 +782,7 @@ class DexBackendAdapter(
         notificationSound = notificationSound,
     )
 
-    private fun DexProfile.toCore(): ProfilePrefs = ProfilePrefs(
+    private fun DexProfile.toCore(): DexProfilePrefs = DexProfilePrefs(
         themeMode = themeMode?.toCore(),
         colorTheme = colorTheme?.trim()?.takeIf { it.isNotEmpty() && it.length <= MAX_THEME_CHARS },
         customAccent = customAccent?.takeIf { ACCENT.matches(it) },

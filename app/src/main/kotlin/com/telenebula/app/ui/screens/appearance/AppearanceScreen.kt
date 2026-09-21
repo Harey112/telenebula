@@ -50,8 +50,8 @@ import com.telenebula.core.model.ThemeMode
 fun AppearanceScreen(viewModel: AppearanceViewModel) {
     val prefs by viewModel.state.collectAsStateWithLifecycle()
     Screen(title = "Appearance", onBack = viewModel::goBack) {
-        ModeSection(prefs.themeMode, viewModel::setMode)
-        ColorThemeSection(prefs.colorTheme, prefs.customAccent, viewModel.swatches, viewModel::setColorTheme, viewModel::setCustomAccent)
+        ModeSection(prefs.app.themeMode, viewModel::setMode)
+        ColorThemeSection(prefs.app.colorTheme, prefs.app.customAccent, viewModel.swatches, viewModel::setColorTheme, viewModel::setCustomAccent)
         PreviewSection()
     }
 }

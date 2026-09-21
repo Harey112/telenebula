@@ -18,13 +18,13 @@ class CallPrefsViewModel(
     private val navigator: Navigator,
 ) : ViewModel() {
     val uiState: StateFlow<CallPrefsUiState> = combine(prefs.prefs, launch.overlayPermitted) { p, overlay ->
-        CallPrefsUiState(p.isVideoSpeakerDefault, overlay)
+        CallPrefsUiState(p.app.isVideoSpeakerDefault, overlay)
     }.uiState(
         viewModelScope,
-        CallPrefsUiState(prefs.prefs.value.isVideoSpeakerDefault, launch.overlayPermitted.value),
+        CallPrefsUiState(prefs.prefs.value.app.isVideoSpeakerDefault, launch.overlayPermitted.value),
     )
 
-    fun toggleVideoSpeakerDefault() = prefs.update { it.copy(isVideoSpeakerDefault = !it.isVideoSpeakerDefault) }
+    fun toggleVideoSpeakerDefault() = prefs.update { it.copy(app = it.app.copy(isVideoSpeakerDefault = !it.app.isVideoSpeakerDefault)) }
 
     fun openOverlayPermission() = openOverlaySettings()
     fun goBack() = navigator.pop()

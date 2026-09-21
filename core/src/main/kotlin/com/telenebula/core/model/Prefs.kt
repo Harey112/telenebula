@@ -1,7 +1,9 @@
 package com.telenebula.core.model
 
 import kotlinx.serialization.SerialName
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 @Serializable
 enum class ThemeMode {
@@ -25,16 +27,17 @@ enum class MessageDensity {
 
 @Serializable
 data class MessageNotificationPrefs(
-    val enabled: Boolean = true,
     /** show who wrote, or a generic "TeleNebula" title */
     val showSender: Boolean = true,
-    /** show the text, or just "New message" */
-    val preview: Boolean = true,
-    val sound: Boolean = true,
     val vibrate: Boolean = true,
     /** heads-up (high importance) vs a quiet shade entry */
     val popup: Boolean = true,
     val reactions: Boolean = true,
+    /** owned by whichever profile is asking, never written here; filled in when the core is told */
+    @Transient val enabled: Boolean = true,
+    /** show the text, or just "New message" */
+    @Transient val preview: Boolean = true,
+    @Transient val sound: Boolean = true,
 )
 
 @Serializable
@@ -121,8 +124,60 @@ data class UpdatePrefs(
  * lock and its delay, the background connection, start on boot, the nebula log level, developer
  * mode, orphan cleaning, the daily update check, the quick reactions, and everything under `dex`.
  */
+/** The same in every profile: what a peer, the tunnel, the outbox or the device itself can observe. */
 @Serializable
-data class ProfilePrefs(
+data class CorePrefs(
+    val presence: PresencePrefs = PresencePrefs(),
+    val isScreenshotBlocked: Boolean = false,
+    val isAppLockEnabled: Boolean = false,
+    /** seconds in the background before the lock re-arms (0 = immediately) */
+    val appLockAfterSec: Int = 60,
+    val isBackgroundConnectionEnabled: Boolean = true,
+    /** the system starts the app at boot and after an update, so the tunnel comes up on its own */
+    val isStartOnBootEnabled: Boolean = true,
+    val nebulaLogLevel: NebulaLogLevel = NebulaLogLevel.INFO,
+    val isDeveloperMode: Boolean = false,
+    val autoCleanOrphans: Boolean = false,
+    val updates: UpdatePrefs = UpdatePrefs(),
+    /** the six reactions offered first */
+    val quickReactions: List<String> = Prefs.DEFAULT_QUICK_REACTIONS,
+    /** most recently used reactions, newest first (never one of quickReactions) */
+    val recentReactions: List<String> = emptyList(),
+    val notifications: NotificationPrefs = NotificationPrefs(),
+)
+
+/** What one profile shows and how it behaves; the app always has a value for each. */
+@Serializable
+data class AppProfile(
+    val sendReadReceipts: Boolean = true,
+    val sendTypingIndicators: Boolean = true,
+    /** the app may use the device's own lock; Dex never can */
+    val coverRevealGate: CoverRevealGate = CoverRevealGate.TAP,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    /** key of a built-in colour theme, or "custom" for the accent below */
+    val colorTheme: String = "sky",
+    val customAccent: String = "#7FB7E6",
+    val chatTextSize: ChatTextSize = ChatTextSize.MEDIUM,
+    val messageDensity: MessageDensity = MessageDensity.COMFORTABLE,
+    val isEnterToSend: Boolean = false,
+    val isVideoSpeakerDefault: Boolean = true,
+    val notificationsEnabled: Boolean = true,
+    val notificationPreview: Boolean = true,
+    val notificationSound: Boolean = true,
+)
+
+/**
+ * The same settings as the app profile, as Dex has them for itself; a null field follows the app.
+ *
+ * Only a setting that describes a screen belongs here. Everything a peer, the tunnel or the device
+ * can observe is a core setting, lives in [CorePrefs], and is the same in every profile.
+ */
+@Serializable
+data class DexProfile(
+    val sendReadReceipts: Boolean? = null,
+    val sendTypingIndicators: Boolean? = null,
+    /** never DEVICE: a browser cannot answer the phone's lock, so it resolves to ASK */
+    val coverRevealGate: CoverRevealGate? = null,
     val themeMode: ThemeMode? = null,
     val colorTheme: String? = null,
     val customAccent: String? = null,
@@ -134,9 +189,10 @@ data class ProfilePrefs(
     val notificationSound: Boolean? = null,
 )
 
-/** The web frontend served by the phone; the password is stored as a salted PBKDF2 hash, never in clear. */
+
+/** Dex the service, not Dex the profile; the password is stored as a salted PBKDF2 hash, never in clear. */
 @Serializable
-data class DexPrefs(
+data class DexServer(
     val isEnabled: Boolean = false,
     val username: String = "",
     val passwordAlgorithm: String = "",
@@ -155,39 +211,19 @@ data class DexPrefs(
 /** Defaults equal the previous builds' DEFAULT_PREFS; decoding a partial file merges over them. */
 @Serializable
 data class Prefs(
-    val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    /** key of a built-in colour theme, or "custom" for the accent below */
-    val colorTheme: String = "sky",
-    val customAccent: String = "#7FB7E6",
-    val chatTextSize: ChatTextSize = ChatTextSize.MEDIUM,
-    val isVideoSpeakerDefault: Boolean = true,
-    val isScreenshotBlocked: Boolean = false,
-    val isBackgroundConnectionEnabled: Boolean = true,
-    /** the system starts the app at boot and after an update, so the tunnel comes up on its own */
-    val isStartOnBootEnabled: Boolean = true,
-    val notifications: NotificationPrefs = NotificationPrefs(),
-    val sendReadReceipts: Boolean = true,
-    val sendTypingIndicators: Boolean = true,
-    val presence: PresencePrefs = PresencePrefs(),
-    val updates: UpdatePrefs = UpdatePrefs(),
-    val messageDensity: MessageDensity = MessageDensity.COMFORTABLE,
-    val isEnterToSend: Boolean = false,
-    val nebulaLogLevel: NebulaLogLevel = NebulaLogLevel.INFO,
-    val isDeveloperMode: Boolean = false,
-    val isAppLockEnabled: Boolean = false,
-    val coverRevealGate: CoverRevealGate = CoverRevealGate.TAP,
-    /** seconds in the background before the lock re-arms (0 = immediately) */
-    val appLockAfterSec: Int = 60,
-    val autoCleanOrphans: Boolean = false,
-    /** most recently used reactions, newest first (never one of quickReactions) */
-    val recentReactions: List<String> = emptyList(),
-    /** the six reactions offered first */
-    val quickReactions: List<String> = DEFAULT_QUICK_REACTIONS,
-    val dex: DexPrefs = DexPrefs(),
-    /** the Dex profile; every unset field follows the app profile's own value above */
-    val dexProfile: ProfilePrefs = ProfilePrefs(),
+    /**
+     * 1 was one flat object; 2 groups it, so the next move is a case in a when rather than a risk.
+     * Always written: the encoder omits defaults, and a file with no version is read as version 1.
+     */
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    val version: Int = CURRENT_VERSION,
+    val core: CorePrefs = CorePrefs(),
+    val app: AppProfile = AppProfile(),
+    val dex: DexProfile = DexProfile(),
+    val server: DexServer = DexServer(),
 ) {
     companion object {
+        const val CURRENT_VERSION = 2
         val DEFAULT_QUICK_REACTIONS: List<String> = listOf("👍", "❤️", "😂", "😮", "😢", "🔥")
         const val MAX_RECENT_REACTIONS = 21
         /** muteUntil sentinel shared with the core */

@@ -42,16 +42,16 @@ class ChatPrefsViewModel(
     val densityOptions = MessageDensity.entries.map { SelectOption(it.name, it.name.lowercase()) }
 
     private fun build(p: Prefs, openMenuKey: String?) = ChatPrefsUiState(
-        textSizeKey = p.chatTextSize.name,
-        densityKey = p.messageDensity.name,
-        isEnterToSend = p.isEnterToSend,
-        quickReactions = p.quickReactions,
+        textSizeKey = p.app.chatTextSize.name,
+        densityKey = p.app.messageDensity.name,
+        isEnterToSend = p.app.isEnterToSend,
+        quickReactions = p.core.quickReactions,
         openMenuKey = openMenuKey,
     )
 
-    fun setChatTextSize(key: String) = prefs.update { it.copy(chatTextSize = ChatTextSize.valueOf(key)) }
-    fun setDensity(key: String) = prefs.update { it.copy(messageDensity = MessageDensity.valueOf(key)) }
-    fun toggleEnterToSend() = prefs.update { it.copy(isEnterToSend = !it.isEnterToSend) }
+    fun setChatTextSize(key: String) = prefs.update { it.copy(app = it.app.copy(chatTextSize = ChatTextSize.valueOf(key))) }
+    fun setDensity(key: String) = prefs.update { it.copy(app = it.app.copy(messageDensity = MessageDensity.valueOf(key))) }
+    fun toggleEnterToSend() = prefs.update { it.copy(app = it.app.copy(isEnterToSend = !it.app.isEnterToSend)) }
     fun goBack() = navigator.pop()
 
     /** Opens the whole catalog to fill one quick-reaction slot. */

@@ -1,6 +1,7 @@
 package com.telenebula.web.state
 
 import com.telenebula.web.wire.DexDensity
+import com.telenebula.web.wire.DexRevealGate
 import com.telenebula.web.wire.DexSettings
 import com.telenebula.web.wire.DexTextSize
 import com.telenebula.web.wire.DexThemeMode
@@ -10,6 +11,9 @@ import com.telenebula.web.wire.DexThemeMode
  * Every view reads these rather than falling back on its own, so the two can never disagree.
  */
 data class Effective(
+    val sendReadReceipts: Boolean = true,
+    val sendTypingIndicators: Boolean = true,
+    val coverRevealGate: DexRevealGate = DexRevealGate.TAP,
     val themeMode: DexThemeMode = DexThemeMode.SYSTEM,
     val colorTheme: String = "sky",
     val customAccent: String = "#7FB7E6",
@@ -27,6 +31,9 @@ data class Effective(
             if (s == null) return NONE
             val d = s.dexProfile
             return Effective(
+                sendReadReceipts = d.sendReadReceipts ?: s.sendReadReceipts,
+                sendTypingIndicators = d.sendTypingIndicators ?: s.sendTypingIndicators,
+                coverRevealGate = d.coverRevealGate ?: s.coverRevealGate,
                 themeMode = d.themeMode ?: s.themeMode,
                 colorTheme = d.colorTheme ?: s.colorTheme,
                 customAccent = d.customAccent ?: s.customAccent,

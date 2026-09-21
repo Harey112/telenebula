@@ -159,9 +159,9 @@ class NetworkViewModel(
             bytesReceived = Format.bytes(snap.stats.bytesReceived),
             pendingActions = snap.stats.pendingActions,
             failedActions = snap.stats.failedActions,
-            isDeveloperMode = p.isDeveloperMode,
-            isVerboseLogging = p.nebulaLogLevel == NebulaLogLevel.DEBUG,
-            isStartOnBoot = p.isStartOnBootEnabled,
+            isDeveloperMode = p.core.isDeveloperMode,
+            isVerboseLogging = p.core.nebulaLogLevel == NebulaLogLevel.DEBUG,
+            isStartOnBoot = p.core.isStartOnBootEnabled,
             firewallRules = listOf(
                 "inbound  icmp any        ← any",
                 "inbound  tcp  $msgPort       ← any (messaging)",
@@ -175,12 +175,12 @@ class NetworkViewModel(
         manual.tryEmit(Unit)
     }
 
-    fun toggleDeveloperMode() = prefs.update { it.copy(isDeveloperMode = !it.isDeveloperMode) }
+    fun toggleDeveloperMode() = prefs.update { it.copy(core = it.core.copy(isDeveloperMode = !it.core.isDeveloperMode)) }
 
-    fun toggleStartOnBoot() = prefs.update { it.copy(isStartOnBootEnabled = !it.isStartOnBootEnabled) }
+    fun toggleStartOnBoot() = prefs.update { it.copy(core = it.core.copy(isStartOnBootEnabled = !it.core.isStartOnBootEnabled)) }
 
     fun toggleVerboseLogging() {
-        prefs.update { it.copy(nebulaLogLevel = if (it.nebulaLogLevel == NebulaLogLevel.DEBUG) NebulaLogLevel.INFO else NebulaLogLevel.DEBUG) }
+        prefs.update { it.copy(core = it.core.copy(nebulaLogLevel = if (it.core.nebulaLogLevel == NebulaLogLevel.DEBUG) NebulaLogLevel.INFO else NebulaLogLevel.DEBUG)) }
         val profile = runtime.profile.value ?: return
         viewModelScope.launch {
             try {

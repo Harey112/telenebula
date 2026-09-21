@@ -21,7 +21,7 @@ class ScreenshotPolicy(prefs: PrefsRepository, core: CoreClient, navigator: Navi
         .map { (it as? ChatScopedKey)?.peerIp }
         .flatMapLatest { ip -> if (ip == null) flowOf(null) else core.contactFlow(ip).map { it?.privacy?.blockScreenshots } }
 
-    val isBlocked: StateFlow<Boolean> = combine(prefs.prefs.map { it.isScreenshotBlocked }, openChatOverride) { global, override ->
+    val isBlocked: StateFlow<Boolean> = combine(prefs.prefs.map { it.core.isScreenshotBlocked }, openChatOverride) { global, override ->
         override ?: global
-    }.stateIn(scope, SharingStarted.Eagerly, prefs.prefs.value.isScreenshotBlocked)
+    }.stateIn(scope, SharingStarted.Eagerly, prefs.prefs.value.core.isScreenshotBlocked)
 }

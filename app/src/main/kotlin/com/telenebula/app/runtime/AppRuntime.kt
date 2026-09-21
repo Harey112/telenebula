@@ -129,8 +129,8 @@ class AppRuntime(
             core.openStore()
             val loaded = prefs.load()
             prefs.loadFailure?.let { notices.addWarning("Settings could not be read: $it. The defaults are in use.") }
-            launch { prefs.prefs.map { it.themeMode }.distinctUntilChanged().collect(nightMode::apply) }
-            launch { prefs.prefs.map { it.isStartOnBootEnabled }.distinctUntilChanged().collect(bootStart::setEnabled) }
+            launch { prefs.prefs.map { it.app.themeMode }.distinctUntilChanged().collect(nightMode::apply) }
+            launch { prefs.prefs.map { it.core.isStartOnBootEnabled }.distinctUntilChanged().collect(bootStart::setEnabled) }
             launch { shareOnline() }
             updateMonitor.start()
             appLock.arm()
@@ -150,7 +150,7 @@ class AppRuntime(
             }
             // the UI is up now; network start continues here and reports through notices
             startRuntime(profile)
-            if (loaded.autoCleanOrphans) core.clearOrphanAttachments()
+            if (loaded.core.autoCleanOrphans) core.clearOrphanAttachments()
             val expiry = CertInspector.expiryStatus(profile.certNotAfter)
             if (expiry.level != CertExpiryLevel.OK) {
                 notices.setPrompt(
@@ -198,7 +198,7 @@ class AppRuntime(
 
     /** Our pong says "online" only while a screen is showing and the Status setting allows it; a pause ends on time. */
     private suspend fun shareOnline() {
-        prefs.prefs.map { it.presence }.distinctUntilChanged().collectLatest { p ->
+        prefs.prefs.map { it.core.presence }.distinctUntilChanged().collectLatest { p ->
             foreground.isForeground.collectLatest { isShowing ->
                 val now = System.currentTimeMillis()
                 core.setOnline(isShowing && p.isSharingAt(now))
@@ -212,7 +212,7 @@ class AppRuntime(
 
     /** The chat on screen gets no notification, so this stands in for it; every other chat's notification vibrates on its own. */
     private fun buzzInApp(ip: String, isMuted: Boolean) {
-        if (!isMuted && isChatOpen(ip) && prefs.prefs.value.notifications.inApp.vibrate) haptics.vibrateShort()
+        if (!isMuted && isChatOpen(ip) && prefs.prefs.value.core.notifications.inApp.vibrate) haptics.vibrateShort()
     }
 
     /** Brings the tunnel up and reports a denial or a failure; a parked consent request stays silent. */
@@ -260,7 +260,7 @@ class AppRuntime(
             is HostKey.Unreadable -> throw IllegalStateException("Host key can't be decrypted (${hostKey.cause}) — reset the app and set up again")
             is HostKey.Available -> hostKey.pem
         }
-        val site = nebulaConfig.buildSite(profile, prefs.prefs.value.nebulaLogLevel)
+        val site = nebulaConfig.buildSite(profile, prefs.prefs.value.core.nebulaLogLevel)
         vpn.start(site.configJson, key, site.networks, site.routes, site.mtu)
         return true
     }
@@ -269,7 +269,7 @@ class AppRuntime(
     suspend fun reloadTunnelConfig(profile: Profile) {
         if (!vpn.isRunning) return
         val key = (identity.loadHostKey() as? HostKey.Available)?.pem ?: return
-        val site = nebulaConfig.buildSite(profile, prefs.prefs.value.nebulaLogLevel)
+        val site = nebulaConfig.buildSite(profile, prefs.prefs.value.core.nebulaLogLevel)
         vpn.reload(site.configJson, key)
     }
 

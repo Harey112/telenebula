@@ -14,6 +14,7 @@ import com.telenebula.core.model.MessageKind
 import com.telenebula.core.model.MessageStatus
 import com.telenebula.core.model.NotificationPrefs
 import com.telenebula.core.model.Prefs
+import com.telenebula.core.model.PrefsMigration
 import com.telenebula.core.model.ThemeMode
 import kotlinx.serialization.KSerializer
 import org.junit.Assert.assertEquals
@@ -141,32 +142,34 @@ class ModelJsonTest {
 
     @Test
     fun prefs_partialFile_mergesOverDefaultsAtEveryLevel() {
-        val prefs = CoreJson.decodeFromString(
-            Prefs.serializer(),
+        // a file every shipped build wrote: flat, versionless, and only what differs from the defaults
+        val prefs = PrefsMigration.decode(
+            CoreJson,
             """{"themeMode":"dark","chatTextSize":"large","notifications":{"quietHours":{"enabled":true}}}""",
         )
-        assertEquals(ThemeMode.DARK, prefs.themeMode)
-        assertEquals(ChatTextSize.LARGE, prefs.chatTextSize)
-        assertTrue(prefs.notifications.quietHours.enabled)
-        assertEquals(22, prefs.notifications.quietHours.fromHour)
-        assertTrue(prefs.notifications.messages.sound)
-        assertEquals(Prefs.DEFAULT_QUICK_REACTIONS, prefs.quickReactions)
-        assertEquals(Prefs(), CoreJson.decodeFromString(Prefs.serializer(), "{}"))
+        assertEquals(ThemeMode.DARK, prefs.app.themeMode)
+        assertEquals(ChatTextSize.LARGE, prefs.app.chatTextSize)
+        assertTrue(prefs.core.notifications.quietHours.enabled)
+        assertEquals(22, prefs.core.notifications.quietHours.fromHour)
+        assertTrue(prefs.app.notificationSound)
+        assertEquals(Prefs.DEFAULT_QUICK_REACTIONS, prefs.core.quickReactions)
+        assertEquals(Prefs(), CoreJson.decodeFromString(Prefs.serializer(), """{"version":2}"""))
     }
 
     @Test
     fun prefs_unknownEnumValue_fallsBackToTheDefault() {
-        val prefs = CoreJson.decodeFromString(Prefs.serializer(), """{"themeMode":"sepia"}""")
-        assertEquals(ThemeMode.SYSTEM, prefs.themeMode)
+        val prefs = PrefsMigration.decode(CoreJson, """{"themeMode":"sepia"}""")
+        assertEquals(ThemeMode.SYSTEM, prefs.app.themeMode)
     }
 
     @Test
     fun notificationPrefs_roundTrip_keepsOnlyWhatChanged() {
-        val prefs = roundTrip(NotificationPrefs.serializer(), """{"messages":{"sound":false},"inApp":{"vibrate":true}}""")
-        assertFalse(prefs.messages.sound)
-        assertTrue(prefs.messages.vibrate)
+        // sound, preview and enabled belong to a profile now; what is left here still round-trips
+        val prefs = roundTrip(NotificationPrefs.serializer(), """{"messages":{"vibrate":false},"inApp":{"vibrate":true}}""")
+        assertFalse(prefs.messages.vibrate)
+        assertTrue(prefs.messages.popup)
         assertTrue(prefs.inApp.vibrate)
-        assertEquals("""{"messages":{"sound":false},"inApp":{"vibrate":true}}""", CoreJson.encodeToString(NotificationPrefs.serializer(), prefs))
+        assertEquals("""{"messages":{"vibrate":false},"inApp":{"vibrate":true}}""", CoreJson.encodeToString(NotificationPrefs.serializer(), prefs))
     }
 
     @Test

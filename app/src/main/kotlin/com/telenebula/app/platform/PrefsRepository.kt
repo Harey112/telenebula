@@ -3,6 +3,7 @@ package com.telenebula.app.platform
 import android.content.Context
 import com.telenebula.core.model.NotificationPrefs
 import com.telenebula.core.model.Prefs
+import com.telenebula.core.model.PrefsMigration
 import java.io.File
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -54,12 +55,13 @@ class PrefsRepository(
         val loaded = when (val read = FileIo.read(file)) {
             FileRead.Missing -> Prefs()
             is FileRead.Failed -> Prefs().also { loadFailure = read.cause.userMessage() }
-            is FileRead.Text -> runCatching { json.decodeFromString(Prefs.serializer(), read.value) }
+            // through the migration, never the serializer: a file older than the split reads as flat
+            is FileRead.Text -> runCatching { PrefsMigration.decode(json, read.value) }
                 .getOrElse { Prefs().also { _ -> loadFailure = it.userMessage() } }
         }
         mutable.value = loaded
-        mirrorNotifications(loaded.notifications)
-        mirrorReadReceipts(loaded.sendReadReceipts)
+        mirrorNotifications(loaded.core.notifications)
+        mirrorReadReceipts(loaded.app.sendReadReceipts)
         loaded
     }
 
@@ -70,28 +72,28 @@ class PrefsRepository(
             transform(current)
         }
         if (next === previous) return
-        if (next.notifications != previous.notifications) mirrorNotifications(next.notifications)
-        if (next.sendReadReceipts != previous.sendReadReceipts) mirrorReadReceipts(next.sendReadReceipts)
+        if (next.core.notifications != previous.core.notifications) mirrorNotifications(next.core.notifications)
+        if (next.app.sendReadReceipts != previous.app.sendReadReceipts) mirrorReadReceipts(next.app.sendReadReceipts)
         writes.tryEmit(next)
     }
 
     /** Moves the emoji to the front of the recent list and trims it; quick reactions are never recent. */
     fun recordRecentReaction(emoji: String) = update { p ->
-        if (emoji in p.quickReactions) return@update p
+        if (emoji in p.core.quickReactions) return@update p
         val next = ArrayList<String>(Reactions.MAX_RECENT)
         next.add(emoji)
-        for (e in p.recentReactions) if (e != emoji && next.size < Reactions.MAX_RECENT) next.add(e)
-        p.copy(recentReactions = next)
+        for (e in p.core.recentReactions) if (e != emoji && next.size < Reactions.MAX_RECENT) next.add(e)
+        p.copy(core = p.core.copy(recentReactions = next))
     }
 
     /** Puts the emoji in one quick-reaction slot; if it already sits elsewhere the two slots swap. */
     fun setQuickReaction(slot: Int, emoji: String) = update { p ->
-        val next = p.quickReactions.toMutableList()
+        val next = p.core.quickReactions.toMutableList()
         val previous = next.getOrNull(slot) ?: return@update p
         val existing = next.indexOf(emoji)
         if (existing != -1) next[existing] = previous
         next[slot] = emoji
-        p.copy(quickReactions = next, recentReactions = p.recentReactions.filterNot { it in next })
+        p.copy(core = p.core.copy(quickReactions = next, recentReactions = p.core.recentReactions.filterNot { it in next }))
     }
 
     private companion object {

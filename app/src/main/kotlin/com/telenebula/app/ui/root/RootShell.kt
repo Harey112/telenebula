@@ -147,7 +147,7 @@ fun RootShell(activity: MainActivity) {
 
     LaunchedEffect(Unit) { graph.root.start(activity.launchRequests) }
 
-    TnTheme(themeMode = prefs.themeMode, colorTheme = prefs.colorTheme, customAccent = prefs.customAccent) {
+    TnTheme(themeMode = prefs.app.themeMode, colorTheme = prefs.app.colorTheme, customAccent = prefs.app.customAccent) {
         val colors = TnTheme.colors
         Box(modifier = Modifier.fillMaxSize().background(colors.background)) {
             Column(modifier = Modifier.fillMaxSize()) {

@@ -35,7 +35,7 @@ class StatusViewModel(private val prefs: PrefsRepository, runtime: AppRuntime, p
     val pauseOptions: List<SelectOption> = PAUSES.map { (minutes, label) -> SelectOption(minutes.toString(), label) }
 
     // a pause that runs out re-renders on time, without a store change to prompt it
-    private val presence = prefs.prefs.map { it.presence }.distinctUntilChanged().transformLatest { p ->
+    private val presence = prefs.prefs.map { it.core.presence }.distinctUntilChanged().transformLatest { p ->
         emit(p)
         val wait = p.pausedUntil - System.currentTimeMillis()
         if (p.isShared && wait > 0) {
@@ -47,7 +47,7 @@ class StatusViewModel(private val prefs: PrefsRepository, runtime: AppRuntime, p
     private val menus = OpenMenu()
 
     val uiState: StateFlow<StatusUiState> = combine(presence, runtime.tunnelRunning, menus.key, ::build)
-        .uiState(viewModelScope, build(prefs.prefs.value.presence, runtime.tunnelRunning.value, null))
+        .uiState(viewModelScope, build(prefs.prefs.value.core.presence, runtime.tunnelRunning.value, null))
 
     fun openMenu(key: String) = menus.open(key)
 
@@ -71,16 +71,16 @@ class StatusViewModel(private val prefs: PrefsRepository, runtime: AppRuntime, p
 
     /** Off while paused means "end the pause"; otherwise the switch is the sharing flag itself. */
     fun toggleActive() = prefs.update { current ->
-        val p = current.presence
+        val p = current.core.presence
         val isPaused = p.isShared && p.pausedUntil > System.currentTimeMillis()
-        current.copy(presence = PresencePrefs(isShared = if (isPaused) true else !p.isShared))
+        current.copy(core = current.core.copy(presence = PresencePrefs(isShared = if (isPaused) true else !p.isShared)))
     }
 
     fun setPause(key: String) {
         val minutes = key.toIntOrNull() ?: 0
         val until = if (minutes > 0) System.currentTimeMillis() + minutes * 60_000L else 0L
         // a pause implies sharing resumes when it ends, so it re-arms the flag as well
-        prefs.update { it.copy(presence = PresencePrefs(isShared = true, pauseMinutes = minutes, pausedUntil = until)) }
+        prefs.update { it.copy(core = it.core.copy(presence = PresencePrefs(isShared = true, pauseMinutes = minutes, pausedUntil = until))) }
     }
 
     fun goBack() {

@@ -61,13 +61,13 @@ class PrivacyViewModel(
     private fun blocked(contacts: List<Contact>?): Int = contacts.orEmpty().count { it.isBlocked }
 
     private fun buildState(p: Prefs, profile: Profile?, blocked: Int, openMenuKey: String?): PrivacyUiState = PrivacyUiState(
-        isAppLockEnabled = p.isAppLockEnabled,
+        isAppLockEnabled = p.core.isAppLockEnabled,
         canUseAppLock = canUseAppLock,
-        appLockAfterKey = p.appLockAfterSec.toString(),
-        isScreenshotBlocked = p.isScreenshotBlocked,
-        sendReadReceipts = p.sendReadReceipts,
-        sendTypingIndicators = p.sendTypingIndicators,
-        coverGateKey = p.coverRevealGate.key,
+        appLockAfterKey = p.core.appLockAfterSec.toString(),
+        isScreenshotBlocked = p.core.isScreenshotBlocked,
+        sendReadReceipts = p.app.sendReadReceipts,
+        sendTypingIndicators = p.app.sendTypingIndicators,
+        coverGateKey = p.app.coverRevealGate.key,
         blockedCount = blocked,
         certFingerprint = profile?.certFingerprint.orEmpty(),
         certExpiry = profile?.certNotAfter?.let(::formatExpiry).orEmpty(),
@@ -82,17 +82,17 @@ class PrivacyViewModel(
 
     fun setCoverGate(key: String) {
         val gate = CoverGates.of(key) ?: return
-        prefs.update { it.copy(coverRevealGate = gate) }
+        prefs.update { it.copy(app = it.app.copy(coverRevealGate = gate)) }
     }
 
-    fun toggleAppLock() = prefs.update { it.copy(isAppLockEnabled = !it.isAppLockEnabled) }
-    fun setAppLockAfter(key: String) = key.toIntOrNull()?.let { sec -> prefs.update { it.copy(appLockAfterSec = sec) } } ?: Unit
-    fun toggleScreenshotBlock() = prefs.update { it.copy(isScreenshotBlocked = !it.isScreenshotBlocked) }
-    fun toggleTypingIndicators() = prefs.update { it.copy(sendTypingIndicators = !it.sendTypingIndicators) }
+    fun toggleAppLock() = prefs.update { it.copy(core = it.core.copy(isAppLockEnabled = !it.core.isAppLockEnabled)) }
+    fun setAppLockAfter(key: String) = key.toIntOrNull()?.let { sec -> prefs.update { it.copy(core = it.core.copy(appLockAfterSec = sec)) } } ?: Unit
+    fun toggleScreenshotBlock() = prefs.update { it.copy(core = it.core.copy(isScreenshotBlocked = !it.core.isScreenshotBlocked)) }
+    fun toggleTypingIndicators() = prefs.update { it.copy(app = it.app.copy(sendTypingIndicators = !it.app.sendTypingIndicators)) }
     fun openBlocked() = navigator.push(Blocked)
     fun goBack() = navigator.pop()
 
-    fun toggleReadReceipts() = prefs.update { it.copy(sendReadReceipts = !it.sendReadReceipts) }
+    fun toggleReadReceipts() = prefs.update { it.copy(app = it.app.copy(sendReadReceipts = !it.app.sendReadReceipts)) }
 
     private fun formatExpiry(notAfter: String): String = runCatching {
         Instant.parse(notAfter).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT))

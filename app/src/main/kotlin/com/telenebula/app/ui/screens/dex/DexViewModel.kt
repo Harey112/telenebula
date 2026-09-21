@@ -91,20 +91,20 @@ class DexViewModel(
         .uiState(viewModelScope, build(dex.status.value, prefs.value, null, local.value))
 
     private fun build(s: DexStatus, p: Prefs, menu: String?, l: Local): DexUiState = DexUiState(
-        isEnabled = p.dex.isEnabled,
+        isEnabled = p.server.isEnabled,
         statusLabel = when {
-            !p.dex.isEnabled -> "Off"
+            !p.server.isEnabled -> "Off"
             s.failure != null -> "Not running"
             s.isRunning -> if (s.clients.isEmpty()) "On · no clients" else if (s.clients.size == 1) "On · 1 client" else "On · ${s.clients.size} clients"
             s.isStarting -> "Starting…"
             else -> "Waiting for setup"
         },
-        failure = if (p.dex.isEnabled) s.failure else null,
+        failure = if (p.server.isEnabled) s.failure else null,
         urls = s.urls,
         fingerprint = s.fingerprint,
-        username = p.dex.username,
-        hasPassword = p.dex.hasPassword,
-        maxClientsKey = p.dex.maxClients.toString(),
+        username = p.server.username,
+        hasPassword = p.server.hasPassword,
+        maxClientsKey = p.server.maxClients.toString(),
         clients = s.clients.map { DexClientRow(it.id, com.telenebula.app.runtime.DexCallBridge.labelOf(it), "since ${Format.clock(it.connectedAt)}") },
         openMenuKey = menu,
         editor = l.editor,

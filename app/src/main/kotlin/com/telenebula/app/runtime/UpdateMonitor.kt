@@ -39,18 +39,18 @@ class UpdateMonitor(
     /** the last answer in this process; null after a restart until the next check */
     val latestRelease: StateFlow<Release?> = mutableRelease.asStateFlow()
 
-    val isUpdateAvailable: StateFlow<Boolean> = prefs.prefs.map { isNewer(it.updates.latestVersion) }.distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, isNewer(prefs.prefs.value.updates.latestVersion))
+    val isUpdateAvailable: StateFlow<Boolean> = prefs.prefs.map { isNewer(it.core.updates.latestVersion) }.distinctUntilChanged()
+        .stateIn(scope, SharingStarted.Eagerly, isNewer(prefs.prefs.value.core.updates.latestVersion))
 
     fun isNewer(version: String?): Boolean = version != null && compareVersions(version, appVersion) > 0
 
     /** Called once the prefs are loaded, or the first check would write over them. */
     fun start() {
         scope.launch {
-            prefs.prefs.map { it.updates.isDailyCheckEnabled }.distinctUntilChanged().collectLatest { enabled ->
+            prefs.prefs.map { it.core.updates.isDailyCheckEnabled }.distinctUntilChanged().collectLatest { enabled ->
                 if (!enabled) return@collectLatest
                 while (true) {
-                    val wait = prefs.prefs.value.updates.lastCheckedAt + DAY_MS - System.currentTimeMillis()
+                    val wait = prefs.prefs.value.core.updates.lastCheckedAt + DAY_MS - System.currentTimeMillis()
                     if (wait > 0) delay(wait.coerceAtMost(DAY_MS))
                     if (check() == null) delay(RETRY_MS)
                 }
@@ -64,10 +64,10 @@ class UpdateMonitor(
             val release = checker.latestRelease(abis)
             mutableRelease.value = release
             mutableLastError.value = null
-            prefs.update { it.copy(updates = it.updates.copy(lastCheckedAt = System.currentTimeMillis(), latestVersion = release.version)) }
-            if (isNewer(release.version) && prefs.prefs.value.updates.notifiedVersion != release.version) {
+            prefs.update { it.copy(core = it.core.copy(updates = it.core.updates.copy(lastCheckedAt = System.currentTimeMillis(), latestVersion = release.version))) }
+            if (isNewer(release.version) && prefs.prefs.value.core.updates.notifiedVersion != release.version) {
                 notifier.show(release.version)
-                prefs.update { it.copy(updates = it.updates.copy(notifiedVersion = release.version)) }
+                prefs.update { it.copy(core = it.core.copy(updates = it.core.updates.copy(notifiedVersion = release.version))) }
             }
             release
         } catch (e: CancellationException) {

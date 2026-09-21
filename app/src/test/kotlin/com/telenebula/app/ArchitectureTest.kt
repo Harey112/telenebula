@@ -82,6 +82,18 @@ class ArchitectureTest {
             }
     }
 
+    /**
+     * A settings file older than the profile split is flat, and decoding it as the current shape
+     * hands the user back the defaults for everything they ever set. The migration is the only
+     * way in; it was once written and not called, and nothing failed until a phone was upgraded.
+     */
+    @Test
+    fun `settings are read through the migration, never the serializer`() {
+        Konsist.scopeFromProduction().files
+            .filterNot { it.name == "PrefsMigration" }
+            .assertFalse { file -> file.text.contains("decodeFromString(Prefs.serializer()") }
+    }
+
     /** A view model is its own file, named after itself, so the rest of the layer can be found. */
     @Test
     fun `view models live in their own files`() {

@@ -28,8 +28,8 @@ class StorageViewModel(
     private val manual = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val stats = merge(core.storeChanges(), manual).mapLatest { core.storageStats() }
 
-    val uiState: StateFlow<StorageUiState> = combine(stats, prefs.prefs) { s, p -> StorageUiState(s, p.autoCleanOrphans) }
-        .uiState(viewModelScope, StorageUiState(autoCleanOrphans = prefs.prefs.value.autoCleanOrphans))
+    val uiState: StateFlow<StorageUiState> = combine(stats, prefs.prefs) { s, p -> StorageUiState(s, p.core.autoCleanOrphans) }
+        .uiState(viewModelScope, StorageUiState(autoCleanOrphans = prefs.prefs.value.core.autoCleanOrphans))
 
     fun refresh() {
         manual.tryEmit(Unit)
@@ -52,6 +52,6 @@ class StorageViewModel(
         ),
     )
 
-    fun toggleAutoClean() = prefs.update { it.copy(autoCleanOrphans = !it.autoCleanOrphans) }
+    fun toggleAutoClean() = prefs.update { it.copy(core = it.core.copy(autoCleanOrphans = !it.core.autoCleanOrphans)) }
     fun goBack() = navigator.pop()
 }

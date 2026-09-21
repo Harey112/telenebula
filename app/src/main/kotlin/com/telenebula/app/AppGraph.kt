@@ -103,7 +103,7 @@ class AppGraph(app: Application) {
     val updates = UpdateChecker(CoreJson)
     val installer = UpdateInstaller(app, openWith)
     val updateMonitor = UpdateMonitor(prefs, updates, UpdateNotifier(app), appScope, BuildConfig.VERSION_NAME, Build.SUPPORTED_ABIS.toList())
-    val appLock = AppLock(app, isEnabled = { prefs.prefs.value.isAppLockEnabled }, lockAfterSec = { prefs.prefs.value.appLockAfterSec })
+    val appLock = AppLock(app, isEnabled = { prefs.prefs.value.core.isAppLockEnabled }, lockAfterSec = { prefs.prefs.value.core.appLockAfterSec })
 
     val webRtc = WebRtcRuntime(app)
     val dexCalls = DexCallBridge(appScope)
@@ -144,7 +144,7 @@ class AppGraph(app: Application) {
         prefs = prefs,
         profile = runtime.profile,
         backend = DexBackendAdapter(
-            appScope, runtime, core, prefs, typing, peerPresence, transfers, peerQueues, attachments, appLock, dexCalls,
+            appScope, runtime, core, prefs, typing, peerPresence, transfers, peerQueues, attachments, dexCalls,
             vpn, updateMonitor, callEngine.diagnostics::value, BuildConfig.VERSION_NAME,
         ),
         bridge = dexCalls,
@@ -180,11 +180,11 @@ class AppGraph(app: Application) {
     private fun callPrefs(): CallPrefs {
         val p = prefs.prefs.value
         return CallPrefs(
-            ringForCalls = p.notifications.calls.ring,
-            vibrateWhileRinging = p.notifications.calls.vibrate,
-            missedNotification = p.notifications.calls.missedNotification,
-            videoSpeakerDefault = p.isVideoSpeakerDefault,
-            isVerboseLogging = p.nebulaLogLevel == NebulaLogLevel.DEBUG,
+            ringForCalls = p.core.notifications.calls.ring,
+            vibrateWhileRinging = p.core.notifications.calls.vibrate,
+            missedNotification = p.core.notifications.calls.missedNotification,
+            videoSpeakerDefault = p.app.isVideoSpeakerDefault,
+            isVerboseLogging = p.core.nebulaLogLevel == NebulaLogLevel.DEBUG,
         )
     }
 }

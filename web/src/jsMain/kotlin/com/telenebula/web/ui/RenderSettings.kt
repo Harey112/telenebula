@@ -285,33 +285,45 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
     }
 
     private fun privacy(s: DexSettings, state: AppState) {
-        val isPhoneOnlyGate = s.coverRevealGate == DexRevealGate.CODE || s.coverRevealGate == DexRevealGate.DEVICE
+        val d = s.dexProfile
+        val isPhoneOnlyGate = state.effective.coverRevealGate == DexRevealGate.CODE
         val blocked = state.contacts.values.filter { it.isBlocked }.sortedBy { it.label.lowercase() }
         content.add(
             section("What your contacts see") {
-                add(switchRow("Send read receipts", "They see when you have read their message", s.sendReadReceipts) { v -> patch(DexSettingsPatch(sendReadReceipts = v)) })
-                add(switchRow("Send typing indicators", "They see when you are writing", s.sendTypingIndicators) { v -> patch(DexSettingsPatch(sendTypingIndicators = v)) })
+                add(
+                    followSwitchRow(
+                        "Send read receipts",
+                        "They see when you have read their message",
+                        inherited = s.sendReadReceipts,
+                        selected = d.sendReadReceipts,
+                    ) { v -> surface(s) { copy(sendReadReceipts = v) } },
+                )
+                add(
+                    followSwitchRow(
+                        "Send typing indicators",
+                        "They see when you are writing",
+                        inherited = s.sendTypingIndicators,
+                        selected = d.sendTypingIndicators,
+                    ) { v -> surface(s) { copy(sendTypingIndicators = v) } },
+                )
             },
             section(
                 "Covered messages",
                 if (isPhoneOnlyGate) {
-                    "A code and the phone's lock are both answered on the handset, so while one of them is chosen a covered message cannot be opened in this browser, and its attachment is not sent here."
+                    "A code is answered on the handset, so while it is chosen a covered message cannot be opened in this browser, and its attachment is not sent here."
                 } else {
-                    "How a covered message is opened. Tap and Ask work here; a code and the phone's lock are answered on the handset."
+                    "How a covered message is opened here."
                 },
             ) {
                 add(
-                    selectRow(
+                    followSelectRow(
                         "Reveal with",
                         null,
-                        listOf(
-                            Choice("TAP", "Just tap"),
-                            Choice("ASK", "Ask first"),
-                            Choice("CODE", "A code"),
-                            Choice("DEVICE", "The phone's lock"),
-                        ),
-                        s.coverRevealGate.name,
-                    ) { key -> patch(DexSettingsPatch(coverRevealGate = DexRevealGate.valueOf(key))) },
+                        inherited = labelOf(GATES_APP, s.coverRevealGate.name),
+                        // the phone's lock is not offered: a browser can never answer it
+                        options = GATES_DEX,
+                        selected = d.coverRevealGate?.name,
+                    ) { key -> surface(s) { copy(coverRevealGate = key?.let { DexRevealGate.valueOf(it) }) } },
                 )
             },
         )
@@ -496,6 +508,9 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
     }
 
     private companion object {
+        val GATES_DEX = listOf(Choice("TAP", "Just tap"), Choice("ASK", "Ask first"), Choice("CODE", "A code"))
+        val GATES_APP = GATES_DEX + Choice("DEVICE", "The phone's lock")
+
         /** the phone's own Status screen offers exactly these */
         val PAUSES = listOf(Choice("0", "Off"), Choice("30", "30 minutes"), Choice("60", "1 hour"), Choice("480", "8 hours"), Choice("1440", "24 hours"))
 

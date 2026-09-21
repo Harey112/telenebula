@@ -85,11 +85,11 @@ private fun ReactionPickerSheet(request: SheetRequest.ReactionPicker, graph: App
     val myIp = profile?.overlayIp.orEmpty()
     val p by graph.prefs.prefs.collectAsStateWithLifecycle()
     val message by graph.core.messageFlow(request.messageId, request.peerIp).collectAsStateWithLifecycle(initialValue = LOADING)
-    val recent = remember(p.recentReactions, p.quickReactions) { p.recentReactions.filterNot { it in p.quickReactions } }
+    val recent = remember(p.core.recentReactions, p.core.quickReactions) { p.core.recentReactions.filterNot { it in p.core.quickReactions } }
     val groups by graph.emojis.groups.collectAsStateWithLifecycle()
     EmojiPicker(
         groups = groups,
-        yourReactions = p.quickReactions,
+        yourReactions = p.core.quickReactions,
         recentReactions = recent,
         currentReaction = message?.takeIf { it !== LOADING }?.reactions?.get(myIp),
         onPick = { emoji ->
@@ -108,7 +108,7 @@ private fun QuickReactionSheet(request: SheetRequest.QuickReaction, graph: AppGr
         groups = groups,
         yourReactions = emptyList(),
         recentReactions = emptyList(),
-        currentReaction = p.quickReactions.getOrNull(request.slot),
+        currentReaction = p.core.quickReactions.getOrNull(request.slot),
         onPick = { emoji ->
             graph.prefs.setQuickReaction(request.slot, emoji)
             graph.sheets.close()
