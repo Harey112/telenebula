@@ -111,11 +111,18 @@ data class UpdatePrefs(
 )
 
 /**
- * What one surface sets for itself. A null field follows the app, so a phone that never opens Dex
- * behaves exactly as before and an older prefs file needs no migration.
+ * What one profile sets for itself, a profile being the app or Dex. A null field follows the app,
+ * so a phone that never opens Dex behaves as before and an older prefs file needs no migration.
+ *
+ * Only a setting that describes a screen belongs here. Everything else is a core setting: it
+ * governs the account, the protocol, the peers or the device, it is the same in every profile,
+ * and it must never gain a per-profile value. Core settings are, deliberately and exhaustively:
+ * read receipts, typing indicators, presence, the cover reveal gate, screenshot blocking, the app
+ * lock and its delay, the background connection, start on boot, the nebula log level, developer
+ * mode, orphan cleaning, the daily update check, the quick reactions, and everything under `dex`.
  */
 @Serializable
-data class SurfacePrefs(
+data class ProfilePrefs(
     val themeMode: ThemeMode? = null,
     val colorTheme: String? = null,
     val customAccent: String? = null,
@@ -177,8 +184,8 @@ data class Prefs(
     /** the six reactions offered first */
     val quickReactions: List<String> = DEFAULT_QUICK_REACTIONS,
     val dex: DexPrefs = DexPrefs(),
-    /** what the browser sets for itself; every unset field follows the app's own value above */
-    val dexSurface: SurfacePrefs = SurfacePrefs(),
+    /** the Dex profile; every unset field follows the app profile's own value above */
+    val dexProfile: ProfilePrefs = ProfilePrefs(),
 ) {
     companion object {
         val DEFAULT_QUICK_REACTIONS: List<String> = listOf("👍", "❤️", "😂", "😮", "😢", "🔥")

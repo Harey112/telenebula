@@ -17,10 +17,12 @@ fun section(title: String? = null, footnote: String? = null, build: HTMLElement.
 }
 
 /** Where a setting actually takes effect, said on the row rather than left to be guessed. */
+/** Where a setting takes effect. A core setting is the same in every profile; only a profile setting differs. */
 enum class Where(val label: String, val cls: String) {
-    PHONE("Phone", ""),
-    BROWSER("Browser", "browser"),
-    BOTH("Both", ""),
+    PHONE("Phone only", ""),
+    BROWSER("Dex only", "browser"),
+    BOTH("Same everywhere", ""),
+    PER_PROFILE("Per profile", "profile"),
 }
 
 // --- the controls themselves, so a row and a table cell never build one two different ways ------
@@ -204,7 +206,7 @@ const val FOLLOW_APP = ""
 fun withSurface(parent: HTMLElement, control: HTMLElement): HTMLElement =
     div("row-group").add(
         parent,
-        div("row-surface").add(div("row-surface-label", "This browser"), div("row-control").add(control)),
+        div("row-surface").add(div("row-surface-label", "Dex profile"), div("row-control").add(control)),
     )
 
 /**

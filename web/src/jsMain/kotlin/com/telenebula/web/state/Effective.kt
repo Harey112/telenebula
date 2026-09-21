@@ -25,7 +25,7 @@ data class Effective(
 
         fun of(s: DexSettings?): Effective {
             if (s == null) return NONE
-            val d = s.dexSurface
+            val d = s.dexProfile
             return Effective(
                 themeMode = d.themeMode ?: s.themeMode,
                 colorTheme = d.colorTheme ?: s.colorTheme,

@@ -322,6 +322,7 @@ svg { display: block; flex: none; }
 .row-label { overflow-wrap: anywhere; }
 .row-scope { flex: none; font-size: 10.5px; letter-spacing: .4px; text-transform: uppercase; padding: 2px 6px; border-radius: 9px; background: var(--surface-raised); color: var(--text-muted); border: 1px solid var(--hairline); }
 .row-scope.browser { color: var(--accent); border-color: var(--accent-soft); background: var(--accent-soft); }
+.row-scope.profile { color: var(--accent); border-color: var(--accent-soft); background: var(--accent-soft); }
 .row-note { color: var(--text-muted); }
 .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 20px; }

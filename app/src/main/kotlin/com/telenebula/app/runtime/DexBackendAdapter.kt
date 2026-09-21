@@ -43,7 +43,7 @@ import com.telenebula.core.model.MessageStatus
 import com.telenebula.core.model.PeerPresence
 import com.telenebula.core.model.PeerQueueState
 import com.telenebula.core.model.Profile
-import com.telenebula.core.model.SurfacePrefs
+import com.telenebula.core.model.ProfilePrefs
 import com.telenebula.dex.DexBackend
 import com.telenebula.dex.DexCallCommand
 import com.telenebula.dex.DexCallEvent
@@ -88,7 +88,7 @@ import com.telenebula.dex.wire.DexRevealGate
 import com.telenebula.dex.wire.DexSendState
 import com.telenebula.dex.wire.DexSettings
 import com.telenebula.dex.wire.DexSettingsPatch
-import com.telenebula.dex.wire.DexSurface
+import com.telenebula.dex.wire.DexProfile
 import com.telenebula.dex.wire.DexStorage
 import com.telenebula.dex.wire.DexTextSize
 import com.telenebula.dex.wire.DexThemeMode
@@ -256,7 +256,7 @@ class DexBackendAdapter(
                 autoCleanOrphans = patch.autoCleanOrphans ?: p.autoCleanOrphans,
                 appLockAfterSec = patch.appLockAfterSec?.coerceIn(0, MAX_LOCK_DELAY_SEC) ?: p.appLockAfterSec,
                 quickReactions = patch.quickReactions?.takeIf { it.size == p.quickReactions.size && it.all(::isEmoji) } ?: p.quickReactions,
-                dexSurface = patch.dexSurface?.toCore() ?: p.dexSurface,
+                dexProfile = patch.dexProfile?.toCore() ?: p.dexProfile,
             )
         }
         // nebula reads its log level from the site config, which only a reload hands it
@@ -754,10 +754,10 @@ class DexBackendAdapter(
         dexUsername = dex.username,
         dexMaxClients = dex.maxClients,
         dexPort = dex.port,
-        dexSurface = dexSurface.toWire(),
+        dexProfile = dexProfile.toWire(),
     )
 
-    private fun SurfacePrefs.toWire(): DexSurface = DexSurface(
+    private fun ProfilePrefs.toWire(): DexProfile = DexProfile(
         themeMode = themeMode?.toWire(),
         colorTheme = colorTheme,
         customAccent = customAccent,
@@ -769,7 +769,7 @@ class DexBackendAdapter(
         notificationSound = notificationSound,
     )
 
-    private fun DexSurface.toCore(): SurfacePrefs = SurfacePrefs(
+    private fun DexProfile.toCore(): ProfilePrefs = ProfilePrefs(
         themeMode = themeMode?.toCore(),
         colorTheme = colorTheme?.trim()?.takeIf { it.isNotEmpty() && it.length <= MAX_THEME_CHARS },
         customAccent = customAccent?.takeIf { ACCENT.matches(it) },

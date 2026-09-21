@@ -283,9 +283,9 @@ data class DexPresencePrefs(val isShared: Boolean = true, val pauseMinutes: Int 
 @Serializable
 data class DexUpdatePrefs(val isDailyCheckEnabled: Boolean = true, val lastCheckedAt: Long = 0, val latestVersion: String? = null)
 
-/** What the browser sets for itself; a null field follows the app's own value. */
+/** What the Dex profile sets for itself; a null field follows the app profile. Core settings never appear here. */
 @Serializable
-data class DexSurface(
+data class DexProfile(
     val themeMode: DexThemeMode? = null,
     val colorTheme: String? = null,
     val customAccent: String? = null,
@@ -328,8 +328,8 @@ data class DexSettings(
     val dexUsername: String = "",
     val dexMaxClients: Int = 2,
     val dexPort: Int = 0,
-    /** the same settings again, as the browser has them set for itself */
-    val dexSurface: DexSurface = DexSurface(),
+    /** the same settings again, as the Dex profile has them set */
+    val dexProfile: DexProfile = DexProfile(),
 )
 
 /** A field left out stays as it is, so a browser sends only what it changed. */
@@ -357,7 +357,7 @@ data class DexSettingsPatch(
     val appLockAfterSec: Int? = null,
     val quickReactions: List<String>? = null,
     /** replaces the browser's own settings whole, so clearing one back to "follow the app" is expressible */
-    val dexSurface: DexSurface? = null,
+    val dexProfile: DexProfile? = null,
 )
 
 // --- what the phone reports about itself -----------------------------------------------------

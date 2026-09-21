@@ -20,7 +20,7 @@ import com.telenebula.web.wire.DexQuietHours
 import com.telenebula.web.wire.DexRevealGate
 import com.telenebula.web.wire.DexSettings
 import com.telenebula.web.wire.DexSettingsPatch
-import com.telenebula.web.wire.DexSurface
+import com.telenebula.web.wire.DexProfile
 import com.telenebula.web.wire.DexTextSize
 import com.telenebula.web.wire.DexThemeMode
 import kotlinx.browser.document
@@ -168,18 +168,18 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
     }
 
     /** What the browser sets for itself is stored on the phone beside the app's, so both are here. */
-    private fun surface(s: DexSettings, change: DexSurface.() -> DexSurface) =
-        patch(DexSettingsPatch(dexSurface = s.dexSurface.change()))
+    private fun surface(s: DexSettings, change: DexProfile.() -> DexProfile) =
+        patch(DexSettingsPatch(dexProfile = s.dexProfile.change()))
 
     private fun labelOf(options: List<Choice>, key: String): String = options.firstOrNull { it.key == key }?.label ?: key
 
     private fun appearance(s: DexSettings, eff: Effective) {
-        val d = s.dexSurface
+        val d = s.dexProfile
         content.add(
             section("Theme", "Each row is the phone's. Leave the browser's own line on Follow app to keep the two the same.") {
                 add(
                     withSurface(
-                        selectRow("Appearance", null, THEME_MODES, s.themeMode.name, where = Where.BOTH) { k -> patch(DexSettingsPatch(themeMode = DexThemeMode.valueOf(k))) },
+                        selectRow("Appearance", null, THEME_MODES, s.themeMode.name, where = Where.PER_PROFILE) { k -> patch(DexSettingsPatch(themeMode = DexThemeMode.valueOf(k))) },
                         followSelect("Appearance", labelOf(THEME_MODES, s.themeMode.name), THEME_MODES, d.themeMode?.name) { k ->
                             surface(s) { copy(themeMode = k?.let { DexThemeMode.valueOf(it) }) }
                         },
@@ -187,13 +187,13 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
                 )
                 add(
                     withSurface(
-                        selectRow("Colour theme", null, THEMES, s.colorTheme, where = Where.BOTH) { k -> patch(DexSettingsPatch(colorTheme = k)) },
+                        selectRow("Colour theme", null, THEMES, s.colorTheme, where = Where.PER_PROFILE) { k -> patch(DexSettingsPatch(colorTheme = k)) },
                         followSelect("Colour theme", labelOf(THEMES, s.colorTheme), THEMES, d.colorTheme) { k -> surface(s) { copy(colorTheme = k) } },
                     ),
                 )
                 add(
                     withSurface(
-                        colorRow("Custom accent", "Used when the colour theme is Custom", s.customAccent, where = Where.BOTH) { hex ->
+                        colorRow("Custom accent", "Used when the colour theme is Custom", s.customAccent, where = Where.PER_PROFILE) { hex ->
                             patch(DexSettingsPatch(customAccent = hex, colorTheme = "custom"))
                         },
                         accentControl(s, eff),
@@ -209,7 +209,7 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
 
     /** A colour input cannot say "follow the app", so the choice leads and the colour follows it. */
     private fun accentControl(s: DexSettings, eff: Effective): HTMLElement {
-        val own = s.dexSurface.customAccent
+        val own = s.dexProfile.customAccent
         val cell = div("cell-pair")
         cell.add(
             followSelect("Custom accent", s.customAccent, listOf(Choice("own", "Own colour")), own?.let { "own" }) { k ->
@@ -221,15 +221,15 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
     }
 
     private fun textSizeRow(s: DexSettings): HTMLElement = withSurface(
-        selectRow("Text size", null, TEXT_SIZES, s.chatTextSize.name, where = Where.BOTH) { k -> patch(DexSettingsPatch(chatTextSize = DexTextSize.valueOf(k))) },
-        followSelect("Text size", labelOf(TEXT_SIZES, s.chatTextSize.name), TEXT_SIZES, s.dexSurface.chatTextSize?.name) { k ->
+        selectRow("Text size", null, TEXT_SIZES, s.chatTextSize.name, where = Where.PER_PROFILE) { k -> patch(DexSettingsPatch(chatTextSize = DexTextSize.valueOf(k))) },
+        followSelect("Text size", labelOf(TEXT_SIZES, s.chatTextSize.name), TEXT_SIZES, s.dexProfile.chatTextSize?.name) { k ->
             surface(s) { copy(chatTextSize = k?.let { DexTextSize.valueOf(it) }) }
         },
     )
 
     private fun densityRow(s: DexSettings): HTMLElement = withSurface(
-        selectRow("Message density", null, DENSITIES, s.messageDensity.name, where = Where.BOTH) { k -> patch(DexSettingsPatch(messageDensity = DexDensity.valueOf(k))) },
-        followSelect("Message density", labelOf(DENSITIES, s.messageDensity.name), DENSITIES, s.dexSurface.messageDensity?.name) { k ->
+        selectRow("Message density", null, DENSITIES, s.messageDensity.name, where = Where.PER_PROFILE) { k -> patch(DexSettingsPatch(messageDensity = DexDensity.valueOf(k))) },
+        followSelect("Message density", labelOf(DENSITIES, s.messageDensity.name), DENSITIES, s.dexProfile.messageDensity?.name) { k ->
             surface(s) { copy(messageDensity = k?.let { DexDensity.valueOf(it) }) }
         },
     )
@@ -241,10 +241,10 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
                 add(densityRow(s))
                 add(
                     withSurface(
-                        switchRow("Enter sends the message", "Otherwise Enter starts a new line and Shift+Enter sends", s.isEnterToSend, where = Where.BOTH) { v ->
+                        switchRow("Enter sends the message", "Otherwise Enter starts a new line and Shift+Enter sends", s.isEnterToSend, where = Where.PER_PROFILE) { v ->
                             patch(DexSettingsPatch(isEnterToSend = v))
                         },
-                        followSwitch("Enter sends the message", s.isEnterToSend, s.dexSurface.isEnterToSend) { v -> surface(s) { copy(isEnterToSend = v) } },
+                        followSwitch("Enter sends the message", s.isEnterToSend, s.dexProfile.isEnterToSend) { v -> surface(s) { copy(isEnterToSend = v) } },
                     ),
                 )
             },
@@ -265,19 +265,19 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
     private fun notifications(s: DexSettings, eff: Effective) {
         val n = s.notifications
         val m = n.messages
-        val d = s.dexSurface
+        val d = s.dexProfile
         fun setNotifications(next: DexNotifications) = patch(DexSettingsPatch(notifications = next))
         content.add(
             section("Messages", "The phone rings and vibrates; this browser shows a desktop notification. The three below can differ.") {
                 add(
                     withSurface(
-                        switchRow("Message notifications", null, m.enabled, where = Where.BOTH) { v -> setNotifications(n.copy(messages = m.copy(enabled = v))) },
+                        switchRow("Message notifications", null, m.enabled, where = Where.PER_PROFILE) { v -> setNotifications(n.copy(messages = m.copy(enabled = v))) },
                         followSwitch("Message notifications", m.enabled, d.notificationsEnabled) { v -> surface(s) { copy(notificationsEnabled = v) } },
                     ),
                 )
                 add(
                     withSurface(
-                        switchRow("Show a preview", "Put the message itself in the notification", m.preview, isEnabled = m.enabled, where = Where.BOTH) { v ->
+                        switchRow("Show a preview", "Put the message itself in the notification", m.preview, isEnabled = m.enabled, where = Where.PER_PROFILE) { v ->
                             setNotifications(n.copy(messages = m.copy(preview = v)))
                         },
                         followSwitch("Show a preview", m.preview, d.notificationPreview, isEnabled = eff.notificationsEnabled) { v -> surface(s) { copy(notificationPreview = v) } },
@@ -285,7 +285,7 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
                 )
                 add(
                     withSurface(
-                        switchRow("Sound", "The phone plays its tone; the browser plays a short beep", m.sound, isEnabled = m.enabled, where = Where.BOTH) { v ->
+                        switchRow("Sound", "The phone plays its tone; the browser plays a short beep", m.sound, isEnabled = m.enabled, where = Where.PER_PROFILE) { v ->
                             setNotifications(n.copy(messages = m.copy(sound = v)))
                         },
                         followSwitch("Sound", m.sound, d.notificationSound, isEnabled = eff.notificationsEnabled) { v -> surface(s) { copy(notificationSound = v) } },
