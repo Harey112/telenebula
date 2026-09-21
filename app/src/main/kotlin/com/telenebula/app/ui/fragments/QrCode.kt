@@ -2,9 +2,6 @@ package com.telenebula.app.ui.fragments
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,7 +9,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -23,7 +19,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -57,22 +52,11 @@ fun QrCode(value: String, size: Dp = 216.dp, modifier: Modifier = Modifier) {
 @Composable
 fun QrSheet(isVisible: Boolean, value: String, name: String, detail: String, onClose: () -> Unit) {
     val colors = TnTheme.colors
-    CenteredOverlay(isVisible = isVisible, onDismiss = onClose, horizontalPadding = 36.dp) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
-                .background(colors.surface)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text(name, style = TnType.body.copy(fontSize = 20.sp, fontWeight = FontWeight.Medium), color = colors.text)
-            QrCode(value, modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(Color.White).padding(14.dp))
-            SelectionContainer {
-                Text(detail, style = TnType.small.copy(fontSize = 14.sp, fontFamily = FontFamily.Monospace), color = colors.text, textAlign = TextAlign.Center)
-            }
-            Text("Share this so others can add you by your IPv6 number.", style = TnType.caption.copy(fontSize = 12.5.sp), color = colors.textMuted, textAlign = TextAlign.Center)
+    TnModal(isVisible = isVisible, title = name, onDismiss = onClose, dismissLabel = null, horizontalPadding = 36.dp, isCentred = true) {
+        QrCode(value, modifier = Modifier.padding(top = 16.dp).clip(RoundedCornerShape(16.dp)).background(Color.White).padding(14.dp))
+        SelectionContainer {
+            Text(detail, style = TnType.small.copy(fontSize = 14.sp, fontFamily = FontFamily.Monospace), color = colors.text, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 16.dp))
         }
+        Text("Share this so others can add you by your IPv6 number.", style = TnType.caption.copy(fontSize = 12.5.sp), color = colors.textMuted, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 16.dp))
     }
 }

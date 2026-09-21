@@ -89,29 +89,18 @@ data class MenuOption(val key: String, val icon: TnIcon, val label: String, val 
 @Composable
 fun OptionsMenu(isVisible: Boolean, options: List<MenuOption>, onClose: () -> Unit, title: String? = null) {
     val colors = TnTheme.colors
-    CenteredOverlay(isVisible = isVisible, onDismiss = onClose) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(colors.surface)
-                .padding(vertical = 6.dp),
-        ) {
-            if (title != null) {
-                Text(title, style = TnType.small.copy(fontSize = 13.5.sp), color = colors.textMuted, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 4.dp))
-            }
-            for (option in options) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(role = Role.Button, onClick = option.onClick)
-                        .padding(horizontal = 18.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    Icon(option.icon, tint = if (option.isDanger) colors.danger else colors.text, size = 19.dp)
-                    Text(option.label, style = TnType.body.copy(fontSize = 15.5.sp), color = if (option.isDanger) colors.danger else colors.text)
-                }
+    TnMenu(isVisible = isVisible, onDismiss = onClose, title = title) {
+        for (option in options) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(role = Role.Button, onClick = option.onClick)
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Icon(option.icon, tint = if (option.isDanger) colors.danger else colors.text, size = 19.dp)
+                Text(option.label, style = TnType.body.copy(fontSize = 15.5.sp), color = if (option.isDanger) colors.danger else colors.text)
             }
         }
     }
@@ -128,42 +117,10 @@ fun EditNameModal(
     title: String = "Edit name",
     placeholder: String = "Display name",
 ) {
-    val colors = TnTheme.colors
     val focus = remember { FocusRequester() }
-    CenteredOverlay(isVisible = isVisible, onDismiss = onCancel, horizontalPadding = 32.dp) {
+    TnModal(isVisible = isVisible, title = title, onDismiss = onCancel, confirmLabel = "Save", onConfirm = onSave, confirmDescription = "Save name") {
         LaunchedEffect(Unit) { focus.requestFocus() }
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(colors.surface)
-                .padding(20.dp),
-        ) {
-            Text(title, style = TnType.body.copy(fontSize = 18.sp, fontWeight = FontWeight.Medium), color = colors.text)
-            BasicTextField(
-                value = value,
-                onValueChange = onChange,
-                singleLine = true,
-                textStyle = TnType.body.copy(fontSize = 16.sp, color = colors.text),
-                cursorBrush = SolidColor(colors.accent),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 14.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(colors.surfaceRaised)
-                    .focusRequester(focus),
-                decorationBox = { inner ->
-                    Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                        if (value.isEmpty()) Text(placeholder, style = TnType.body.copy(fontSize = 16.sp), color = colors.textMuted)
-                        inner()
-                    }
-                },
-            )
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(26.dp, Alignment.End)) {
-                Text("Cancel", style = TnType.body.copy(fontWeight = FontWeight.Medium), color = colors.textMuted, modifier = Modifier.clickable(role = Role.Button, onClick = onCancel))
-                Text("Save", style = TnType.body.copy(fontWeight = FontWeight.Medium), color = colors.accent, modifier = Modifier.clickable(role = Role.Button, onClick = onSave).semantics { contentDescription = "Save name" })
-            }
-        }
+        ModalTextField(value, onChange, placeholder, focus = focus)
     }
 }
 
@@ -210,43 +167,31 @@ fun TnBottomSheet(isVisible: Boolean, title: String, onClose: () -> Unit, conten
 fun RevealCodeModal(code: String?, entry: String, onEntry: (String) -> Unit, onCancel: () -> Unit) {
     val colors = TnTheme.colors
     val focus = remember { FocusRequester() }
-    CenteredOverlay(isVisible = code != null, onDismiss = onCancel, horizontalPadding = 36.dp) {
+    TnModal(isVisible = code != null, title = "Type this code to reveal", onDismiss = onCancel, horizontalPadding = 36.dp, isCentred = true) {
         LaunchedEffect(Unit) { focus.requestFocus() }
-        Column(
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.surface).padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text("Type this code to reveal", style = TnType.body.copy(fontWeight = FontWeight.Medium), color = colors.text)
-            Text(
-                code.orEmpty().toCharArray().joinToString("  "),
-                style = TnType.title.copy(fontSize = 26.sp, fontWeight = FontWeight.Medium),
-                color = colors.accent,
-                modifier = Modifier.padding(top = 14.dp).semantics { contentDescription = "Code ${code.orEmpty().toCharArray().joinToString(" ")}" },
-            )
-            BasicTextField(
-                value = entry,
-                onValueChange = onEntry,
-                singleLine = true,
-                textStyle = TnType.title.copy(fontSize = 24.sp, color = colors.text, textAlign = TextAlign.Center, letterSpacing = 8.sp),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                cursorBrush = SolidColor(colors.accent),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(colors.surfaceRaised)
-                    .focusRequester(focus)
-                    .semantics { contentDescription = "Enter the code" },
-                decorationBox = { inner ->
-                    Box(modifier = Modifier.padding(vertical = 12.dp), contentAlignment = Alignment.Center) { inner() }
-                },
-            )
-            Text(
-                "Cancel",
-                style = TnType.body.copy(fontWeight = FontWeight.Medium),
-                color = colors.textMuted,
-                modifier = Modifier.padding(top = 18.dp).clickable(role = Role.Button, onClick = onCancel),
-            )
-        }
+        Text(
+            code.orEmpty().toCharArray().joinToString("  "),
+            style = TnType.title.copy(fontSize = 26.sp, fontWeight = FontWeight.Medium),
+            color = colors.accent,
+            modifier = Modifier.padding(top = 14.dp).semantics { contentDescription = "Code ${code.orEmpty().toCharArray().joinToString(" ")}" },
+        )
+        BasicTextField(
+            value = entry,
+            onValueChange = onEntry,
+            singleLine = true,
+            textStyle = TnType.title.copy(fontSize = 24.sp, color = colors.text, textAlign = TextAlign.Center, letterSpacing = 8.sp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+            cursorBrush = SolidColor(colors.accent),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(colors.surfaceRaised)
+                .focusRequester(focus)
+                .semantics { contentDescription = "Enter the code" },
+            decorationBox = { inner ->
+                Box(modifier = Modifier.padding(vertical = 12.dp), contentAlignment = Alignment.Center) { inner() }
+            },
+        )
     }
 }
