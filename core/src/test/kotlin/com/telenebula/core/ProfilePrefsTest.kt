@@ -6,6 +6,7 @@ import com.telenebula.core.model.DexProfile
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.SerialDescriptor
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -51,6 +52,30 @@ class ProfilePrefsTest {
         "recentReactions",
         "dex",
     )
+
+    /** Changing the phone must not change what the browser tells a peer, or how it opens a cover. */
+    @Test
+    fun `privacy in the Dex profile does not follow the app`() {
+        val descriptor = DexProfile.serializer().descriptor
+        for (setting in setOf("sendReadReceipts", "sendTypingIndicators", "coverRevealGate")) {
+            val i = descriptor.getElementIndex(setting)
+            assertTrue("$setting is missing from the Dex profile", i >= 0)
+            assertFalse(
+                "$setting is nullable, so an unset Dex value would follow the app and change with it",
+                descriptor.getElementDescriptor(i).isNullable,
+            )
+        }
+    }
+
+    /** What a screen looks like is worth inheriting; set nothing and the browser follows the app. */
+    @Test
+    fun `presentation in the Dex profile still follows the app`() {
+        val descriptor = DexProfile.serializer().descriptor
+        for (setting in setOf("themeMode", "chatTextSize", "messageDensity", "isEnterToSend")) {
+            val i = descriptor.getElementIndex(setting)
+            assertTrue(setting, i >= 0 && descriptor.getElementDescriptor(i).isNullable)
+        }
+    }
 
     @Test
     fun `a profile carries only the settings that describe a screen`() {

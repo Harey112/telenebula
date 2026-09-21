@@ -110,8 +110,13 @@ object PrefsMigration {
             notificationPreview = notifications.messages.preview,
             notificationSound = notifications.messages.sound,
         ),
-        // version 1 had no second profile, so Dex starts out following the app
-        dex = DexProfile(),
+        // version 1 had no second profile: what it shows follows the app, but its privacy is its
+        // own from here on, so it starts at what the phone was set to rather than at the defaults
+        dex = DexProfile(
+            sendReadReceipts = sendReadReceipts,
+            sendTypingIndicators = sendTypingIndicators,
+            coverRevealGate = if (coverRevealGate == CoverRevealGate.DEVICE) CoverRevealGate.ASK else coverRevealGate,
+        ),
         server = dex,
     )
 }

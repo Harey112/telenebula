@@ -6,6 +6,7 @@ import com.telenebula.web.wire.DexSettings
 import com.telenebula.web.wire.DexTextSize
 import com.telenebula.web.wire.DexThemeMode
 
+/** Privacy is read from the Dex profile alone; only what a screen looks like follows the app. */
 /**
  * What this browser actually uses: its own value where it has set one, the app's where it has not.
  * Every view reads these rather than falling back on its own, so the two can never disagree.
@@ -31,9 +32,9 @@ data class Effective(
             if (s == null) return NONE
             val d = s.dexProfile
             return Effective(
-                sendReadReceipts = d.sendReadReceipts ?: s.sendReadReceipts,
-                sendTypingIndicators = d.sendTypingIndicators ?: s.sendTypingIndicators,
-                coverRevealGate = d.coverRevealGate ?: s.coverRevealGate,
+                sendReadReceipts = d.sendReadReceipts,
+                sendTypingIndicators = d.sendTypingIndicators,
+                coverRevealGate = d.coverRevealGate,
                 themeMode = d.themeMode ?: s.themeMode,
                 colorTheme = d.colorTheme ?: s.colorTheme,
                 customAccent = d.customAccent ?: s.customAccent,

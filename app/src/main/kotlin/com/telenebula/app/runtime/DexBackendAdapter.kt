@@ -205,7 +205,7 @@ class DexBackendAdapter(
     override fun sendTyping(peer: String, isTyping: Boolean) {
         val contact = core.cachedContact(peer)
         val isOn = contact?.privacy?.sendTypingIndicators
-            ?: dexProfileValue({ it.sendTypingIndicators }, { it.sendTypingIndicators })
+            ?: prefs.prefs.value.dex.sendTypingIndicators
         if (isOn) core.sendTyping(peer, isTyping)
     }
 
@@ -538,13 +538,9 @@ class DexBackendAdapter(
     private val DexRevealGate.canRevealRemotely: Boolean get() = this == DexRevealGate.TAP || this == DexRevealGate.ASK
 
     /** What Dex obeys: its own profile where it has an opinion, the app profile otherwise. */
-    private fun <T> dexProfileValue(own: (DexProfilePrefs) -> T?, app: (AppProfile) -> T): T {
-        val p = prefs.prefs.value
-        return own(p.dex) ?: app(p.app)
-    }
 
     private fun gateFor(peer: String): DexRevealGate =
-        gateOf(core.cachedContact(peer), dexProfileValue({ it.coverRevealGate }, { it.coverRevealGate }))
+        gateOf(core.cachedContact(peer), prefs.prefs.value.dex.coverRevealGate)
 
     private fun gateOf(contact: Contact?, fallback: CoverRevealGate): DexRevealGate {
         // a browser can never answer the phone's lock, so DEVICE resolves to ASK for Dex

@@ -103,8 +103,13 @@ class PrefsMigrationTest {
         assertEquals(5, p.server.maxClients)
         assertEquals(9000, p.server.port)
 
-        // version 1 had no second profile, so Dex starts out following the app
-        assertEquals(Prefs().dex, p.dex)
+        // version 1 had no second profile: Dex starts at what the phone was set to, then diverges
+        assertFalse(p.dex.sendReadReceipts)
+        assertFalse(p.dex.sendTypingIndicators)
+        assertEquals(CoverRevealGate.CODE, p.dex.coverRevealGate)
+        // what a screen looks like is still inherited, so these stay unset
+        assertEquals(null, p.dex.themeMode)
+        assertEquals(null, p.dex.chatTextSize)
     }
 
     /** The real file on a test phone: sparse, because only what differs from a default is written. */
@@ -119,6 +124,8 @@ class PrefsMigrationTest {
         assertTrue(p.server.isEnabled)
         assertEquals(ThemeMode.SYSTEM, p.app.themeMode)
         assertTrue(p.app.sendReadReceipts)
+        // the phone's lock cannot cross, so a phone set to it leaves Dex asking instead
+        assertEquals(CoverRevealGate.CODE, p.dex.coverRevealGate)
         assertEquals(Prefs.DEFAULT_QUICK_REACTIONS, p.core.quickReactions)
     }
 
@@ -127,6 +134,14 @@ class PrefsMigrationTest {
         val once = PrefsMigration.decode(CoreJson, version1)
         val text = CoreJson.encodeToString(Prefs.serializer(), once)
         assertEquals(once, PrefsMigration.decode(CoreJson, text))
+    }
+
+    /** The phone's lock is the one gate a browser can never answer, so it must not be handed one. */
+    @Test
+    fun `a phone using its own lock leaves Dex asking instead`() {
+        val p = PrefsMigration.decode(CoreJson, """{"coverRevealGate":"device"}""")
+        assertEquals(CoverRevealGate.DEVICE, p.app.coverRevealGate)
+        assertEquals(CoverRevealGate.ASK, p.dex.coverRevealGate)
     }
 
     @Test

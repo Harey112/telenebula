@@ -174,10 +174,12 @@ data class AppProfile(
  */
 @Serializable
 data class DexProfile(
-    val sendReadReceipts: Boolean? = null,
-    val sendTypingIndicators: Boolean? = null,
-    /** never DEVICE: a browser cannot answer the phone's lock, so it resolves to ASK */
-    val coverRevealGate: CoverRevealGate? = null,
+    // privacy is the browser's own and never follows the app: what it tells a peer, and what it
+    // takes to open a covered message here, are not decided by a setting changed on the phone
+    val sendReadReceipts: Boolean = true,
+    val sendTypingIndicators: Boolean = true,
+    /** never DEVICE: a browser cannot answer the phone's lock */
+    val coverRevealGate: CoverRevealGate = CoverRevealGate.TAP,
     val themeMode: ThemeMode? = null,
     val colorTheme: String? = null,
     val customAccent: String? = null,

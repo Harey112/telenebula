@@ -290,21 +290,16 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         val blocked = state.contacts.values.filter { it.isBlocked }.sortedBy { it.label.lowercase() }
         content.add(
             section("What your contacts see") {
+                // privacy here is this browser's own; the phone keeps its own answer
                 add(
-                    followSwitchRow(
-                        "Send read receipts",
-                        "They see when you have read their message",
-                        inherited = s.sendReadReceipts,
-                        selected = d.sendReadReceipts,
-                    ) { v -> surface(s) { copy(sendReadReceipts = v) } },
+                    switchRow("Send read receipts", "They see when you have read their message here", d.sendReadReceipts) { v ->
+                        surface(s) { copy(sendReadReceipts = v) }
+                    },
                 )
                 add(
-                    followSwitchRow(
-                        "Send typing indicators",
-                        "They see when you are writing",
-                        inherited = s.sendTypingIndicators,
-                        selected = d.sendTypingIndicators,
-                    ) { v -> surface(s) { copy(sendTypingIndicators = v) } },
+                    switchRow("Send typing indicators", "They see when you are writing here", d.sendTypingIndicators) { v ->
+                        surface(s) { copy(sendTypingIndicators = v) }
+                    },
                 )
             },
             section(
@@ -316,14 +311,10 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
                 },
             ) {
                 add(
-                    followSelectRow(
-                        "Reveal with",
-                        null,
-                        inherited = labelOf(GATES_APP, s.coverRevealGate.name),
-                        // the phone's lock is not offered: a browser can never answer it
-                        options = GATES_DEX,
-                        selected = d.coverRevealGate?.name,
-                    ) { key -> surface(s) { copy(coverRevealGate = key?.let { DexRevealGate.valueOf(it) }) } },
+                    // the phone's lock is not offered: a browser can never answer it
+                    selectRow("Reveal with", null, GATES_DEX, d.coverRevealGate.name) { key ->
+                        surface(s) { copy(coverRevealGate = DexRevealGate.valueOf(key)) }
+                    },
                 )
             },
         )
