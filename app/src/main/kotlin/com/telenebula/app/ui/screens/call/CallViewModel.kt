@@ -13,7 +13,9 @@ import com.telenebula.app.runtime.CallPresence
 import com.telenebula.app.runtime.PresenceState
 import com.telenebula.calls.CallEngine
 import com.telenebula.calls.CallPhase
+import com.telenebula.calls.CallSeat
 import com.telenebula.calls.CallState
+import com.telenebula.calls.RemoteClient
 import com.telenebula.app.ui.shared.uiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +41,11 @@ data class CallUiState(
     val hasFailed: Boolean = false,
     val areControlsShown: Boolean = true,
     val isOverlayPromptOpen: Boolean = false,
+    /** an active phone call, not moving, with at least one Dex browser to move it to */
+    val canMoveToDex: Boolean = false,
+    val isMovingToDex: Boolean = false,
+    val dexClients: List<RemoteClient> = emptyList(),
+    val isDexPickerOpen: Boolean = false,
 ) {
     val isRemoteVideoLive: Boolean get() = remoteVideo != null && (phase == CallPhase.ACTIVE || phase == CallPhase.CONNECTING)
     val showLocalVideo: Boolean get() = !camOff && localVideo != null && phase != null
@@ -59,6 +66,7 @@ interface CallActions {
     fun toggleControls()
     fun toggleMute()
     fun toggleSpeaker()
+    fun moveToDex()
 }
 
 class CallViewModel(
@@ -70,33 +78,40 @@ class CallViewModel(
     private val openOverlaySettings: () -> Unit,
     private val navigator: Navigator,
 ) : ViewModel(), CallActions {
-    private data class Local(val areControlsShown: Boolean = true, val isOverlayPromptOpen: Boolean = false)
+    private data class Local(val areControlsShown: Boolean = true, val isOverlayPromptOpen: Boolean = false, val isDexPickerOpen: Boolean = false)
 
     private val local = MutableStateFlow(Local())
     override val egl: EglBase.Context get() = engine.eglContext
 
-    val uiState: StateFlow<CallUiState> = combine(engine.state, presence.state, local, ::buildState)
-        .uiState(viewModelScope, buildState(engine.state.value, presence.state.value, local.value))
+    val uiState: StateFlow<CallUiState> = combine(engine.state, presence.state, engine.remoteClients, local, ::buildState)
+        .uiState(viewModelScope, buildState(engine.state.value, presence.state.value, engine.remoteClients.value, local.value))
 
     // engine.state/presence.state are already-live StateFlows by the time this ViewModel is built
     // (even on a revisit, after WhileSubscribed tore the combine down) — seeding with this same
     // mapping instead of a blank CallUiState() is what stops a live call from flashing "Call ended"
     // for a frame every time the call screen (re)opens.
-    private fun buildState(state: CallState, p: PresenceState, l: Local): CallUiState = when (state) {
-        is CallState.Live -> CallUiState(
-            phase = state.phase,
-            peerName = state.session.peer.name,
-            isVideoCall = state.session.video,
-            muted = state.session.muted,
-            speaker = state.session.speaker,
-            camOff = state.session.camOff,
-            isFrontCamera = state.session.isFrontCamera,
-            localVideo = state.session.localVideo,
-            remoteVideo = if (state.session.remoteCamOn) state.session.remoteVideo else null,
-            statusLabel = p.statusLabel,
-            areControlsShown = l.areControlsShown,
-            isOverlayPromptOpen = l.isOverlayPromptOpen,
-        )
+    private fun buildState(state: CallState, p: PresenceState, clients: List<RemoteClient>, l: Local): CallUiState = when (state) {
+        is CallState.Live -> {
+            val isMoving = state.session.movingTo != null
+            CallUiState(
+                phase = state.phase,
+                peerName = state.session.peer.name,
+                isVideoCall = state.session.video,
+                muted = state.session.muted,
+                speaker = state.session.speaker,
+                camOff = state.session.camOff,
+                isFrontCamera = state.session.isFrontCamera,
+                localVideo = state.session.localVideo,
+                remoteVideo = if (state.session.remoteCamOn) state.session.remoteVideo else null,
+                statusLabel = if (isMoving) "Moving to Dex…" else p.statusLabel,
+                areControlsShown = l.areControlsShown,
+                isOverlayPromptOpen = l.isOverlayPromptOpen,
+                canMoveToDex = state.phase == CallPhase.ACTIVE && state.session.seat == CallSeat.Phone && !isMoving && clients.isNotEmpty(),
+                isMovingToDex = isMoving,
+                dexClients = clients,
+                isDexPickerOpen = l.isDexPickerOpen && clients.isNotEmpty(),
+            )
+        }
         is CallState.Ended -> CallUiState(
             peerName = state.peer?.name.orEmpty(),
             isVideoCall = state.video,
@@ -170,6 +185,24 @@ class CallViewModel(
         }
         navigator.closeCall()
     }
+
+    /** One browser moves at once; several open the picker. */
+    override fun moveToDex() {
+        val clients = uiState.value.dexClients
+        if (!uiState.value.canMoveToDex) return
+        when (clients.size) {
+            0 -> Unit
+            1 -> engine.moveToRemote(clients.single().id)
+            else -> local.update { it.copy(isDexPickerOpen = true) }
+        }
+    }
+
+    fun moveToDexClient(clientId: String) {
+        local.update { it.copy(isDexPickerOpen = false) }
+        if (uiState.value.canMoveToDex) engine.moveToRemote(clientId)
+    }
+
+    fun closeDexPicker() = local.update { it.copy(isDexPickerOpen = false) }
 
     fun allowOverlay() {
         local.update { it.copy(isOverlayPromptOpen = false) }

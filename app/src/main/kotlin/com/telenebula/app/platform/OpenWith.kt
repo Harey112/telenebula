@@ -1,6 +1,8 @@
 package com.telenebula.app.platform
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -51,6 +53,12 @@ class OpenWith(context: Context) {
                 .putExtra(Settings.EXTRA_APP_PACKAGE, app.packageName)
                 .putExtra(Settings.EXTRA_CHANNEL_ID, channelId),
         )
+    }
+
+    /** Plain text onto the clipboard; Android 13+ shows its own confirmation. */
+    fun copyText(text: String) {
+        val clipboard = app.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+        clipboard.setPrimaryClip(ClipData.newPlainText("TeleNebula", text))
     }
 
     fun openUrl(url: String) {

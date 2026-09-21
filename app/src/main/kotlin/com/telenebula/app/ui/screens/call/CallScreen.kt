@@ -45,6 +45,8 @@ import com.telenebula.app.ui.fragments.CallPalette
 import com.telenebula.app.ui.fragments.OverlayPermissionSheet
 import com.telenebula.app.ui.fragments.RemoteVideoView
 import com.telenebula.app.ui.fragments.RoundControl
+import com.telenebula.app.ui.fragments.SelectMenu
+import com.telenebula.app.ui.fragments.SelectOption
 import com.telenebula.app.ui.fragments.SettleOnBounds
 import com.telenebula.app.ui.fragments.VideoTile
 import com.telenebula.app.ui.fragments.floatingDrag
@@ -64,6 +66,14 @@ fun CallScreen(viewModel: CallViewModel) {
     KeepScreenOn()
     if (state.isRemoteVideoLive) VideoCallStage(state, viewModel) else VoiceCallStage(state, viewModel)
     OverlayPermissionSheet(isVisible = state.isOverlayPromptOpen, onAllow = viewModel::allowOverlay, onDecline = viewModel::declineOverlay)
+    SelectMenu(
+        title = "Move call to",
+        options = state.dexClients.map { SelectOption(it.id, it.label) },
+        selectedKey = "",
+        isVisible = state.isDexPickerOpen,
+        onSelect = viewModel::moveToDexClient,
+        onClose = viewModel::closeDexPicker,
+    )
 }
 
 @Composable
@@ -108,6 +118,15 @@ private fun MinimizeButton(state: CallUiState, actions: CallActions, modifier: M
         modifier = modifier.size(44.dp).clickable(role = Role.Button, onClick = actions::minimize),
         contentAlignment = Alignment.Center,
     ) { Icon(TnIcon.MINIMIZE, tint = CallPalette.inkDim, size = 26.dp, contentDescription = "Minimize call") }
+}
+
+@Composable
+private fun MoveToDexButton(state: CallUiState, actions: CallActions, modifier: Modifier) {
+    if (!state.canMoveToDex && !state.isMovingToDex) return
+    Box(
+        modifier = modifier.size(44.dp).clickable(enabled = state.canMoveToDex, role = Role.Button, onClick = actions::moveToDex),
+        contentAlignment = Alignment.Center,
+    ) { Icon(TnIcon.DESKTOP, tint = if (state.canMoveToDex) CallPalette.inkDim else CallPalette.inkMuted, size = 26.dp, contentDescription = "Move call to Dex") }
 }
 
 /** Draggable local camera tile, snapping to the nearest corner. */
@@ -161,6 +180,7 @@ private fun VideoCallStage(state: CallUiState, actions: CallActions) {
                 Text(state.statusLabel, style = TextStyle(color = CallPalette.inkMuted, fontSize = 13.5.sp))
             }
             MinimizeButton(state, actions, Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = statusBar + 10.dp))
+            MoveToDexButton(state, actions, Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = statusBar + 10.dp))
             Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(CallPalette.scrim).padding(top = 22.dp, bottom = navBar + 24.dp)) {
                 CallControls(state, actions)
             }
@@ -181,6 +201,7 @@ private fun VoiceCallStage(state: CallUiState, actions: CallActions) {
             Box(modifier = Modifier.fillMaxSize().background(CallPalette.dim))
         }
         MinimizeButton(state, actions, Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = statusBar + 10.dp))
+        MoveToDexButton(state, actions, Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = statusBar + 10.dp))
         Column(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(top = statusBar + 64.dp, start = 32.dp, end = 32.dp),

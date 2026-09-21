@@ -35,6 +35,12 @@ class AttachmentStore(context: Context, private val io: CoroutineDispatcher = Di
         return File(attachmentsDir, "${java.util.UUID.randomUUID()}-${sanitize(VOICE_FILE_NAME)}")
     }
 
+    /** Where a browser's upload streams straight into the attachments layout, so the send needs no copy. */
+    fun uploadFile(name: String): File {
+        attachmentsDir.mkdirs()
+        return File(attachmentsDir, "${java.util.UUID.randomUUID()}-${sanitize(name)}")
+    }
+
     suspend fun remove(file: File): Boolean = withContext(io) { file.delete() }
 
     suspend fun readText(uri: Uri): String = withContext(io) {

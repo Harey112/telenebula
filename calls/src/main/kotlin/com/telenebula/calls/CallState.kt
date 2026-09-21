@@ -31,7 +31,12 @@ data class CallSession(
     val remoteCamOn: Boolean = video,
     val localVideo: VideoTrack? = null,
     val remoteVideo: VideoTrack? = null,
-)
+    val seat: CallSeat = CallSeat.Phone,
+    /** a move of the media is in flight towards this seat */
+    val movingTo: CallSeat? = null,
+) {
+    val isRemoteSeat: Boolean get() = seat is CallSeat.Remote
+}
 
 sealed interface CallState {
     data object Idle : CallState

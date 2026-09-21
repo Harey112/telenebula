@@ -110,6 +110,24 @@ data class UpdatePrefs(
     val notifiedVersion: String? = null,
 )
 
+/** The web frontend served by the phone; the password is stored as a salted PBKDF2 hash, never in clear. */
+@Serializable
+data class DexPrefs(
+    val isEnabled: Boolean = false,
+    val username: String = "",
+    val passwordAlgorithm: String = "",
+    val passwordIterations: Int = 0,
+    val passwordSalt: String = "",
+    val passwordHash: String = "",
+    /** browsers logged in at once */
+    val maxClients: Int = 2,
+    val port: Int = 8420,
+    val turnPort: Int = 8421,
+) {
+    val hasPassword: Boolean get() = passwordHash.isNotEmpty() && passwordSalt.isNotEmpty() && passwordIterations > 0
+    val hasCredentials: Boolean get() = username.isNotBlank() && hasPassword
+}
+
 /** Defaults equal the previous builds' DEFAULT_PREFS; decoding a partial file merges over them. */
 @Serializable
 data class Prefs(
@@ -141,6 +159,7 @@ data class Prefs(
     val recentReactions: List<String> = emptyList(),
     /** the six reactions offered first */
     val quickReactions: List<String> = DEFAULT_QUICK_REACTIONS,
+    val dex: DexPrefs = DexPrefs(),
 ) {
     companion object {
         val DEFAULT_QUICK_REACTIONS: List<String> = listOf("👍", "❤️", "😂", "😮", "😢", "🔥")
