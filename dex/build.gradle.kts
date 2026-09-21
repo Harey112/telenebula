@@ -9,6 +9,8 @@ android {
     compileSdkMinor = 2
     defaultConfig {
         minSdk = 26
+        // src/androidTest (./gradlew :dex:connectedDebugAndroidTest): the Keystore-backed TLS
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -23,4 +25,8 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
 }

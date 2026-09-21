@@ -80,6 +80,10 @@ Rules:
   Dex server talks to the phone through `DexBackend` and to the call engine through `RemoteSeatPort`,
   both adapted in `app/…/runtime/Dex*.kt`. `:dex` depends on coroutines, serialization and the
   framework only, like `:core`; every bound it enforces lives in `dex/…/Limits.kt` with its reason.
+  Its TLS is the one part no unit test can reach, since the key lives in the Android Keystore and
+  the restrictions put on it are only refused when a handshake is attempted: `:dex` therefore has
+  `src/androidTest` (`./gradlew :dex:connectedDebugAndroidTest`, adding androidx.test as `:core`
+  does), and a change to `DexTls` has to run there.
 - `:web` is Kotlin/JS with no npm dependencies: `web.js` plus `index.html`, `app.css` and `favicon.svg`
   are copied into `assets/dex/` by `:app`'s `bundleDexWeb` task at build time and are never committed.
   The browser is a frontend only; everything it shows or does happens on the phone through the wire.

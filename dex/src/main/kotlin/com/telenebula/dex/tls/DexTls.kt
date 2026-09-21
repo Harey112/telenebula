@@ -7,6 +7,8 @@ import com.telenebula.dex.DexFailure
 import java.math.BigInteger
 import java.security.KeyPairGenerator
 import java.security.KeyStore
+import java.security.PrivateKey
+import java.security.Signature
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
@@ -54,13 +56,22 @@ class DexTls(private val alias: String = DEFAULT_ALIAS) {
 
     private fun ensureKey(keyStore: KeyStore) {
         synchronized(lock) {
-            if (keyStore.containsAlias(alias) && keyStore.getCertificate(alias) is X509Certificate) return
+            if (keyStore.containsAlias(alias) && keyStore.getCertificate(alias) is X509Certificate && isUsableForTls(keyStore)) return
+            if (keyStore.containsAlias(alias)) {
+                try {
+                    keyStore.deleteEntry(alias)
+                } catch (e: Exception) {
+                    throw DexException(DexFailure.CERTIFICATE, "Dex certificate could not be replaced: ${e.message}", e)
+                }
+            }
             try {
                 val notBefore = Calendar.getInstance()
                 val notAfter = Calendar.getInstance().apply { add(Calendar.YEAR, VALIDITY_YEARS) }
                 val spec = KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_SIGN)
                     .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
-                    .setDigests(KeyProperties.DIGEST_SHA256)
+                    // TLS hashes the handshake itself and hands the key a finished digest to sign,
+                    // so a key that allows only SHA-256 is refused with INCOMPATIBLE_DIGEST
+                    .setDigests(KeyProperties.DIGEST_NONE, KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA384, KeyProperties.DIGEST_SHA512)
                     .setCertificateSubject(X500Principal("CN=TeleNebula Dex"))
                     .setCertificateSerialNumber(BigInteger(64, SecureRandom()).setBit(63))
                     .setCertificateNotBefore(notBefore.time)
@@ -71,6 +82,23 @@ class DexTls(private val alias: String = DEFAULT_ALIAS) {
                 throw DexException(DexFailure.CERTIFICATE, "Dex certificate could not be created: ${e.message}", e)
             }
         }
+    }
+
+    /** A key an older build restricted to one digest cannot sign a handshake; it is replaced rather than served. */
+    private fun isUsableForTls(keyStore: KeyStore): Boolean = try {
+        val key = keyStore.getKey(alias, null) as? PrivateKey
+        if (key == null) {
+            false
+        } else {
+            Signature.getInstance("NONEwithECDSA").apply {
+                initSign(key)
+                update(ByteArray(EC_DIGEST_BYTES))
+                sign()
+            }
+            true
+        }
+    } catch (e: Exception) {
+        false
     }
 
     private fun keyStore(): KeyStore = try {
@@ -86,5 +114,7 @@ class DexTls(private val alias: String = DEFAULT_ALIAS) {
         const val DEFAULT_ALIAS = "tn.dex.tls"
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val VALIDITY_YEARS = 10
+        /** what a P-256 handshake signature is taken over */
+        private const val EC_DIGEST_BYTES = 32
     }
 }
