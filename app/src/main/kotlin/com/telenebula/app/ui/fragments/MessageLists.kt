@@ -261,47 +261,39 @@ fun MessageActionsMenu(
     onDeleteForEveryone: () -> Unit,
 ) {
     val colors = TnTheme.colors
-    CenteredOverlay(isVisible = state != null, onDismiss = onClose) {
-        if (state == null) return@CenteredOverlay
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
-                .background(colors.surface)
-                .padding(vertical = 6.dp),
-        ) {
-            if (state.canReact) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    for (emoji in quickReactions) {
-                        val isCurrent = emoji == state.myReaction
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(if (isCurrent) colors.accentSoft else colors.surfaceRaised)
-                                .clickable(role = Role.Button) { onReact(emoji) }
-                                .semantics { contentDescription = if (isCurrent) "Remove reaction $emoji" else "React $emoji" },
-                            contentAlignment = Alignment.Center,
-                        ) { Text(emoji, style = TextStyle(fontSize = 22.sp)) }
-                    }
+    TnMenu(isVisible = state != null, onDismiss = onClose) {
+        if (state == null) return@TnMenu
+        if (state.canReact) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                for (emoji in quickReactions) {
+                    val isCurrent = emoji == state.myReaction
                     Box(
-                        modifier = Modifier.size(40.dp).clip(CircleShape).background(colors.surfaceRaised).clickable(role = Role.Button, onClick = onMoreReactions).semantics { contentDescription = "More reactions" },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(if (isCurrent) colors.accentSoft else colors.surfaceRaised)
+                            .clickable(role = Role.Button) { onReact(emoji) }
+                            .semantics { contentDescription = if (isCurrent) "Remove reaction $emoji" else "React $emoji" },
                         contentAlignment = Alignment.Center,
-                    ) { Icon(TnIcon.PLUS, tint = colors.text, size = 19.dp) }
+                    ) { Text(emoji, style = TextStyle(fontSize = 22.sp)) }
                 }
+                Box(
+                    modifier = Modifier.size(40.dp).clip(CircleShape).background(colors.surfaceRaised).clickable(role = Role.Button, onClick = onMoreReactions).semantics { contentDescription = "More reactions" },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(TnIcon.PLUS, tint = colors.text, size = 19.dp) }
             }
-            if (state.canReply) MenuRow(TnIcon.REPLY, "Reply", onClick = onReply)
-            if (state.canEdit) MenuRow(TnIcon.PENCIL, "Edit", onClick = onEdit)
-            if (state.canCopy) MenuRow(TnIcon.COPY, "Copy", onClick = onCopy)
-            if (state.canForward) MenuRow(TnIcon.FORWARD, "Forward", onClick = onForward)
-            MenuRow(TnIcon.LIST, "Actions", onClick = onShowActions)
-            MenuRow(TnIcon.TRASH, "Delete for me", isDanger = true, onClick = onDeleteForMe)
-            if (state.canDeleteEveryone) MenuRow(TnIcon.TRASH, "Delete for everyone", isDanger = true, onClick = onDeleteForEveryone)
         }
+        if (state.canReply) MenuRow(TnIcon.REPLY, "Reply", onClick = onReply)
+        if (state.canEdit) MenuRow(TnIcon.PENCIL, "Edit", onClick = onEdit)
+        if (state.canCopy) MenuRow(TnIcon.COPY, "Copy", onClick = onCopy)
+        if (state.canForward) MenuRow(TnIcon.FORWARD, "Forward", onClick = onForward)
+        MenuRow(TnIcon.LIST, "Actions", onClick = onShowActions)
+        MenuRow(TnIcon.TRASH, "Delete for me", isDanger = true, onClick = onDeleteForMe)
+        if (state.canDeleteEveryone) MenuRow(TnIcon.TRASH, "Delete for everyone", isDanger = true, onClick = onDeleteForEveryone)
     }
 }
 

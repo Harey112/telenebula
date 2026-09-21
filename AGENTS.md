@@ -312,10 +312,15 @@ frame, apply locally, revert), one object per variant holds all N behaviours.
 the facade and shared, so reentrancy across aggregates holds; batched writes wrapped in one
 transaction; callers keep the facade's signatures.
 
-**Requests as data, rendered at the root** (`SheetRequest`/`SheetHost`, `MediaViewerCenter`/
-`MediaViewerHost`, `Notices`/`NoticeHost`). A store holds a plain value saying what to show; a root
-component `when`s over it and reads its own data from the graph. Composable lambdas and flow
-collection never live in a store or view model.
+**Requests as data, rendered at the root** (`MediaViewerCenter`/`MediaViewerHost`,
+`Notices`/`NoticeHost`). A store holds a plain value saying what to show; a root component `when`s
+over it and reads its own data from the graph. Flow collection never lives in a store or view model.
+
+**Sheets carry their content** (`SheetRequest`/`SheetHost`). A request is a title and a composable;
+the host draws it. The composable is one of the root components in `SheetHost.kt`, which reads its
+own data from the graph, so the lambda a view model builds captures plain values only — an id, a
+slot — and never the view model itself. A sheet that captured its screen's state would keep
+rendering it after the screen is gone and stop updating when the chat behind it re-queries.
 
 **Sealed modes for mutually exclusive UI state** (`ComposerMode`, `ChatOverlay`). Eight booleans
 and nullables that exclude each other become one sealed value in both the view model's local
