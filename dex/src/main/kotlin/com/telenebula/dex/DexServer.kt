@@ -41,6 +41,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -174,13 +175,7 @@ class DexServer(
     private suspend fun CoroutineScope.serve(run: Run) {
         publish(run, DexServerState.Starting)
         val server = try {
-            withContext(io) {
-                socketFactory().createServerSocket().apply {
-                    reuseAddress = true
-                    if (this is SSLServerSocket) enabledProtocols = supportedProtocols.filter { it == "TLSv1.3" || it == "TLSv1.2" }.toTypedArray()
-                    bind(InetSocketAddress(run.config.port), BACKLOG)
-                }
-            }
+            withContext(io) { listenOn(run.config.port) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -211,6 +206,24 @@ class DexServer(
             closeQuietly(server)
             run.closeAll()
             publish(run, DexServerState.Off, isFinished = true)
+        }
+    }
+
+    /** A restart races the previous socket's wind-down, so a refused port is retried before it is reported. */
+    private suspend fun listenOn(port: Int): ServerSocket {
+        var attempt = 1
+        while (true) {
+            try {
+                return socketFactory().createServerSocket().apply {
+                    reuseAddress = true
+                    if (this is SSLServerSocket) enabledProtocols = supportedProtocols.filter { it == "TLSv1.3" || it == "TLSv1.2" }.toTypedArray()
+                    bind(InetSocketAddress(port), BACKLOG)
+                }
+            } catch (e: IOException) {
+                if (attempt >= BIND_ATTEMPTS) throw e
+                attempt += 1
+                delay(BIND_RETRY_MS)
+            }
         }
     }
 
@@ -512,6 +525,8 @@ class DexServer(
         const val COOKIE = "dex"
         const val INDEX = "index.html"
         const val BACKLOG = 16
+        const val BIND_ATTEMPTS = 5
+        const val BIND_RETRY_MS = 200L
         const val INPUT_BUFFER = 8 * 1024
         const val OUTPUT_BUFFER = 16 * 1024
         const val MAX_USER_AGENT_CHARS = 200

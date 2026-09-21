@@ -15,6 +15,7 @@ import com.telenebula.dex.wire.DexQueue
 import com.telenebula.dex.wire.ServerFrame
 import java.io.ByteArrayInputStream
 import java.io.EOFException
+import java.io.IOException
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -295,9 +296,26 @@ class DexServerTest {
     @Test
     fun `a stopped server lets go of its port and a second start binds again`() {
         server.stop()
-        server.start(DexConfig(port, "harey", Passwords.hash("secret", iterations = 1_000), maxClients = 2))
+        // the socket is closed as stop returns, but the kernel's wind-down is its own business
+        var isReleased = false
+        for (attempt in 1..20) {
+            isReleased = try {
+                connect().close()
+                false
+            } catch (e: IOException) {
+                true
+            }
+            if (isReleased) break
+            Thread.sleep(100)
+        }
+        assertTrue("the old port still accepts two seconds after stop", isReleased)
+
+        // port 0 again: re-binding the exact ephemeral port the OS just handed back is the
+        // machine's decision, not the server's, and asserting it makes this test the machine's
+        server.start(DexConfig(0, "harey", Passwords.hash("secret", iterations = 1_000), maxClients = 2))
         val running = runBlocking { withTimeout(5_000) { server.state.first { it is DexServerState.Running } } } as DexServerState.Running
-        assertEquals(port, running.port)
+        assertTrue(running.port > 0)
+        port = running.port
         connect().use { socket -> assertEquals(200, request(socket, "GET / HTTP/1.1\r\nHost: x\r\n\r\n").status) }
     }
 
