@@ -64,6 +64,12 @@ class ArchitectureTest {
         "/app/src/main/kotlin/com/telenebula/app/ui/screens/diagnostics/",
         // hands the one Json instance to the platform stores; it never encodes anything itself
         "/app/src/main/kotlin/com/telenebula/app/AppGraph.kt",
+        // the Dex socket is a real boundary: its frames and the login body are JSON on the way out
+        "/dex/src/main/kotlin/com/telenebula/dex/wire/",
+        "/dex/src/main/kotlin/com/telenebula/dex/DexServer.kt",
+        "/dex/src/main/kotlin/com/telenebula/dex/http/ClientSession.kt",
+        // the browser is the far side of that same wire
+        "/web/",
     )
 
     @Test

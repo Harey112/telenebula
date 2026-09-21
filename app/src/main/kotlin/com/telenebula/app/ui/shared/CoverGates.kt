@@ -14,6 +14,12 @@ object CoverGates {
 
     fun keyOf(gate: CoverRevealGate?): String = gate?.key ?: DEFAULT_KEY
 
+    /** A phone with no screen lock can never answer the system prompt, so asking is the nearest thing. */
+    fun effective(gate: CoverRevealGate?, fallback: CoverRevealGate, canUseDeviceAuth: Boolean): CoverRevealGate {
+        val chosen = gate ?: fallback
+        return if (chosen == CoverRevealGate.DEVICE && !canUseDeviceAuth) CoverRevealGate.ASK else chosen
+    }
+
     private fun labelOf(gate: CoverRevealGate): String = when (gate) {
         CoverRevealGate.TAP -> "Just tap"
         CoverRevealGate.ASK -> "Ask first"

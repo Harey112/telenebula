@@ -1,0 +1,190 @@
+package com.telenebula.web.net
+
+import com.telenebula.web.wire.DexIdentity
+import com.telenebula.web.wire.DexJson
+import kotlinx.browser.window
+import kotlinx.coroutines.await
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import org.w3c.dom.url.URL
+import org.w3c.fetch.RequestInit
+import org.w3c.fetch.Response
+import org.w3c.files.Blob
+import org.w3c.xhr.XMLHttpRequest
+import kotlin.coroutines.resume
+import kotlin.js.json
+
+sealed interface LoginResult {
+    data object Ok : LoginResult
+    data object Wrong : LoginResult
+    data object Locked : LoginResult
+    data object ClientLimit : LoginResult
+    data class Failed(val message: String) : LoginResult
+}
+
+sealed interface SessionResult {
+    data class Active(val me: DexIdentity) : SessionResult
+    data object None : SessionResult
+    data class Failed(val message: String) : SessionResult
+}
+
+class UploadRequest(
+    val peer: String,
+    val name: String,
+    val mime: String,
+    val body: Blob,
+    val replyTo: String?,
+    val isCovered: Boolean,
+    val isVoice: Boolean,
+    val durationMs: Long?,
+    val width: Int?,
+    val height: Int?,
+)
+
+/** A running upload; [abort] stops it and the awaiting caller sees [UploadOutcome.Cancelled]. */
+class UploadHandle internal constructor(private val xhr: XMLHttpRequest) {
+    fun abort() = xhr.abort()
+}
+
+sealed interface UploadOutcome {
+    data object Done : UploadOutcome
+    data object Cancelled : UploadOutcome
+    data class Failed(val message: String) : UploadOutcome
+}
+
+/** One group of the phone's own emoji catalogue, served at `/emoji_catalog.json`. */
+@Serializable
+data class EmojiGroup(val title: String, val emojis: List<String>)
+
+@Serializable
+private data class LoginBody(val username: String, val password: String)
+
+@Serializable
+private data class ErrorBody(val error: String? = null)
+
+/** The phone's HTTP API; every failure is a value, nothing escapes as an exception. */
+object Api {
+    suspend fun session(): SessionResult = try {
+        val response = window.fetch("/api/session", requestInit("GET")).await()
+        when (response.status.toInt()) {
+            200 -> SessionResult.Active(DexJson.decodeFromString(DexIdentity.serializer(), response.text().await()))
+            401 -> SessionResult.None
+            else -> SessionResult.Failed("The phone answered ${response.status}")
+        }
+    } catch (e: Throwable) {
+        SessionResult.Failed(e.message ?: "The phone did not answer")
+    }
+
+    suspend fun login(username: String, password: String): LoginResult = try {
+        val body = DexJson.encodeToString(LoginBody.serializer(), LoginBody(username, password))
+        val response = window.fetch("/api/login", requestInit("POST", body, "application/json")).await()
+        when (response.status.toInt()) {
+            204, 200 -> LoginResult.Ok
+            401 -> LoginResult.Wrong
+            429 -> LoginResult.Locked
+            503 -> LoginResult.ClientLimit
+            else -> LoginResult.Failed(errorOf(response) ?: "The phone answered ${response.status}")
+        }
+    } catch (e: Throwable) {
+        LoginResult.Failed(e.message ?: "The phone did not answer")
+    }
+
+    suspend fun logout(): Boolean = try {
+        window.fetch("/api/logout", requestInit("POST")).await().ok
+    } catch (e: Throwable) {
+        false
+    }
+
+    private suspend fun errorOf(response: Response): String? = try {
+        DexJson.decodeFromString(ErrorBody.serializer(), response.text().await()).error
+    } catch (e: Throwable) {
+        null
+    }
+
+    /** The phone's own catalogue, so the browser offers exactly what the phone does; empty when it cannot be read. */
+    suspend fun emojiCatalog(): List<EmojiGroup> = try {
+        val response = window.fetch("/emoji_catalog.json", requestInit("GET")).await()
+        if (response.status.toInt() != 200) {
+            emptyList()
+        } else {
+            DexJson.decodeFromString(ListSerializer(EmojiGroup.serializer()), response.text().await())
+        }
+    } catch (e: Throwable) {
+        emptyList()
+    }
+
+    fun attachmentUrl(messageId: String): String = "/a/${encodeURIComponent(messageId)}"
+
+    fun uploadUrl(request: UploadRequest): String {
+        val url = URL("/a", window.location.origin)
+        url.searchParams.set("peer", request.peer)
+        url.searchParams.set("name", request.name)
+        url.searchParams.set("mime", request.mime)
+        request.replyTo?.let { url.searchParams.set("reply", it) }
+        if (request.isCovered) url.searchParams.set("cover", "1")
+        if (request.isVoice) url.searchParams.set("voice", "1")
+        request.durationMs?.let { url.searchParams.set("durationMs", it.toString()) }
+        request.width?.let { url.searchParams.set("width", it.toString()) }
+        request.height?.let { url.searchParams.set("height", it.toString()) }
+        return url.pathname + url.search
+    }
+
+    /** Streams the blob; [onProgress] gets 0..100. */
+    suspend fun upload(request: UploadRequest, onStart: (UploadHandle) -> Unit, onProgress: (Int) -> Unit): UploadOutcome =
+        suspendCancellableCoroutine { cont ->
+            val xhr = XMLHttpRequest()
+            var isSettled = false
+            fun settle(outcome: UploadOutcome) {
+                if (isSettled) return
+                isSettled = true
+                cont.resume(outcome)
+            }
+            xhr.upload.onprogress = { e ->
+                val total = e.total.toDouble()
+                if (e.lengthComputable && total > 0.0) onProgress(((e.loaded.toDouble() / total) * 100).toInt().coerceIn(0, 100))
+            }
+            xhr.onload = {
+                if (xhr.status.toInt() == 201 || xhr.status.toInt() == 200) settle(UploadOutcome.Done)
+                else settle(UploadOutcome.Failed(uploadError(xhr)))
+            }
+            xhr.onerror = { settle(UploadOutcome.Failed("Upload failed")) }
+            xhr.onabort = { settle(UploadOutcome.Cancelled) }
+            xhr.ontimeout = { settle(UploadOutcome.Failed("Upload timed out")) }
+            cont.invokeOnCancellation { xhr.abort() }
+            try {
+                xhr.open("POST", uploadUrl(request))
+                xhr.setRequestHeader("Content-Type", request.mime.ifBlank { "application/octet-stream" })
+                onStart(UploadHandle(xhr))
+                xhr.send(request.body)
+            } catch (e: Throwable) {
+                settle(UploadOutcome.Failed(e.message ?: "Upload failed"))
+            }
+        }
+
+    private fun uploadError(xhr: XMLHttpRequest): String = when (xhr.status.toInt()) {
+        401 -> "Not logged in"
+        413 -> "That file is too large for Dex"
+        else -> try {
+            DexJson.decodeFromString(ErrorBody.serializer(), xhr.responseText).error ?: "The phone answered ${xhr.status}"
+        } catch (e: Throwable) {
+            "The phone answered ${xhr.status}"
+        }
+    }
+}
+
+external fun encodeURIComponent(value: String): String
+
+/**
+ * The stdlib's RequestInit factory puts every option it was not given on the object too, and the
+ * browser refuses a `cache: null`; this carries only what is set.
+ */
+private fun requestInit(method: String, body: String? = null, contentType: String? = null): RequestInit {
+    val init = js("({})")
+    init.method = method
+    init.credentials = "same-origin"
+    init.cache = "no-store"
+    if (body != null) init.body = body
+    if (contentType != null) init.headers = json("Content-Type" to contentType)
+    return init.unsafeCast<RequestInit>()
+}

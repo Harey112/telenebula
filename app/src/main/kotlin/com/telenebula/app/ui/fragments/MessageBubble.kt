@@ -430,7 +430,7 @@ fun MessageBubble(
                     )
                 } else {
                     val source = remember(msg.attachment) { msg.attachment?.mediaSource() }
-                    val voiceAttachment = msg.attachment?.takeIf { it.mime.startsWith("audio/") }
+                    val voiceAttachment = msg.attachment?.takeIf { it.isVoice }
                     // an unopenable row must not take the tap, or the bubble never opens its details
                     val canOpen = source != null
                     val openModifier = if (canOpen) {

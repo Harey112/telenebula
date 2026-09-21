@@ -11,6 +11,7 @@ import com.telenebula.calls.media.wire
 import com.telenebula.calls.system.AndroidCallSystem
 import com.telenebula.calls.system.CallActionBus
 import java.util.UUID
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CompletableJob
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -46,6 +47,11 @@ import org.webrtc.VideoTrack
  * not need does not exist in it. Every transition happens on [scope]: libwebrtc and core callbacks
  * hop through it first. The call sequence, timings and user-facing strings are those of the
  * original `callEngine.ts`.
+ *
+ * The media has a seat: this phone, or one Dex browser. A browser's peer connection is driven
+ * through [RemoteSeatPort]; the phone relays its SDP and (rewritten) candidates to the peer as
+ * if they were its own. Only the seat may move the call, and a move is an ICE restart offered
+ * from the new seat's connection.
  */
 class CallEngine internal constructor(
     private val core: CoreSignaling,
@@ -53,6 +59,7 @@ class CallEngine internal constructor(
     private val audio: CallAudioPort,
     private val media: CallMediaFactory,
     private val system: CallSystem,
+    private val remote: RemoteSeatPort,
     private val scope: CoroutineScope,
     private val diag: CallDiagnostics,
     /** libwebrtc opens and disposes media on blocking calls; they run here, never on the main thread */
@@ -65,8 +72,9 @@ class CallEngine internal constructor(
         prefs: () -> CallPrefs,
         audio: CallAudio,
         runtime: WebRtcRuntime,
+        remote: RemoteSeatPort,
         scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
-    ) : this(core, prefs, audio, WebRtcMediaFactory(context, runtime), AndroidCallSystem(context), scope, CallDiagnostics({ prefs().isVerboseLogging }))
+    ) : this(core, prefs, audio, WebRtcMediaFactory(context, runtime), AndroidCallSystem(context), remote, scope, CallDiagnostics({ prefs().isVerboseLogging }))
 
     private val mutableState = MutableStateFlow<CallState>(CallState.Idle)
     val state: StateFlow<CallState> = mutableState.asStateFlow()
@@ -81,6 +89,9 @@ class CallEngine internal constructor(
 
     /** the last call's connection trail, for the Diagnostics screen */
     val diagnostics: StateFlow<List<String>> = diag.trail
+
+    /** the Dex browsers a call could be moved to */
+    val remoteClients: StateFlow<List<RemoteClient>> get() = remote.clients
 
     val eglContext: EglBase.Context get() = media.eglContext
 
@@ -99,13 +110,39 @@ class CallEngine internal constructor(
         var noAnswer: Job? = null
         var watchdog: Job? = null
         var hasRestartedIce = false
+        /** the offer a Dex browser produces for a call it placed */
+        val remoteOffer = CompletableDeferred<PendingOffer>()
     }
 
     private class PendingOffer(val sdp: String, val sdpType: String?, val video: Boolean)
 
-    /** The media of a call once a peer connection exists; the ICE sender is the one consumer of [iceOut]. */
-    private class Media(val tracks: LocalTracks, val link: PeerLink, val iceOut: Channel<OutboundCallSignal>) {
-        var iceSender: Job? = null
+    /** Own candidates for one connection leave in order through one sender, started once the peer is known to be there. */
+    private class IceQueue {
+        val out = Channel<OutboundCallSignal>(capacity = MAX_BUFFERED_CANDIDATES)
+        var sender: Job? = null
+    }
+
+    /** The phone's media once a peer connection exists. */
+    private class Media(val tracks: LocalTracks, val link: PeerLink, val ice: IceQueue) {
+        var collector: Job? = null
+    }
+
+    private sealed interface Seat {
+        val ice: IceQueue
+
+        class Phone(val media: Media) : Seat {
+            override val ice: IceQueue get() = media.ice
+        }
+
+        class Remote(val clientId: String, override val ice: IceQueue = IceQueue()) : Seat
+    }
+
+    /** A move of the media towards another seat; [deadline] ends it if the new seat never comes up. */
+    private sealed interface Move {
+        val deadline: Job
+
+        class ToRemote(val clientId: String, val ice: IceQueue, override val deadline: Job) : Move
+        class ToPhone(val media: Media, override val deadline: Job) : Move
     }
 
     private sealed interface Machine {
@@ -116,36 +153,48 @@ class CallEngine internal constructor(
 
         sealed class Live(val attempt: Attempt, val session: CallSession) : Machine {
             abstract val phase: CallPhase
-            open val media: Media? get() = null
+            abstract val seat: Seat?
             open val connectedAt: Long get() = 0
+            open val move: Move? get() = null
+            val media: Media? get() = (seat as? Seat.Phone)?.media
             abstract fun withSession(session: CallSession): Live
         }
 
         class Incoming(attempt: Attempt, session: CallSession, val offer: PendingOffer, val heldRemote: List<IceCandidatePayload>) : Live(attempt, session) {
             override val phase get() = CallPhase.INCOMING
+            override val seat: Seat? get() = null
             override fun withSession(session: CallSession) = Incoming(attempt, session, offer, heldRemote)
         }
 
-        /** Outgoing, before the peer acknowledged the offer; [media] is null until the local tracks are open. */
-        class Dialing(attempt: Attempt, session: CallSession, override val media: Media?) : Live(attempt, session) {
+        /** Outgoing, before the peer acknowledged the offer; a phone seat is null until the local tracks are open. */
+        class Dialing(attempt: Attempt, session: CallSession, override val seat: Seat?) : Live(attempt, session) {
             override val phase get() = CallPhase.CONTACTING
-            override fun withSession(session: CallSession) = Dialing(attempt, session, media)
+            override fun withSession(session: CallSession) = Dialing(attempt, session, seat)
         }
 
-        class Ringing(attempt: Attempt, session: CallSession, override val media: Media) : Live(attempt, session) {
+        class Ringing(attempt: Attempt, session: CallSession, override val seat: Seat) : Live(attempt, session) {
             override val phase get() = CallPhase.RINGING
-            override fun withSession(session: CallSession) = Ringing(attempt, session, media)
+            override fun withSession(session: CallSession) = Ringing(attempt, session, seat)
         }
 
-        class Connecting(attempt: Attempt, session: CallSession, override val media: Media) : Live(attempt, session) {
+        class Connecting(attempt: Attempt, session: CallSession, override val seat: Seat) : Live(attempt, session) {
             override val phase get() = CallPhase.CONNECTING
-            override fun withSession(session: CallSession) = Connecting(attempt, session, media)
+            override fun withSession(session: CallSession) = Connecting(attempt, session, seat)
         }
 
-        class Active(attempt: Attempt, session: CallSession, override val media: Media, override val connectedAt: Long, val isLinkUp: Boolean) : Live(attempt, session) {
+        class Active(
+            attempt: Attempt,
+            session: CallSession,
+            override val seat: Seat,
+            override val connectedAt: Long,
+            val isLinkUp: Boolean,
+            override val move: Move? = null,
+        ) : Live(attempt, session) {
             override val phase get() = CallPhase.ACTIVE
-            override fun withSession(session: CallSession) = Active(attempt, session, media, connectedAt, isLinkUp)
-            fun withLink(isUp: Boolean) = Active(attempt, session, media, connectedAt, isUp)
+            override fun withSession(session: CallSession) = Active(attempt, session, seat, connectedAt, isLinkUp, move)
+            fun withLink(isUp: Boolean) = Active(attempt, session, seat, connectedAt, isUp, move)
+            fun withMove(move: Move?) = Active(attempt, session, seat, connectedAt, isLinkUp, move)
+            fun withSeat(seat: Seat, session: CallSession) = Active(attempt, session, seat, connectedAt, isLinkUp = true, move = null)
         }
     }
 
@@ -161,12 +210,29 @@ class CallEngine internal constructor(
         mutableState.value = when (next) {
             Machine.Idle -> CallState.Idle
             is Machine.Ending -> next.ended
-            is Machine.Live -> CallState.Live(next.phase, next.session, next.connectedAt)
+            is Machine.Live -> CallState.Live(next.phase, next.session.copy(seat = publicSeat(next.seat), movingTo = publicMoveTarget(next.move)), next.connectedAt)
         }
+    }
+
+    private fun publicSeat(seat: Seat?): CallSeat = when (seat) {
+        is Seat.Remote -> CallSeat.Remote(seat.clientId)
+        is Seat.Phone, null -> CallSeat.Phone
+    }
+
+    private fun publicMoveTarget(move: Move?): CallSeat? = when (move) {
+        is Move.ToRemote -> CallSeat.Remote(move.clientId)
+        is Move.ToPhone -> CallSeat.Phone
+        null -> null
     }
 
     private fun newAttempt(callId: String, peer: CallPeer, isIncoming: Boolean, video: Boolean) =
         Attempt(callId, peer, isIncoming, video, now(), SupervisorJob(scope.coroutineContext[Job]))
+
+    private fun isKnownClient(clientId: String): Boolean = remote.clients.value.any { it.id == clientId }
+
+    private fun isSeatOf(current: Machine.Live, clientId: String): Boolean = (current.seat as? Seat.Remote)?.clientId == clientId
+
+    private fun moveTargetOf(current: Machine.Live): Move.ToRemote? = current.move as? Move.ToRemote
 
     init {
         scope.launch { CallActionBus.actions.collect { onCallAction(it) } }
@@ -190,7 +256,7 @@ class CallEngine internal constructor(
         media.setVerbose(prefs().isVerboseLogging)
         diag.begin("outgoing", attempt.callId, peerIp)
         val speaker = video && prefs().videoSpeakerDefault
-        transition(Machine.Dialing(attempt, CallSession(callId = attempt.callId, peer = attempt.peer, video = video, speaker = speaker), media = null))
+        transition(Machine.Dialing(attempt, CallSession(callId = attempt.callId, peer = attempt.peer, video = video, speaker = speaker), seat = null))
         system.startSession(attempt.peer.name, video, 0)
         scope.launch(attempt.jobs) { runOutgoing(attempt, speaker) }
         return true
@@ -207,27 +273,24 @@ class CallEngine internal constructor(
         sendQuietly(incoming.attempt.peer.ip, OutboundCallSignal(CallSignalType.REJECT, incoming.attempt.callId, reason = "declined"), SHORT_TIMEOUT_MS)
     }
 
-    /** Ends the call immediately; the call-end signal is delivered in the background. Idempotent. */
+    /** Ends a call this phone holds; the call-end signal is delivered in the background. Idempotent; a Dex-seated call is left to Dex. */
     fun hangup() {
         val current = live ?: return
-        val outcome = when {
-            current is Machine.Active -> null
-            current.attempt.isIncoming -> CallOutcome.DECLINED
-            else -> CallOutcome.CANCELLED
-        }
-        end(null, outcome, playBusyTone = false)
-        sendQuietly(current.attempt.peer.ip, OutboundCallSignal(CallSignalType.END, current.attempt.callId), SHORT_TIMEOUT_MS)
+        if (current.seat is Seat.Remote) return
+        hangupNow(current)
     }
 
     fun toggleMute() {
         val current = live ?: return
+        val media = current.media ?: return
         val muted = !current.session.muted
-        current.media?.tracks?.setMicrophoneEnabled(!muted)
+        media.tracks.setMicrophoneEnabled(!muted)
         updateSession { it.copy(muted = muted) }
     }
 
     fun toggleSpeaker() {
         val current = live ?: return
+        if (current.seat is Seat.Remote) return
         val next = !current.session.speaker
         audio.setSpeaker(next)
         updateSession { it.copy(speaker = next) }
@@ -243,6 +306,11 @@ class CallEngine internal constructor(
         scope.launch { toggleCameraNow() }
     }
 
+    /** Hands an active phone call's media to one Dex browser; anything else is a no-op. */
+    fun moveToRemote(clientId: String) {
+        scope.launch { moveToRemoteNow(clientId) }
+    }
+
     /** Leaves the ended screen. */
     fun acknowledgeEnded() {
         if (machine is Machine.Ending) transition(Machine.Idle)
@@ -251,6 +319,11 @@ class CallEngine internal constructor(
     /** Inbound signal from the core, applied on the engine's own scope. */
     fun handleSignal(fromIp: String, signal: InboundSignal) {
         scope.launch { dispatch(signal, fromIp) }
+    }
+
+    /** What a Dex browser asked for or reported, applied on the engine's own scope. */
+    fun onRemote(command: RemoteCommand) {
+        scope.launch { dispatchRemote(command) }
     }
 
     fun onCallAction(action: CallAction) {
@@ -262,15 +335,30 @@ class CallEngine internal constructor(
         }
     }
 
-    /** Ends whatever is live and stops listening; nothing this engine started outlives it. */
+    /** Ends whatever is live, wherever its seat is, and stops listening; nothing this engine started outlives it. */
     fun close() {
-        hangup()
+        endAll()
         val disposal = (machine as? Machine.Ending)?.disposal
         // the media release runs on this scope; cancelling before it ran would leave the camera open
         scope.launch {
             disposal?.join()
             scope.cancel()
         }
+    }
+
+    private fun hangupNow(current: Machine.Live) {
+        val outcome = when {
+            current is Machine.Active -> null
+            current.attempt.isIncoming -> CallOutcome.DECLINED
+            else -> CallOutcome.CANCELLED
+        }
+        end(null, outcome, playBusyTone = false)
+        sendQuietly(current.attempt.peer.ip, OutboundCallSignal(CallSignalType.END, current.attempt.callId), SHORT_TIMEOUT_MS)
+    }
+
+    private fun endAll() {
+        val current = live ?: return
+        hangupNow(current)
     }
 
     // --- outbound ---------------------------------------------------------------------------
@@ -284,12 +372,12 @@ class CallEngine internal constructor(
             return
         }
         val dialing = current(attempt) as? Machine.Dialing
-        if (dialing == null) {
+        if (dialing == null || dialing.seat != null) {
             withContext(workDispatcher) { tracks.release() }
             return
         }
         val link = openLink(attempt, tracks, heldRemote = emptyList())
-        transition(Machine.Dialing(attempt, dialing.session.copy(localVideo = tracks.videoTrack, isFrontCamera = tracks.isFrontCamera), link))
+        transition(Machine.Dialing(attempt, dialing.session.copy(localVideo = tracks.videoTrack, isFrontCamera = tracks.isFrontCamera), Seat.Phone(link)))
 
         val offer: SessionDescription = try {
             link.link.createOffer()
@@ -301,8 +389,22 @@ class CallEngine internal constructor(
         if (current(attempt) == null) return
 
         audio.start(speaker)
-        val offerSignal = OutboundCallSignal(CallSignalType.OFFER, attempt.callId, sdp = offer.description, sdpType = offer.type.wire, video = attempt.video)
+        contactPeer(attempt, OutboundCallSignal(CallSignalType.OFFER, attempt.callId, sdp = offer.description, sdpType = offer.type.wire, video = attempt.video))
+    }
 
+    /** A call a Dex browser placed: its offer arrives over the socket, then the peer is contacted with it. */
+    private suspend fun runOutgoingRemote(attempt: Attempt) {
+        val offer = withTimeoutOrNull(OFFER_WAIT_MS) { attempt.remoteOffer.await() }
+        if (current(attempt) == null) return
+        if (offer == null) {
+            diag.note("dex never produced an offer")
+            end("Dex did not start the call. Please try again.", CallOutcome.FAILED, playBusyTone = false)
+            return
+        }
+        contactPeer(attempt, OutboundCallSignal(CallSignalType.OFFER, attempt.callId, sdp = offer.sdp, sdpType = offer.sdpType, video = attempt.video))
+    }
+
+    private suspend fun contactPeer(attempt: Attempt, offerSignal: OutboundCallSignal) {
         // phase 1: ping only. A frame queued into a zombie socket looks sent, so the offer waits for a pong.
         val pingDeadline = now() + PING_WINDOW_MS
         var isReachable = false
@@ -367,10 +469,10 @@ class CallEngine internal constructor(
     }
 
     /** Own candidates leave in order through one coroutine; started once the peer has proven it is there. */
-    private fun startIceSender(attempt: Attempt, media: Media) {
-        if (media.iceSender != null) return
-        media.iceSender = scope.launch(attempt.jobs) {
-            for (signal in media.iceOut) {
+    private fun startIceSender(attempt: Attempt, ice: IceQueue) {
+        if (ice.sender != null) return
+        ice.sender = scope.launch(attempt.jobs) {
+            for (signal in ice.out) {
                 runCatching { core.sendSignal(attempt.peer.ip, signal, 0) }
                     .onFailure { diag.note("candidate not delivered: ${it.message}") }
             }
@@ -396,11 +498,7 @@ class CallEngine internal constructor(
             is InboundSignal.Answer -> handleAnswer(signal, current)
             is InboundSignal.Ice -> onRemoteCandidate(signal.candidate, current)
             is InboundSignal.Renegotiate -> handleRenegotiate(signal, current)
-            is InboundSignal.RenegotiateAnswer -> {
-                val link = current.media?.link ?: return
-                runCatching { link.setRemote(SessionDescription(sdpType(signal.sdpType, SessionDescription.Type.ANSWER), signal.sdp)) }
-                    .onFailure { warningFlow.tryEmit("Couldn't switch the call's video: ${it.message}") }
-            }
+            is InboundSignal.RenegotiateAnswer -> handleRenegotiateAnswer(signal, current)
             is InboundSignal.Cam -> updateSession { it.copy(remoteCamOn = signal.isOn) }
             is InboundSignal.Reject -> end(if (signal.reason == "busy") "They are on another call right now." else "Call declined.", CallOutcome.DECLINED, playBusyTone = true)
             is InboundSignal.End -> {
@@ -414,11 +512,11 @@ class CallEngine internal constructor(
 
     private fun onRinging(current: Machine.Live) {
         val dialing = current as? Machine.Dialing ?: return
-        val media = dialing.media ?: return
+        val seat = dialing.seat ?: return
         diag.note("peer is ringing")
-        transition(Machine.Ringing(dialing.attempt, dialing.session, media))
-        audio.startRingback()
-        startIceSender(dialing.attempt, media)
+        transition(Machine.Ringing(dialing.attempt, dialing.session, seat))
+        if (seat is Seat.Phone) audio.startRingback()
+        startIceSender(dialing.attempt, seat.ice)
         armNoAnswerTimer(dialing.attempt)
     }
 
@@ -428,30 +526,48 @@ class CallEngine internal constructor(
      */
     private fun isAcceptableCandidate(c: IceCandidatePayload): Boolean {
         if (c.candidate.length > MAX_CANDIDATE_CHARS) return false
-        val parts = c.candidate.split(' ')
-        val type = parts.indexOf("typ").takeIf { it >= 0 }?.let { parts.getOrNull(it + 1) }
-        return type == "host"
+        return CandidateRewrite.typeOf(c.candidate) == "host"
     }
 
     /**
      * A candidate that arrives before this side has a session (the callee still rings) waits for
      * `accept`; dropping it would leave the callee with nothing to pair against the caller's
      * only cross-network route. A missing candidate is the caller's end-of-candidates marker.
+     * While a move is in flight the candidate belongs to the connection being set up.
      */
     private fun onRemoteCandidate(c: IceCandidatePayload?, current: Machine.Live) {
+        val callId = current.attempt.callId
+        val move = current.move
+        val seat = current.seat
         if (c == null) {
             diag.note("remote: end of candidates")
+            when {
+                move is Move.ToRemote -> remote.send(SeatEvent.Ice(move.clientId, callId, null))
+                move is Move.ToPhone -> Unit
+                seat is Seat.Remote -> remote.send(SeatEvent.Ice(seat.clientId, callId, null))
+            }
             return
         }
         if (!isAcceptableCandidate(c)) {
             diag.note("remote candidate refused")
             return
         }
-        val link = current.media?.link
         when {
-            link != null -> {
-                link.addRemoteCandidate(IceCandidate(c.sdpMid, c.sdpMLineIndex ?: 0, c.candidate))
+            move is Move.ToRemote -> {
+                remote.send(SeatEvent.Ice(move.clientId, callId, c))
+                diag.note("remote candidate to dex (moving) ${describe(c.candidate)}")
+            }
+            move is Move.ToPhone -> {
+                move.media.link.addRemoteCandidate(IceCandidate(c.sdpMid, c.sdpMLineIndex ?: 0, c.candidate))
+                diag.note("remote candidate to phone (moving) ${describe(c.candidate)}")
+            }
+            seat is Seat.Phone -> {
+                seat.media.link.addRemoteCandidate(IceCandidate(c.sdpMid, c.sdpMLineIndex ?: 0, c.candidate))
                 diag.note("remote candidate ${describe(c.candidate)}")
+            }
+            seat is Seat.Remote -> {
+                remote.send(SeatEvent.Ice(seat.clientId, callId, c))
+                diag.note("remote candidate to dex ${describe(c.candidate)}")
             }
             current is Machine.Incoming && current.heldRemote.size < MAX_BUFFERED_CANDIDATES -> {
                 transition(Machine.Incoming(current.attempt, current.session, current.offer, current.heldRemote + c))
@@ -519,9 +635,9 @@ class CallEngine internal constructor(
                 return
             }
             val link = openLink(attempt, tracks, still.heldRemote)
-            val connecting = Machine.Connecting(attempt, still.session.copy(localVideo = tracks.videoTrack), link)
+            val connecting = Machine.Connecting(attempt, still.session.copy(localVideo = tracks.videoTrack), Seat.Phone(link))
             transition(connecting)
-            startIceSender(attempt, link)
+            startIceSender(attempt, link.ice)
             armLinkWatchdog(attempt, CONNECT_TIMEOUT_MS)
             link.link.setRemote(SessionDescription(sdpType(offer.sdpType, SessionDescription.Type.OFFER), offer.sdp))
             val answer = link.link.createAnswer()
@@ -544,38 +660,67 @@ class CallEngine internal constructor(
     }
 
     private suspend fun handleAnswer(signal: InboundSignal.Answer, current: Machine.Live) {
-        // an answer belongs to a call this side placed and has media for
+        // an answer belongs to a call this side placed and has a seat for
         if (current !is Machine.Dialing && current !is Machine.Ringing) return
-        val media = current.media ?: return
+        val seat = current.seat ?: return
         val attempt = current.attempt
         attempt.noAnswer?.cancel()
         attempt.noAnswer = null
-        audio.stopRingback()
         diag.note("answer received")
-        startIceSender(attempt, media)
-        try {
-            media.link.setRemote(SessionDescription(sdpType(signal.sdpType, SessionDescription.Type.ANSWER), signal.sdp))
-            val now = current(attempt) ?: return
-            transition(Machine.Connecting(attempt, now.session, media))
-            armLinkWatchdog(attempt, CONNECT_TIMEOUT_MS)
-        } catch (e: Exception) {
-            diag.note("answer rejected by libwebrtc: ${e.message}")
-            abort("The call could not connect. Please try again.", CallOutcome.FAILED)
+        startIceSender(attempt, seat.ice)
+        when (seat) {
+            is Seat.Remote -> {
+                remote.send(SeatEvent.Sdp(seat.clientId, attempt.callId, signal.sdp, signal.sdpType ?: "answer"))
+                transition(Machine.Connecting(attempt, current.session, seat))
+                armLinkWatchdog(attempt, CONNECT_TIMEOUT_MS)
+            }
+            is Seat.Phone -> {
+                audio.stopRingback()
+                try {
+                    seat.media.link.setRemote(SessionDescription(sdpType(signal.sdpType, SessionDescription.Type.ANSWER), signal.sdp))
+                    val now = current(attempt) ?: return
+                    transition(Machine.Connecting(attempt, now.session, seat))
+                    armLinkWatchdog(attempt, CONNECT_TIMEOUT_MS)
+                } catch (e: Exception) {
+                    diag.note("answer rejected by libwebrtc: ${e.message}")
+                    abort("The call could not connect. Please try again.", CallOutcome.FAILED)
+                }
+            }
         }
     }
 
     private suspend fun handleRenegotiate(signal: InboundSignal.Renegotiate, current: Machine.Live) {
-        val link = current.media?.link ?: return
-        try {
-            link.setRemote(SessionDescription(sdpType(signal.sdpType, SessionDescription.Type.OFFER), signal.sdp))
-            val answer = link.createAnswer()
-            core.sendSignal(
-                current.attempt.peer.ip,
-                OutboundCallSignal(CallSignalType.RENEGOTIATE_ANSWER, current.attempt.callId, sdp = answer.description, sdpType = answer.type.wire),
-                ANSWER_TIMEOUT_MS,
-            )
-        } catch (e: Exception) {
-            warningFlow.tryEmit("Couldn't switch the call's video: ${e.message}")
+        // an offer from the peer while this side is offering a move is glare; the move's own answer settles it
+        if (current.move != null) return
+        when (val seat = current.seat) {
+            is Seat.Remote -> remote.send(SeatEvent.Sdp(seat.clientId, current.attempt.callId, signal.sdp, signal.sdpType ?: "offer"))
+            is Seat.Phone -> try {
+                val link = seat.media.link
+                link.setRemote(SessionDescription(sdpType(signal.sdpType, SessionDescription.Type.OFFER), signal.sdp))
+                val answer = link.createAnswer()
+                core.sendSignal(
+                    current.attempt.peer.ip,
+                    OutboundCallSignal(CallSignalType.RENEGOTIATE_ANSWER, current.attempt.callId, sdp = answer.description, sdpType = answer.type.wire),
+                    ANSWER_TIMEOUT_MS,
+                )
+            } catch (e: Exception) {
+                warningFlow.tryEmit("Couldn't switch the call's video: ${e.message}")
+            }
+            null -> Unit
+        }
+    }
+
+    private suspend fun handleRenegotiateAnswer(signal: InboundSignal.RenegotiateAnswer, current: Machine.Live) {
+        val callId = current.attempt.callId
+        val move = current.move
+        val seat = current.seat
+        when {
+            move is Move.ToRemote -> remote.send(SeatEvent.Sdp(move.clientId, callId, signal.sdp, signal.sdpType ?: "answer"))
+            move is Move.ToPhone -> runCatching { move.media.link.setRemote(SessionDescription(sdpType(signal.sdpType, SessionDescription.Type.ANSWER), signal.sdp)) }
+                .onFailure { failMoveToPhone("The phone could not take the call: ${it.message}") }
+            seat is Seat.Remote -> remote.send(SeatEvent.Sdp(seat.clientId, callId, signal.sdp, signal.sdpType ?: "answer"))
+            seat is Seat.Phone -> runCatching { seat.media.link.setRemote(SessionDescription(sdpType(signal.sdpType, SessionDescription.Type.ANSWER), signal.sdp)) }
+                .onFailure { warningFlow.tryEmit("Couldn't switch the call's video: ${it.message}") }
         }
     }
 
@@ -593,6 +738,7 @@ class CallEngine internal constructor(
 
     private suspend fun toggleCameraNow() {
         val current = live ?: return
+        if (current.move != null) return
         val media = current.media ?: return
         val attempt = current.attempt
         if (!current.session.camOff) {
@@ -620,6 +766,284 @@ class CallEngine internal constructor(
         }
         updateSession { it.copy(camOff = false, localVideo = track, isFrontCamera = media.tracks.isFrontCamera) }
         sendQuietly(attempt.peer.ip, OutboundCallSignal(CallSignalType.CAM, attempt.callId, video = true), 0)
+    }
+
+    // --- the remote seat --------------------------------------------------------------------
+
+    private suspend fun dispatchRemote(command: RemoteCommand) {
+        when (command) {
+            is RemoteCommand.Start -> startRemoteCall(command)
+            is RemoteCommand.Gone -> onRemoteGone(command.clientId)
+            is RemoteCommand.Accept -> acceptRemote(command.clientId, command.callId)
+            is RemoteCommand.Reject -> liveFor(command.callId)?.let { if (it is Machine.Incoming) reject() }
+            is RemoteCommand.Hangup -> liveFor(command.callId)?.let { if (isSeatOf(it, command.clientId)) hangupNow(it) }
+            is RemoteCommand.Sdp -> liveFor(command.callId)?.let { onRemoteSdp(it, command) }
+            is RemoteCommand.Ice -> liveFor(command.callId)?.let { onRemoteIce(it, command) }
+            is RemoteCommand.Connected -> liveFor(command.callId)?.let { onRemoteConnected(it, command.clientId) }
+            is RemoteCommand.Failed -> liveFor(command.callId)?.let { onRemoteFailed(it, command.clientId, command.reason) }
+            is RemoteCommand.Cam -> liveFor(command.callId)?.let { onRemoteCam(it, command) }
+            is RemoteCommand.MoveToPhone -> liveFor(command.callId)?.let { moveToPhone(it, command.clientId) }
+        }
+    }
+
+    private fun liveFor(callId: String): Machine.Live? = live?.takeIf { it.attempt.callId == callId }
+
+    private suspend fun startRemoteCall(command: RemoteCommand.Start) {
+        if (machine is Machine.Live) return
+        if (!isKnownClient(command.clientId)) return
+        val contact = core.contact(command.peerIp)
+        if (contact?.isBlocked == true) return
+        if (machine is Machine.Live) return
+        if (!isKnownClient(command.clientId)) return
+
+        val attempt = newAttempt(UUID.randomUUID().toString(), CallPeer(command.peerIp, contact?.label ?: command.peerIp), isIncoming = false, video = command.video)
+        diag.begin("outgoing from dex", attempt.callId, command.peerIp)
+        val seat = Seat.Remote(command.clientId)
+        transition(Machine.Dialing(attempt, CallSession(callId = attempt.callId, peer = attempt.peer, video = command.video), seat))
+        remote.send(SeatEvent.Media(command.clientId, attempt.callId, isOfferer = true, video = command.video))
+        scope.launch(attempt.jobs) { runOutgoingRemote(attempt) }
+    }
+
+    /** A Dex browser takes an incoming call: it gets the offer and every candidate held so far; the phone stops ringing. */
+    private fun acceptRemote(clientId: String, callId: String) {
+        val incoming = liveFor(callId) as? Machine.Incoming ?: return
+        if (!isKnownClient(clientId)) return
+        val attempt = incoming.attempt
+        system.hideIncoming()
+        diag.note("accepted on dex")
+        val seat = Seat.Remote(clientId)
+        transition(Machine.Connecting(attempt, incoming.session, seat))
+        startIceSender(attempt, seat.ice)
+        armLinkWatchdog(attempt, CONNECT_TIMEOUT_MS)
+        remote.send(SeatEvent.Media(clientId, attempt.callId, isOfferer = false, video = incoming.offer.video, remoteSdp = incoming.offer.sdp, remoteSdpType = incoming.offer.sdpType))
+        for (c in incoming.heldRemote) remote.send(SeatEvent.Ice(clientId, attempt.callId, c))
+        if (incoming.heldRemote.isNotEmpty()) diag.note("handed ${incoming.heldRemote.size} held remote candidates to dex")
+    }
+
+    private fun onRemoteSdp(current: Machine.Live, command: RemoteCommand.Sdp) {
+        if (command.sdp.length > MAX_SDP_CHARS) return
+        val attempt = current.attempt
+        val isOffer = command.sdpType.equals("offer", ignoreCase = true)
+        val move = moveTargetOf(current)
+        if (move != null && move.clientId == command.clientId) {
+            if (isOffer) sendQuietly(attempt.peer.ip, OutboundCallSignal(CallSignalType.RENEGOTIATE, attempt.callId, sdp = command.sdp, sdpType = command.sdpType), ANSWER_TIMEOUT_MS)
+            return
+        }
+        if (!isSeatOf(current, command.clientId)) return
+        when (current) {
+            is Machine.Dialing -> if (isOffer) attempt.remoteOffer.complete(PendingOffer(command.sdp, command.sdpType, attempt.video))
+            is Machine.Connecting -> if (!isOffer) {
+                sendQuietly(attempt.peer.ip, OutboundCallSignal(CallSignalType.ANSWER, attempt.callId, sdp = command.sdp, sdpType = command.sdpType), ANSWER_TIMEOUT_MS)
+                diag.note("answer sent from dex")
+            }
+            is Machine.Active -> if (current.move == null) {
+                val type = if (isOffer) CallSignalType.RENEGOTIATE else CallSignalType.RENEGOTIATE_ANSWER
+                sendQuietly(attempt.peer.ip, OutboundCallSignal(type, attempt.callId, sdp = command.sdp, sdpType = command.sdpType), ANSWER_TIMEOUT_MS)
+            }
+            is Machine.Ringing, is Machine.Incoming -> Unit
+        }
+    }
+
+    /** A browser's candidates go to the peer as this phone's own: only the relayed ones reach it, and they travel as host candidates. */
+    private fun onRemoteIce(current: Machine.Live, command: RemoteCommand.Ice) {
+        val attempt = current.attempt
+        val move = moveTargetOf(current)
+        val ice = when {
+            move != null && move.clientId == command.clientId -> move.ice
+            isSeatOf(current, command.clientId) -> (current.seat as Seat.Remote).ice
+            else -> return
+        }
+        val candidate = command.candidate
+        if (candidate == null) {
+            ice.out.trySend(OutboundCallSignal(CallSignalType.ICE, attempt.callId, candidate = null))
+            diag.note("dex: end of candidates")
+            return
+        }
+        val rewritten = CandidateRewrite.forPeer(candidate) ?: run {
+            diag.note("dex candidate dropped: not relayed")
+            return
+        }
+        if (ice.out.trySend(OutboundCallSignal(CallSignalType.ICE, attempt.callId, candidate = rewritten)).isFailure) {
+            diag.note("dex candidate dropped: buffer full")
+        } else {
+            diag.note("dex candidate ${describe(rewritten.candidate)}")
+        }
+    }
+
+    private fun onRemoteConnected(current: Machine.Live, clientId: String) {
+        val move = moveTargetOf(current)
+        if (move != null && move.clientId == clientId) {
+            finishMoveToRemote(current as Machine.Active, move)
+            return
+        }
+        if (!isSeatOf(current, clientId)) return
+        val attempt = current.attempt
+        when (current) {
+            is Machine.Connecting -> {
+                attempt.watchdog?.cancel()
+                attempt.watchdog = null
+                attempt.noAnswer?.cancel()
+                attempt.noAnswer = null
+                diag.note("connected on dex")
+                transition(Machine.Active(attempt, current.session, current.seat, now(), isLinkUp = true))
+            }
+            is Machine.Active -> if (!current.isLinkUp) {
+                attempt.watchdog?.cancel()
+                attempt.watchdog = null
+                diag.note("dex link is back")
+                transition(current.withLink(isUp = true))
+            }
+            is Machine.Dialing, is Machine.Ringing, is Machine.Incoming -> Unit
+        }
+    }
+
+    private fun onRemoteFailed(current: Machine.Live, clientId: String, reason: String) {
+        val move = moveTargetOf(current)
+        if (move != null && move.clientId == clientId) {
+            failMoveToRemote(reason)
+            return
+        }
+        if (!isSeatOf(current, clientId)) return
+        diag.note("dex reported failure: $reason")
+        abort(reason, if (current is Machine.Active) null else CallOutcome.FAILED, playBusyTone = false)
+    }
+
+    private fun onRemoteCam(current: Machine.Live, command: RemoteCommand.Cam) {
+        if (!isSeatOf(current, command.clientId)) return
+        updateSession { it.copy(camOff = !command.isOn) }
+        sendQuietly(current.attempt.peer.ip, OutboundCallSignal(CallSignalType.CAM, current.attempt.callId, video = command.isOn), 0)
+    }
+
+    private fun onRemoteGone(clientId: String) {
+        val current = live ?: return
+        val move = moveTargetOf(current)
+        if (move != null && move.clientId == clientId) {
+            failMoveToRemote("Dex disconnected.")
+            return
+        }
+        if (!isSeatOf(current, clientId)) return
+        diag.note("dex seat disconnected")
+        abort("Dex disconnected.", if (current is Machine.Active) null else CallOutcome.FAILED, playBusyTone = false)
+    }
+
+    // --- moving the seat --------------------------------------------------------------------
+
+    private fun moveToRemoteNow(clientId: String) {
+        val active = live as? Machine.Active ?: return
+        if (active.seat !is Seat.Phone || active.move != null) return
+        if (!isKnownClient(clientId)) return
+        val attempt = active.attempt
+        val ice = IceQueue()
+        val deadline = scope.launch(attempt.jobs) {
+            delay(MOVE_TIMEOUT_MS)
+            if ((moveTargetOf(current(attempt) ?: return@launch))?.clientId == clientId) failMoveToRemote("Dex did not connect in time.")
+        }
+        transition(active.withMove(Move.ToRemote(clientId, ice, deadline)))
+        startIceSender(attempt, ice)
+        diag.note("moving to dex")
+        remote.send(SeatEvent.Media(clientId, attempt.callId, isOfferer = true, video = active.session.video || !active.session.camOff))
+    }
+
+    private fun finishMoveToRemote(active: Machine.Active, move: Move.ToRemote) {
+        val phone = active.seat as? Seat.Phone ?: return
+        move.deadline.cancel()
+        dispose(listOf(phone.media))
+        audio.setProximityEnabled(false)
+        audio.stop(playBusyTone = false)
+        system.stopSession()
+        system.hideFloating()
+        transition(active.withSeat(Seat.Remote(move.clientId, move.ice), active.session.copy(localVideo = null, remoteVideo = null)))
+        diag.note("call moved to dex")
+    }
+
+    /** The browser never came up: it is released and the phone's own connection is restarted to reclaim the peer. */
+    private fun failMoveToRemote(reason: String) {
+        val active = live as? Machine.Active ?: return
+        val move = active.move as? Move.ToRemote ?: return
+        val attempt = active.attempt
+        move.deadline.cancel()
+        move.ice.out.close()
+        remote.send(SeatEvent.Release(move.clientId, attempt.callId, reason))
+        transition(active.withMove(null))
+        val phone = active.seat as? Seat.Phone ?: return
+        diag.note("move to dex failed: $reason; reclaiming")
+        scope.launch(attempt.jobs) {
+            try {
+                phone.media.link.restartIce()
+                current(attempt)?.let { renegotiate(it) }
+            } catch (e: Exception) {
+                diag.note("reclaim offer failed: ${e.message}")
+            }
+        }
+        armLinkWatchdog(attempt, CONNECT_TIMEOUT_MS)
+    }
+
+    private suspend fun moveToPhone(current: Machine.Live, clientId: String) {
+        val active = current as? Machine.Active ?: return
+        val seat = active.seat as? Seat.Remote ?: return
+        if (seat.clientId != clientId || active.move != null) return
+        val attempt = active.attempt
+        val wantsCamera = !active.session.camOff
+        diag.note("moving to phone")
+        val tracks = try {
+            withContext(workDispatcher) { media.openLocal(wantsCamera) }
+        } catch (e: Exception) {
+            diag.note("local media unavailable for the move: ${e.message}")
+            warningFlow.tryEmit(mediaUnavailableMessage(wantsCamera, isAnswering = true))
+            return
+        }
+        val still = current(attempt) as? Machine.Active
+        if (still == null || still.move != null || still.seat !is Seat.Remote) {
+            withContext(workDispatcher) { tracks.release() }
+            return
+        }
+        val newMedia = openLink(attempt, tracks, heldRemote = emptyList())
+        val deadline = scope.launch(attempt.jobs) {
+            delay(MOVE_TIMEOUT_MS)
+            if (current(attempt)?.move is Move.ToPhone) failMoveToPhone("The phone did not connect in time.")
+        }
+        transition(still.withMove(Move.ToPhone(newMedia, deadline)))
+        startIceSender(attempt, newMedia.ice)
+        try {
+            val offer = newMedia.link.createOffer()
+            core.sendSignal(
+                attempt.peer.ip,
+                OutboundCallSignal(CallSignalType.RENEGOTIATE, attempt.callId, sdp = offer.description, sdpType = offer.type.wire),
+                ANSWER_TIMEOUT_MS,
+            )
+        } catch (e: Exception) {
+            failMoveToPhone("The phone could not offer the call: ${e.message}")
+        }
+    }
+
+    private fun finishMoveToPhone(active: Machine.Active, move: Move.ToPhone) {
+        val seat = active.seat as? Seat.Remote ?: return
+        val attempt = active.attempt
+        move.deadline.cancel()
+        seat.ice.out.close()
+        remote.send(SeatEvent.Release(seat.clientId, attempt.callId, "moved"))
+        val tracks = move.media.tracks
+        val session = active.session.copy(localVideo = tracks.videoTrack, isFrontCamera = tracks.isFrontCamera, camOff = tracks.videoTrack == null)
+        transition(active.withSeat(Seat.Phone(move.media), session))
+        audio.start(session.speaker)
+        audio.setProximityEnabled(true)
+        system.startSession(attempt.peer.name, session.video, active.connectedAt)
+        move.media.link.describeSelectedPair { line -> scope.launch { if (current(attempt) != null) diag.note("media path: $line") } }
+        diag.note("call moved to phone")
+    }
+
+    /** The phone never came up: its media goes, and the browser restarts ICE to reclaim the peer. */
+    private fun failMoveToPhone(reason: String) {
+        val active = live as? Machine.Active ?: return
+        val move = active.move as? Move.ToPhone ?: return
+        val attempt = active.attempt
+        move.deadline.cancel()
+        dispose(listOf(move.media))
+        transition(active.withMove(null))
+        val seat = active.seat as? Seat.Remote ?: return
+        diag.note("move to phone failed: $reason; dex reclaims")
+        warningFlow.tryEmit(reason)
+        remote.send(SeatEvent.Media(seat.clientId, attempt.callId, isOfferer = true, video = active.session.video || !active.session.camOff, isRestart = true))
     }
 
     // --- the link -----------------------------------------------------------------------------
@@ -656,8 +1080,8 @@ class CallEngine internal constructor(
             },
             tracks,
         )
-        val media = Media(tracks, link, Channel(capacity = MAX_BUFFERED_CANDIDATES))
-        scope.launch(attempt.jobs) {
+        val media = Media(tracks, link, IceQueue())
+        media.collector = scope.launch(attempt.jobs) {
             for (event in events) onLinkEvent(attempt, media, event)
         }
         if (heldRemote.isNotEmpty()) {
@@ -669,11 +1093,14 @@ class CallEngine internal constructor(
 
     private suspend fun onLinkEvent(attempt: Attempt, media: Media, event: LinkEvent) {
         val current = current(attempt) ?: return
+        val incomingMove = (current.move as? Move.ToPhone)?.takeIf { it.media === media }
+        // a report from a connection that is no longer this call's (released after a move) changes nothing
+        if (current.media !== media && incomingMove == null) return
         when (event) {
             is LinkEvent.LocalCandidate -> {
                 val payload = IceCandidatePayload(event.candidate.sdp, event.candidate.sdpMid, event.candidate.sdpMLineIndex)
                 // queued in order; the sender starts once the peer is known to be there
-                if (media.iceOut.trySend(OutboundCallSignal(CallSignalType.ICE, attempt.callId, candidate = payload)).isFailure) {
+                if (media.ice.out.trySend(OutboundCallSignal(CallSignalType.ICE, attempt.callId, candidate = payload)).isFailure) {
                     diag.note("local candidate dropped: buffer full")
                 } else {
                     diag.note("local candidate ${describe(event.candidate.sdp)}")
@@ -681,12 +1108,12 @@ class CallEngine internal constructor(
             }
             LinkEvent.GatheringComplete -> {
                 diag.note("local: end of candidates")
-                media.iceOut.trySend(OutboundCallSignal(CallSignalType.ICE, attempt.callId, candidate = null))
+                media.ice.out.trySend(OutboundCallSignal(CallSignalType.ICE, attempt.callId, candidate = null))
             }
             is LinkEvent.RemoteVideo -> updateSession { it.copy(remoteVideo = event.track) }
-            LinkEvent.Connected -> activate(current)
-            LinkEvent.IceFailed -> onLinkFailed(current)
-            LinkEvent.Closed -> abort("Connection lost.", null)
+            LinkEvent.Connected -> if (incomingMove != null) finishMoveToPhone(current as Machine.Active, incomingMove) else activate(current)
+            LinkEvent.IceFailed -> if (incomingMove != null) failMoveToPhone("The phone could not connect.") else onLinkFailed(current)
+            LinkEvent.Closed -> if (incomingMove != null) failMoveToPhone("The phone's connection closed.") else abort("Connection lost.", null)
             is LinkEvent.State -> diag.note(event.what)
         }
     }
@@ -717,11 +1144,11 @@ class CallEngine internal constructor(
     }
 
     private fun activate(current: Machine.Live) {
-        val media = current.media ?: return
+        val seat = current.seat as? Seat.Phone ?: return
         val attempt = current.attempt
         attempt.watchdog?.cancel()
         attempt.watchdog = null
-        media.link.describeSelectedPair { line -> scope.launch { if (current(attempt) != null) diag.note("media path: $line") } }
+        seat.media.link.describeSelectedPair { line -> scope.launch { if (current(attempt) != null) diag.note("media path: $line") } }
         if (current is Machine.Active) {
             diag.note("link is back")
             if (!current.isLinkUp) transition(current.withLink(isUp = true))
@@ -732,7 +1159,7 @@ class CallEngine internal constructor(
         attempt.noAnswer = null
         audio.stopRingback()
         val connectedAt = now()
-        transition(Machine.Active(attempt, current.session, media, connectedAt, isLinkUp = true))
+        transition(Machine.Active(attempt, current.session, seat, connectedAt, isLinkUp = true))
         audio.setProximityEnabled(true)
         // re-anchor the ongoing notification's chronometer at the ANSWER moment
         system.startSession(attempt.peer.name, current.session.video, connectedAt)
@@ -760,17 +1187,34 @@ class CallEngine internal constructor(
         current.attempt.jobs.cancel()
         system.stopSession()
         system.hideFloating()
-        audio.stop(playBusyTone)
+        val seat = current.seat
+        if (seat !is Seat.Remote) audio.stop(playBusyTone)
+        if (seat is Seat.Remote) {
+            seat.ice.out.close()
+            remote.send(SeatEvent.Release(seat.clientId, current.attempt.callId, reason ?: "ended"))
+        }
+        (current.move as? Move.ToRemote)?.let {
+            it.ice.out.close()
+            remote.send(SeatEvent.Release(it.clientId, current.attempt.callId, reason ?: "ended"))
+        }
 
         val ended = CallState.Ended(current.session.peer, current.session.video, reason)
         transition(Machine.Ending(ended, disposal = null))
-        val media = current.media ?: return
-        val disposal = scope.launch(workDispatcher) {
-            media.iceOut.close()
-            media.tracks.release()
-            media.link.close()
+        val toDispose = listOfNotNull(current.media, (current.move as? Move.ToPhone)?.media)
+        if (toDispose.isEmpty()) return
+        machine = Machine.Ending(ended, dispose(toDispose))
+    }
+
+    /** Releases connections off the main thread; their collectors are stopped first so nothing they report lands on the next state. */
+    private fun dispose(medias: List<Media>): Job {
+        for (m in medias) m.collector?.cancel()
+        return scope.launch(workDispatcher) {
+            for (m in medias) {
+                m.ice.out.close()
+                m.tracks.release()
+                m.link.close()
+            }
         }
-        machine = Machine.Ending(ended, disposal)
     }
 
     /** Writes one call log row for the attempt that is being torn down. */
@@ -816,7 +1260,7 @@ class CallEngine internal constructor(
         val parts = candidateSdp.split(' ')
         val address = parts.getOrNull(4) ?: return candidateSdp.take(40)
         val port = parts.getOrNull(5).orEmpty()
-        val type = parts.indexOf("typ").takeIf { it >= 0 }?.let { parts.getOrNull(it + 1) } ?: "?"
+        val type = CandidateRewrite.typeOf(candidateSdp) ?: "?"
         val family = when {
             address.startsWith("fd", ignoreCase = true) || address.startsWith("fc", ignoreCase = true) -> "overlay v6"
             address.contains(':') -> "v6"
@@ -842,6 +1286,10 @@ class CallEngine internal constructor(
         const val CONNECT_TIMEOUT_MS = 30_000L
         /** The callee's patience for the caller's ICE restart after a failure. */
         const val ICE_RESTART_GRACE_MS = 15_000L
+        /** A Dex browser placing a call has this long to produce its offer. */
+        const val OFFER_WAIT_MS = 10_000L
+        /** A seat move that has not connected by then is undone. */
+        const val MOVE_TIMEOUT_MS = 20_000L
         /** Candidates held per direction while the session or the peer is not there yet. */
         const val MAX_BUFFERED_CANDIDATES = 64
         /** libwebrtc reports queued for the engine; a burst past this drops the oldest, and the watchdog still ends a dead call. */

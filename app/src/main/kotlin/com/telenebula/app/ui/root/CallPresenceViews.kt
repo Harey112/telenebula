@@ -36,18 +36,20 @@ import com.telenebula.app.ui.icons.TnIcon
 fun CallBanner(presenceFlow: StateFlow<PresenceState>, onOpen: () -> Unit) {
     val presence by presenceFlow.collectAsStateWithLifecycle()
     if (!presence.isOffCallScreen || presence.hasVideo) return
+    val isRemote = presence.isRemoteSeat
+    // a call held by Dex is only mirrored here: nothing to return to, nothing to press
+    val open = if (isRemote) Modifier else Modifier.clickable(role = Role.Button, onClick = onOpen).semantics { contentDescription = "Return to call with ${presence.peerName}" }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(CallPalette.bannerGreen)
-            .clickable(role = Role.Button, onClick = onOpen)
-            .semantics { contentDescription = "Return to call with ${presence.peerName}" }
+            .then(open)
             .statusBarsPadding()
             .padding(top = 4.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.CenterHorizontally),
     ) {
-        Icon(TnIcon.CALL, tint = CallPalette.ink, size = 14.dp)
+        Icon(if (isRemote) TnIcon.DESKTOP else TnIcon.CALL, tint = CallPalette.ink, size = 14.dp)
         Text("${presence.peerName} · ${presence.statusLabel}", style = TextStyle(color = CallPalette.ink, fontSize = 13.5.sp, fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

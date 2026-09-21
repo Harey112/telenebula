@@ -77,8 +77,11 @@ class RootController(
         main.launch {
             var previous: CallPhase? = null
             callEngine.state.collect { state ->
-                val phase = (state as? CallState.Live)?.phase
+                val live = state as? CallState.Live
+                val phase = live?.phase
                 when {
+                    // a call Dex holds is only a banner here; the phone never shows its screen
+                    live?.session?.isRemoteSeat == true -> navigator.closeCall()
                     phase == CallPhase.INCOMING -> navigator.openCall()
                     phase == CallPhase.CONNECTING && previous == CallPhase.INCOMING -> navigator.openCall()
                     state is CallState.Ended && state.reason == null -> scheduleAutoLeave()

@@ -1,7 +1,9 @@
 package com.telenebula.calls
 
+import com.telenebula.calls.media.MediaUnavailableException
 import com.telenebula.calls.media.WebRtcSessionListener
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -78,6 +80,7 @@ class CallEngineTest {
     private class FakeLink : PeerLink {
         val remoteCandidates = ArrayList<IceCandidate>()
         var isClosed = false
+        var restarts = 0
         override val isStable: Boolean = true
         override suspend fun createOffer() = SessionDescription(SessionDescription.Type.OFFER, "v=0 offer")
         override suspend fun createAnswer() = SessionDescription(SessionDescription.Type.ANSWER, "v=0 answer")
@@ -87,7 +90,10 @@ class CallEngineTest {
         }
 
         override fun setVideoTrack(track: VideoTrack?): Boolean = false
-        override fun restartIce() = Unit
+        override fun restartIce() {
+            restarts += 1
+        }
+
         override fun describeSelectedPair(onResult: (String) -> Unit) = onResult("fake pair")
         override fun close() {
             isClosed = true
@@ -98,8 +104,12 @@ class CallEngineTest {
         val links = ArrayList<FakeLink>()
         val tracks = ArrayList<FakeTracks>()
         var listener: WebRtcSessionListener? = null
+        var failOpen = false
         override val eglContext: EglBase.Context get() = throw IllegalStateException("no EGL in tests")
-        override fun openLocal(video: Boolean): LocalTracks = FakeTracks().also { tracks += it }
+        override fun openLocal(video: Boolean): LocalTracks {
+            if (failOpen) throw MediaUnavailableException("no microphone in tests")
+            return FakeTracks().also { tracks += it }
+        }
         override fun openLink(listener: WebRtcSessionListener, local: LocalTracks): PeerLink {
             this.listener = listener
             return FakeLink().also { links += it }
@@ -108,9 +118,20 @@ class CallEngineTest {
         override fun setVerbose(enabled: Boolean) = Unit
     }
 
+    private class FakeRemote : RemoteSeatPort {
+        override val clients = MutableStateFlow<List<RemoteClient>>(emptyList())
+        val events = ArrayList<SeatEvent>()
+        override fun send(event: SeatEvent) {
+            events += event
+        }
+
+        inline fun <reified T : SeatEvent> of(): List<T> = events.filterIsInstance<T>()
+    }
+
     private class Harness(testScope: TestScope) {
         val core = FakeSignaling()
         val media = FakeMedia()
+        val remote = FakeRemote()
         val diagnostics = CallDiagnostics(isVerbose = { false }, now = { testScope.testScheduler.currentTime })
         val engine = CallEngine(
             core = core,
@@ -118,6 +139,7 @@ class CallEngineTest {
             audio = FakeAudio(),
             media = media,
             system = FakeSystem(),
+            remote = remote,
             scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScope.testScheduler)),
             diag = diagnostics,
             workDispatcher = StandardTestDispatcher(testScope.testScheduler),
@@ -458,10 +480,298 @@ class CallEngineTest {
         assertEquals(1, h.media.tracks.single().releases)
     }
 
+    // --- the Dex seat ---
+
+    private fun Harness.withClient(id: String = DEX) {
+        remote.clients.value = listOf(RemoteClient(id, "Chrome on desk"))
+    }
+
+    private fun Harness.callId(): String = session?.callId ?: ""
+
+    @Test
+    fun webAccept_handsTheOfferAndHeldCandidatesToTheBrowser_andNeverOpensPhoneMedia() = runTest {
+        val h = Harness(this)
+        h.withClient()
+        h.offer()
+        h.ice(CANDIDATE_A)
+        runCurrent()
+        h.engine.onRemote(RemoteCommand.Accept(DEX, CALL_ID))
+        runCurrent()
+        assertEquals(CallPhase.CONNECTING, h.phase)
+        assertEquals(CallSeat.Remote(DEX), h.session?.seat)
+        val media = h.remote.of<SeatEvent.Media>().single()
+        assertEquals(false, media.isOfferer)
+        assertEquals("v=0 remote offer", media.remoteSdp)
+        assertEquals(listOf(CANDIDATE_A), h.remote.of<SeatEvent.Ice>().map { it.candidate?.candidate })
+        assertTrue("no phone media for a dex seat", h.media.tracks.isEmpty())
+
+        h.engine.onRemote(RemoteCommand.Sdp(DEX, CALL_ID, "v=0 dex answer", "answer"))
+        runCurrent()
+        assertEquals("v=0 dex answer", h.sentOfType(CallSignalType.ANSWER).single().sdp)
+
+        h.engine.onRemote(RemoteCommand.Connected(DEX, CALL_ID))
+        runCurrent()
+        assertEquals(CallPhase.ACTIVE, h.phase)
+        advanceTimeBy(CallEngine.CONNECT_TIMEOUT_MS + 1)
+        runCurrent()
+        assertEquals("the watchdog was disarmed by the browser's connected report", CallPhase.ACTIVE, h.phase)
+    }
+
+    @Test
+    fun webAccept_fromAnUnknownClient_isIgnored() = runTest {
+        val h = Harness(this)
+        h.offer()
+        runCurrent()
+        h.engine.onRemote(RemoteCommand.Accept("nobody", CALL_ID))
+        runCurrent()
+        assertEquals(CallPhase.INCOMING, h.phase)
+        assertTrue(h.remote.events.isEmpty())
+    }
+
+    @Test
+    fun webStart_waitsForTheBrowserOffer_thenContactsThePeerWithIt() = runTest {
+        val h = Harness(this)
+        h.withClient()
+        h.engine.onRemote(RemoteCommand.Start(DEX, PEER, video = false))
+        runCurrent()
+        assertEquals(CallPhase.CONTACTING, h.phase)
+        assertEquals(true, h.remote.of<SeatEvent.Media>().single().isOfferer)
+        assertTrue("nothing goes to the peer before the browser has an offer", h.sentOfType(CallSignalType.OFFER).isEmpty())
+
+        val callId = h.callId()
+        h.engine.onRemote(RemoteCommand.Sdp(DEX, callId, "v=0 dex offer", "offer"))
+        runCurrent()
+        assertEquals("v=0 dex offer", h.sentOfType(CallSignalType.OFFER).single().sdp)
+
+        h.signal(InboundSignal.Ringing(callId))
+        runCurrent()
+        assertEquals(CallPhase.RINGING, h.phase)
+
+        h.answer(callId)
+        runCurrent()
+        assertEquals(CallPhase.CONNECTING, h.phase)
+        assertEquals("v=0 remote answer", h.remote.of<SeatEvent.Sdp>().single().sdp)
+        assertTrue(h.media.tracks.isEmpty())
+    }
+
+    @Test
+    fun webStart_withNoOffer_endsAfterTheWait() = runTest {
+        val h = Harness(this)
+        h.withClient()
+        h.engine.onRemote(RemoteCommand.Start(DEX, PEER, video = false))
+        advanceTimeBy(CallEngine.OFFER_WAIT_MS + 1)
+        runCurrent()
+        assertTrue(h.engine.state.value is CallState.Ended)
+        assertEquals(1, h.remote.of<SeatEvent.Release>().size)
+        assertEquals(CallOutcome.FAILED, h.core.logged.single().outcome)
+    }
+
+    @Test
+    fun browserCandidates_onlyRelayedOnesReachThePeer_asHostCandidates() = runTest {
+        val h = Harness(this)
+        h.withClient()
+        h.offer()
+        runCurrent()
+        h.engine.onRemote(RemoteCommand.Accept(DEX, CALL_ID))
+        runCurrent()
+        h.engine.onRemote(RemoteCommand.Ice(DEX, CALL_ID, IceCandidatePayload(CANDIDATE_B, "0", 0)))
+        h.engine.onRemote(RemoteCommand.Ice(DEX, CALL_ID, IceCandidatePayload("candidate:9 1 udp 41885439 fd10:100::105 61234 typ relay raddr 192.168.1.20 rport 50001 generation 0", "0", 0)))
+        h.engine.onRemote(RemoteCommand.Ice(DEX, CALL_ID, null))
+        runCurrent()
+        val ice = h.sentOfType(CallSignalType.ICE).map { it.candidate?.candidate }
+        assertEquals(listOf("candidate:9 1 udp 41885439 fd10:100::105 61234 typ host generation 0", null), ice)
+    }
+
+    private suspend fun TestScope.activePhoneCall(h: Harness) {
+        h.offer()
+        h.engine.accept()
+        runCurrent()
+        h.media.listener?.onConnected()
+        runCurrent()
+        assertEquals(CallPhase.ACTIVE, h.phase)
+    }
+
+    @Test
+    fun movePhoneToDex_renegotiatesWithTheBrowserOffer_thenReleasesThePhoneMedia() = runTest {
+        val h = Harness(this)
+        h.withClient()
+        activePhoneCall(h)
+        h.engine.moveToRemote(DEX)
+        runCurrent()
+        assertEquals(CallSeat.Remote(DEX), h.session?.movingTo)
+        assertEquals(CallSeat.Phone, h.session?.seat)
+        assertEquals(true, h.remote.of<SeatEvent.Media>().single().isOfferer)
+
+        h.engine.onRemote(RemoteCommand.Sdp(DEX, CALL_ID, "v=0 dex offer", "offer"))
+        runCurrent()
+        assertEquals("v=0 dex offer", h.sentOfType(CallSignalType.RENEGOTIATE).single().sdp)
+
+        h.signal(InboundSignal.RenegotiateAnswer(CALL_ID, "v=0 peer answer", "answer"))
+        runCurrent()
+        assertEquals("v=0 peer answer", h.remote.of<SeatEvent.Sdp>().single().sdp)
+
+        h.engine.onRemote(RemoteCommand.Connected(DEX, CALL_ID))
+        runCurrent()
+        assertEquals(CallSeat.Remote(DEX), h.session?.seat)
+        assertEquals(null, h.session?.movingTo)
+        assertEquals(CallPhase.ACTIVE, h.phase)
+        assertEquals(1, h.media.tracks.single().releases)
+        assertTrue(h.link.isClosed)
+
+        h.engine.hangup()
+        runCurrent()
+        assertEquals("the phone cannot end a call it does not hold", CallPhase.ACTIVE, h.phase)
+        h.engine.onRemote(RemoteCommand.Hangup(DEX, CALL_ID))
+        runCurrent()
+        assertTrue(h.engine.state.value is CallState.Ended)
+        assertEquals(CallOutcome.ANSWERED, h.core.logged.single().outcome)
+    }
+
+    @Test
+    fun movePhoneToDex_thatTimesOut_releasesTheBrowserAndReclaimsOnThePhone() = runTest {
+        val h = Harness(this)
+        h.withClient()
+        activePhoneCall(h)
+        h.engine.moveToRemote(DEX)
+        runCurrent()
+        advanceTimeBy(CallEngine.MOVE_TIMEOUT_MS + 1)
+        runCurrent()
+        assertEquals(1, h.remote.of<SeatEvent.Release>().size)
+        assertEquals(null, h.session?.movingTo)
+        assertEquals(CallSeat.Phone, h.session?.seat)
+        assertEquals(1, h.link.restarts)
+        assertEquals(1, h.sentOfType(CallSignalType.RENEGOTIATE).size)
+        assertEquals(0, h.media.tracks.single().releases)
+    }
+
+    @Test
+    fun moveDexToPhone_offersFromThePhone_andReleasesTheBrowserOnceConnected() = runTest {
+        val h = Harness(this)
+        h.withClient()
+        h.offer()
+        runCurrent()
+        h.engine.onRemote(RemoteCommand.Accept(DEX, CALL_ID))
+        h.engine.onRemote(RemoteCommand.Connected(DEX, CALL_ID))
+        runCurrent()
+        assertEquals(CallPhase.ACTIVE, h.phase)
+
+        h.engine.onRemote(RemoteCommand.MoveToPhone("someone-else", CALL_ID))
+        runCurrent()
+        assertTrue("only the seat may move the call", h.media.tracks.isEmpty())
+
+        h.engine.onRemote(RemoteCommand.MoveToPhone(DEX, CALL_ID))
+        runCurrent()
+        assertEquals(CallSeat.Phone, h.session?.movingTo)
+        assertEquals("v=0 offer", h.sentOfType(CallSignalType.RENEGOTIATE).single().sdp)
+        h.signal(InboundSignal.RenegotiateAnswer(CALL_ID, "v=0 peer answer", "answer"))
+        h.ice(CANDIDATE_A)
+        runCurrent()
+        assertEquals(listOf(CANDIDATE_A), h.link.remoteCandidates.map { it.sdp })
+
+        h.media.listener?.onConnected()
+        runCurrent()
+        assertEquals(CallSeat.Phone, h.session?.seat)
+        assertEquals(null, h.session?.movingTo)
+        assertEquals("moved", h.remote.of<SeatEvent.Release>().single().reason)
+    }
+
+    @Test
+    fun moveDexToPhone_withoutMedia_leavesTheCallOnDex() = runTest {
+        val h = Harness(this)
+        h.withClient()
+        h.media.failOpen = true
+        h.offer()
+        runCurrent()
+        h.engine.onRemote(RemoteCommand.Accept(DEX, CALL_ID))
+        h.engine.onRemote(RemoteCommand.Connected(DEX, CALL_ID))
+        h.engine.onRemote(RemoteCommand.MoveToPhone(DEX, CALL_ID))
+        runCurrent()
+        assertEquals(CallSeat.Remote(DEX), h.session?.seat)
+        assertEquals(null, h.session?.movingTo)
+        assertTrue(h.sentOfType(CallSignalType.RENEGOTIATE).isEmpty())
+    }
+
+    @Test
+    fun moveDexToPhone_whosePhoneLinkFails_asksTheBrowserToRestart() = runTest {
+        val h = Harness(this)
+        h.withClient()
+        h.offer()
+        runCurrent()
+        h.engine.onRemote(RemoteCommand.Accept(DEX, CALL_ID))
+        h.engine.onRemote(RemoteCommand.Connected(DEX, CALL_ID))
+        h.engine.onRemote(RemoteCommand.MoveToPhone(DEX, CALL_ID))
+        runCurrent()
+        h.media.listener?.onIceFailed()
+        runCurrent()
+        assertEquals(CallSeat.Remote(DEX), h.session?.seat)
+        assertEquals(null, h.session?.movingTo)
+        assertEquals(true, h.remote.of<SeatEvent.Media>().last().isRestart)
+        assertEquals(1, h.media.tracks.single().releases)
+        assertEquals(CallPhase.ACTIVE, h.phase)
+    }
+
+    @Test
+    fun aVanishedSeat_endsTheCallAndTellsThePeer() = runTest {
+        val h = Harness(this)
+        h.withClient()
+        h.offer()
+        runCurrent()
+        h.engine.onRemote(RemoteCommand.Accept(DEX, CALL_ID))
+        h.engine.onRemote(RemoteCommand.Connected(DEX, CALL_ID))
+        runCurrent()
+        h.engine.onRemote(RemoteCommand.Gone("someone-else"))
+        runCurrent()
+        assertEquals(CallPhase.ACTIVE, h.phase)
+        h.engine.onRemote(RemoteCommand.Gone(DEX))
+        runCurrent()
+        assertEquals("Dex disconnected.", (h.engine.state.value as? CallState.Ended)?.reason)
+        assertEquals(1, h.sentOfType(CallSignalType.END).size)
+    }
+
+    @Test
+    fun peerRenegotiation_onADexSeat_goesToTheBrowser_andItsAnswerComesBack() = runTest {
+        val h = Harness(this)
+        h.withClient()
+        h.offer()
+        runCurrent()
+        h.engine.onRemote(RemoteCommand.Accept(DEX, CALL_ID))
+        h.engine.onRemote(RemoteCommand.Connected(DEX, CALL_ID))
+        runCurrent()
+        h.signal(InboundSignal.Renegotiate(CALL_ID, "v=0 peer re-offer", "offer"))
+        runCurrent()
+        assertEquals("v=0 peer re-offer", h.remote.of<SeatEvent.Sdp>().single().sdp)
+        h.engine.onRemote(RemoteCommand.Sdp(DEX, CALL_ID, "v=0 dex re-answer", "answer"))
+        h.engine.onRemote(RemoteCommand.Cam(DEX, CALL_ID, isOn = true))
+        runCurrent()
+        assertEquals("v=0 dex re-answer", h.sentOfType(CallSignalType.RENEGOTIATE_ANSWER).single().sdp)
+        assertEquals(true, h.sentOfType(CallSignalType.CAM).single().video)
+        assertEquals(false, h.session?.camOff)
+    }
+
+    @Test
+    fun phoneControls_doNothingForADexSeat() = runTest {
+        val h = Harness(this)
+        h.withClient()
+        h.offer()
+        runCurrent()
+        h.engine.onRemote(RemoteCommand.Accept(DEX, CALL_ID))
+        h.engine.onRemote(RemoteCommand.Connected(DEX, CALL_ID))
+        runCurrent()
+        val before = h.session
+        h.engine.toggleMute()
+        h.engine.toggleSpeaker()
+        h.engine.toggleCamera()
+        h.engine.switchCamera()
+        h.engine.moveToRemote(DEX)
+        runCurrent()
+        assertEquals(before, h.session)
+    }
+
     private companion object {
         const val PEER = "fd10:100::107"
         const val STRANGER = "fd10:100::999"
         const val CALL_ID = "call-1"
+        const val DEX = "dex-1"
         const val CANDIDATE_A = "candidate:1 1 udp 2130706431 fd10:100::107 50000 typ host"
         const val CANDIDATE_B = "candidate:2 1 udp 2130706431 192.168.1.20 50001 typ host"
     }

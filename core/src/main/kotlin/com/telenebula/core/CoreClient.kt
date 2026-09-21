@@ -610,7 +610,7 @@ class CoreClient internal constructor(
     companion object {
         private const val TYPING_TIMEOUT_MS = 1500
         private const val CHAT_VIEW_CACHE = 8
-        private const val CHAT_HEAD_LIMIT = 200
+        const val CHAT_HEAD_LIMIT = 200
 
         /** more changed rows than this and a plain re-read of the window is the cheaper query */
         private const val MAX_PATCH_IDS = 200

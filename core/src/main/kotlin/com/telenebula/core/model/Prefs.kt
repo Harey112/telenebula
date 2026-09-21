@@ -110,6 +110,48 @@ data class UpdatePrefs(
     val notifiedVersion: String? = null,
 )
 
+/**
+ * What one profile sets for itself, a profile being the app or Dex. A null field follows the app,
+ * so a phone that never opens Dex behaves as before and an older prefs file needs no migration.
+ *
+ * Only a setting that describes a screen belongs here. Everything else is a core setting: it
+ * governs the account, the protocol, the peers or the device, it is the same in every profile,
+ * and it must never gain a per-profile value. Core settings are, deliberately and exhaustively:
+ * read receipts, typing indicators, presence, the cover reveal gate, screenshot blocking, the app
+ * lock and its delay, the background connection, start on boot, the nebula log level, developer
+ * mode, orphan cleaning, the daily update check, the quick reactions, and everything under `dex`.
+ */
+@Serializable
+data class ProfilePrefs(
+    val themeMode: ThemeMode? = null,
+    val colorTheme: String? = null,
+    val customAccent: String? = null,
+    val chatTextSize: ChatTextSize? = null,
+    val messageDensity: MessageDensity? = null,
+    val isEnterToSend: Boolean? = null,
+    val notificationsEnabled: Boolean? = null,
+    val notificationPreview: Boolean? = null,
+    val notificationSound: Boolean? = null,
+)
+
+/** The web frontend served by the phone; the password is stored as a salted PBKDF2 hash, never in clear. */
+@Serializable
+data class DexPrefs(
+    val isEnabled: Boolean = false,
+    val username: String = "",
+    val passwordAlgorithm: String = "",
+    val passwordIterations: Int = 0,
+    val passwordSalt: String = "",
+    val passwordHash: String = "",
+    /** browsers logged in at once */
+    val maxClients: Int = 2,
+    val port: Int = 8420,
+    val turnPort: Int = 8421,
+) {
+    val hasPassword: Boolean get() = passwordHash.isNotEmpty() && passwordSalt.isNotEmpty() && passwordIterations > 0
+    val hasCredentials: Boolean get() = username.isNotBlank() && hasPassword
+}
+
 /** Defaults equal the previous builds' DEFAULT_PREFS; decoding a partial file merges over them. */
 @Serializable
 data class Prefs(
@@ -141,6 +183,9 @@ data class Prefs(
     val recentReactions: List<String> = emptyList(),
     /** the six reactions offered first */
     val quickReactions: List<String> = DEFAULT_QUICK_REACTIONS,
+    val dex: DexPrefs = DexPrefs(),
+    /** the Dex profile; every unset field follows the app profile's own value above */
+    val dexProfile: ProfilePrefs = ProfilePrefs(),
 ) {
     companion object {
         val DEFAULT_QUICK_REACTIONS: List<String> = listOf("👍", "❤️", "😂", "😮", "😢", "🔥")

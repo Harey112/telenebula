@@ -123,7 +123,10 @@ data class MessageAttachment(
     val height: Long? = null,
     /** audio length, so a voice clip shows its length before it is played */
     val durationMs: Long? = null,
-)
+) {
+    /** A clip recorded in the app rather than a file picked from disk; the one rule, so every surface agrees. */
+    val isVoice: Boolean get() = mime.startsWith("audio/")
+}
 
 @Serializable
 data class ChatMessage(

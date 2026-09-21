@@ -62,21 +62,37 @@ core/     com.telenebula.core     the messaging domain (see §8): db/ (SQLite st
                                   TnCore + CoreClient (reactive flows), models, notifications, TnCoreService
 vpn/      com.telenebula.vpn      NebulaVpnService over the mobile_nebula gomobile AAR (vpn/local-maven), controller
 calls/    com.telenebula.calls    WebRTC call engine (org.webrtc via stream-webrtc-android), CallStyle
-                                  notifications, foreground service, floating call window
+                                  notifications, foreground service, floating call window; the remote
+                                  seat (a Dex browser holding the call's media) behind RemoteSeatPort
+dex/      com.telenebula.dex      Dex: the HTTPS + WebSocket server the phone runs for the web frontend
+                                  (http/, tls/ over the Android Keystore, auth/), the TURN relay (turn/)
+                                  that carries browser media onto the overlay, the wire/ frames, Limits
+web/      com.telenebula.web      the Dex frontend: Kotlin/JS, plain DOM, bundled into app assets/dex/
 scripts/  build-nebula-aar.sh, gen-icons.py, gen-emoji-catalog.py
 ```
 
 Rules:
 
-- `:core`, `:vpn`, `:calls` are Android libraries with **no `res/`**: icons and tones they need are
-  injected by `:app` (`CoreNotificationConfig`, `CallsConfig`) or live in `assets/`.
-- `:app` depends on the three libraries; the libraries never depend on `:app` or on each other.
-  The call engine talks to the core through the `CoreSignaling` interface that `:app` adapts.
+- `:core`, `:vpn`, `:calls`, `:dex` are Android libraries with **no `res/`**: icons and tones they need
+  are injected by `:app` (`CoreNotificationConfig`, `CallsConfig`, `DexAssets`) or live in `assets/`.
+- `:app` depends on the four libraries; the libraries never depend on `:app` or on each other.
+  The call engine talks to the core through the `CoreSignaling` interface that `:app` adapts; the
+  Dex server talks to the phone through `DexBackend` and to the call engine through `RemoteSeatPort`,
+  both adapted in `app/…/runtime/Dex*.kt`. `:dex` depends on coroutines, serialization and the
+  framework only, like `:core`; every bound it enforces lives in `dex/…/Limits.kt` with its reason.
+  Its TLS is the one part no unit test can reach, since the key lives in the Android Keystore and
+  the restrictions put on it are only refused when a handshake is attempted: `:dex` therefore has
+  `src/androidTest` (`./gradlew :dex:connectedDebugAndroidTest`, adding androidx.test as `:core`
+  does), and a change to `DexTls` has to run there.
+- `:web` is Kotlin/JS with no npm dependencies: `web.js` plus `index.html`, `app.css` and `favicon.svg`
+  are copied into `assets/dex/` by `:app`'s `bundleDexWeb` task at build time and are never committed.
+  The browser is a frontend only; everything it shows or does happens on the phone through the wire.
 - Generated files are committed and never hand-edited: `app/…/ui/icons/TnIcons.kt`
   (`scripts/gen-icons.py`), `app/src/main/assets/emoji_catalog.json` (`scripts/gen-emoji-catalog.py`).
 - Models that cross a real boundary (the wire, disk, a database column, the nebula config) are
   `@Serializable` data classes in `core/…/model`, encoded with the single `CoreJson` instance —
-  or with the wire's own `FrameCodec.WireJson`, whose field rules the protocol fixes.
+  or with the wire's own `FrameCodec.WireJson`, whose field rules the protocol fixes. The Dex wire
+  (`dex/…/wire/DexWire.kt`, `DexJson`) is the one other boundary; `web/…/wire` mirrors it field for field.
 - **Inside the process there is no JSON.** Modules exchange Kotlin types; a screen, a view model
   or a store that encodes or parses JSON has invented a boundary that does not exist.
   `ArchitectureTest` enforces it.
@@ -160,7 +176,8 @@ easier to read.
   notices always sit on top.
 - **Secrets**: the nebula host private key lives in the Android Keystore-backed `KeystoreBox` and is
   read only by `IdentityStore`; only `AppRuntime` hands it to the VPN start/reload. No other class
-  sees the raw key. The identity profile (`profile.json`) and prefs (`prefs.json`) keep the on-disk
+  sees the raw key. The Dex TLS key never leaves the Keystore (`DexTls`); the Dex password is stored
+  only as its PBKDF2 hash (`Passwords`), and sessions and TURN credentials live in memory only. The identity profile (`profile.json`) and prefs (`prefs.json`) keep the on-disk
   paths and keys the backup reads and writes.
 - **Nebula config** is owned by `core/nebula`: `NebulaConfigRepository` renders the site config,
   converts config ↔ editor draft and validates it, all against the golden fixtures. The config is a

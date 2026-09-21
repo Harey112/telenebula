@@ -70,6 +70,7 @@ import com.telenebula.core.model.MessageStatus
 import com.telenebula.core.model.PeerQueueState
 import com.telenebula.core.model.PeerPresence
 import com.telenebula.core.model.Prefs
+import com.telenebula.app.ui.shared.CoverGates
 import com.telenebula.app.ui.shared.uiState
 import java.io.File
 import kotlinx.coroutines.CancellationException
@@ -778,9 +779,7 @@ class ChatViewModel(
 
     /** What this chat asks before a cover comes off; the global setting when the chat has no answer of its own. */
     private fun revealGate(): CoverRevealGate {
-        val gate = core.cachedContact(peerIp)?.privacy?.revealGate ?: prefs.prefs.value.coverRevealGate
-        // a phone with no screen lock can never answer the system prompt; asking is the nearest thing to it
-        return if (gate == CoverRevealGate.DEVICE && !appLock.canUseDeviceAuth()) CoverRevealGate.ASK else gate
+        return CoverGates.effective(core.cachedContact(peerIp)?.privacy?.revealGate, prefs.prefs.value.coverRevealGate, appLock.canUseDeviceAuth())
     }
 
     private fun revealMessage(msg: ChatMessage) {

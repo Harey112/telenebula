@@ -40,7 +40,7 @@ private fun Menu(state: MeUiState, actions: MeActions) {
             )
         }
         row { SettingRow(TnIcon.CIRCLE, "Status", subtitle = "What contacts see when they check on you", onClick = { actions.open(Status) }) }
-        row { SettingRow(TnIcon.DESKTOP, "Dex", subtitle = "Coming soon", onClick = { actions.open(Dex) }) }
+        row { SettingRow(TnIcon.DESKTOP, "Dex", subtitle = state.dexLabel, onClick = { actions.open(Dex) }) }
         row {
             SettingRow(
                 TnIcon.ARCHIVE,

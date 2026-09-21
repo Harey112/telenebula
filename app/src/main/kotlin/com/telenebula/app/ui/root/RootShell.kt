@@ -166,10 +166,10 @@ fun RootShell(activity: MainActivity) {
                             entry<ContactsTab>(metadata = noAnimation) { ContactsScreen(viewModel { ContactsViewModel(graph.core, graph.notices, navigator) }) }
                             entry<CallsTab>(metadata = noAnimation) { CallsScreen(viewModel { CallsViewModel(graph.core, graph.runtime, graph.callEngine, graph.gateway, graph.notices, navigator) }) }
                             entry<MeTab>(metadata = noAnimation) {
-                                MeScreen(viewModel { MeViewModel(graph.runtime, graph.core, graph.notices, graph.updateMonitor, navigator) })
+                                MeScreen(viewModel { MeViewModel(graph.runtime, graph.core, graph.notices, graph.updateMonitor, graph.dex, navigator) })
                             }
                             entry<Settings> { SettingsScreen(viewModel { SettingsViewModel(graph.runtime, graph.updateMonitor, navigator) }) }
-                            entry<Dex> { DexScreen(viewModel { DexViewModel(navigator) }) }
+                            entry<Dex> { DexScreen(viewModel { DexViewModel(graph.dex, graph.prefs.prefs, graph.notices, graph.openWith::copyText, navigator) }) }
                             entry<Status> { StatusScreen(viewModel { StatusViewModel(graph.prefs, graph.runtime, navigator) }) }
                             entry<Call>(metadata = NavDisplay.transitionSpec { fadeIn(tween(120)) togetherWith ExitTransition.None }) {
                                 CallScreen(

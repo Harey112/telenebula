@@ -6,6 +6,7 @@ import com.telenebula.app.nav.TnKey
 import com.telenebula.app.platform.Format
 import com.telenebula.calls.CallEngine
 import com.telenebula.calls.CallPhase
+import com.telenebula.calls.CallSeat
 import com.telenebula.calls.CallState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -26,6 +27,9 @@ data class PresenceState(
     val peerName: String = "",
     val statusLabel: String = "",
     val live: CallState.Live? = null,
+    val seat: CallSeat = CallSeat.Phone,
+    /** the media is on a Dex browser: this phone only shows a banner */
+    val isRemoteSeat: Boolean = false,
 )
 
 /** Ticks once a second only while a call is active; otherwise a single value. Shared by every consumer. */
@@ -35,17 +39,15 @@ class CallPresence(callEngine: CallEngine, navigator: Navigator, scope: Coroutin
         when (live?.phase) {
             CallPhase.ACTIVE -> flow {
                 while (true) {
-                    emit(Format.duration(live.startedAt))
+                    emit(prefix(live) + Format.duration(live.startedAt))
                     delay(1_000)
                 }
             }
-            CallPhase.CONTACTING -> flowOf("Contacting…")
-            CallPhase.RINGING -> flowOf("Ringing…")
-            CallPhase.CONNECTING -> flowOf("Connecting…")
-            CallPhase.INCOMING -> flowOf(if (live.session.video) "Incoming video call" else "Incoming call")
-            null -> flowOf("")
+            else -> flowOf(currentLabel(state))
         }
     }
+
+    private fun prefix(live: CallState.Live): String = if (live.session.isRemoteSeat) "On Dex · " else ""
 
     val state: StateFlow<PresenceState> = combine(callEngine.state, navigator.topKey, label, ::buildState)
         .stateIn(
@@ -61,10 +63,10 @@ class CallPresence(callEngine: CallEngine, navigator: Navigator, scope: Coroutin
     private fun currentLabel(state: CallState): String {
         val live = state as? CallState.Live
         return when (live?.phase) {
-            CallPhase.ACTIVE -> Format.duration(live.startedAt)
-            CallPhase.CONTACTING -> "Contacting…"
-            CallPhase.RINGING -> "Ringing…"
-            CallPhase.CONNECTING -> "Connecting…"
+            CallPhase.ACTIVE -> prefix(live) + Format.duration(live.startedAt)
+            CallPhase.CONTACTING -> prefix(live) + "Contacting…"
+            CallPhase.RINGING -> prefix(live) + "Ringing…"
+            CallPhase.CONNECTING -> prefix(live) + "Connecting…"
             CallPhase.INCOMING -> if (live.session.video) "Incoming video call" else "Incoming call"
             null -> ""
         }
@@ -75,13 +77,16 @@ class CallPresence(callEngine: CallEngine, navigator: Navigator, scope: Coroutin
         return if (live == null || live.phase == CallPhase.INCOMING) {
             PresenceState(statusLabel = text, live = live, peerName = live?.session?.peer?.name.orEmpty())
         } else {
+            val isRemote = live.session.isRemoteSeat
             PresenceState(
                 isLive = true,
-                isOffCallScreen = top != Call,
-                hasVideo = live.session.remoteCamOn || !live.session.camOff,
+                isOffCallScreen = isRemote || top != Call,
+                hasVideo = !isRemote && (live.session.remoteCamOn || !live.session.camOff),
                 peerName = live.session.peer.name,
                 statusLabel = text,
                 live = live,
+                seat = live.session.seat,
+                isRemoteSeat = isRemote,
             )
         }
     }

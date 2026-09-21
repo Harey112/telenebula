@@ -34,6 +34,10 @@ import com.telenebula.app.runtime.ScreenshotPolicy
 import com.telenebula.app.runtime.AppRuntime
 import com.telenebula.app.runtime.CallPresence
 import com.telenebula.app.runtime.CoreSignalingAdapter
+import com.telenebula.app.runtime.DexBackendAdapter
+import com.telenebula.app.runtime.DexCallBridge
+import com.telenebula.app.runtime.DexController
+import com.telenebula.app.platform.WebAssets
 import com.telenebula.app.runtime.RootController
 import com.telenebula.app.sheets.MediaViewerCenter
 import com.telenebula.app.sheets.SheetCenter
@@ -102,13 +106,15 @@ class AppGraph(app: Application) {
     val appLock = AppLock(app, isEnabled = { prefs.prefs.value.isAppLockEnabled }, lockAfterSec = { prefs.prefs.value.appLockAfterSec })
 
     val webRtc = WebRtcRuntime(app)
+    val dexCalls = DexCallBridge(appScope)
     val callEngine = CallEngine(
         context = app,
         core = CoreSignalingAdapter(core),
         prefs = ::callPrefs,
         audio = CallAudio(app),
         runtime = webRtc,
-    )
+        remote = dexCalls,
+    ).also(dexCalls::attach)
 
     val runtime = AppRuntime(
         context = app,
@@ -130,6 +136,20 @@ class AppGraph(app: Application) {
         isChatOpen = ::isChatOpen,
         bootStart = BootStart(app),
         appVersion = BuildConfig.VERSION_NAME,
+    )
+
+    /** the web frontend served over the LAN; on only while the setting is and the phone is set up */
+    val dex = DexController(
+        scope = appScope,
+        prefs = prefs,
+        profile = runtime.profile,
+        backend = DexBackendAdapter(
+            appScope, runtime, core, prefs, typing, peerPresence, transfers, peerQueues, attachments, appLock, dexCalls,
+            vpn, updateMonitor, callEngine.diagnostics::value, BuildConfig.VERSION_NAME,
+        ),
+        bridge = dexCalls,
+        assets = WebAssets(app),
+        notices = notices,
     )
 
     val navigator = Navigator(appScope)
