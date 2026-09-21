@@ -6,6 +6,7 @@ import com.telenebula.app.nav.Navigator
 import com.telenebula.app.platform.PrefsRepository
 import com.telenebula.app.sheets.SheetCenter
 import com.telenebula.app.sheets.SheetRequest
+import com.telenebula.app.ui.root.QuickReactionSheet
 import com.telenebula.app.ui.fragments.SelectOption
 import com.telenebula.core.model.ChatTextSize
 import com.telenebula.core.model.MessageDensity
@@ -55,5 +56,5 @@ class ChatPrefsViewModel(
     fun goBack() = navigator.pop()
 
     /** Opens the whole catalog to fill one quick-reaction slot. */
-    fun editQuickReaction(slot: Int) = sheets.open(SheetRequest.QuickReaction(slot))
+    fun editQuickReaction(slot: Int) = sheets.open(SheetRequest("Choose a reaction") { QuickReactionSheet(slot) })
 }

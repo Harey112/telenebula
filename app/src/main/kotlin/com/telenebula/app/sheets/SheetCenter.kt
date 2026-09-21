@@ -1,29 +1,16 @@
 package com.telenebula.app.sheets
 
+import androidx.compose.runtime.Composable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** What the root bottom sheet should show, as data; the host decides how. */
-sealed interface SheetRequest {
-    val title: String
-
-    class MessageActivity(val messageId: String, val peerIp: String) : SheetRequest {
-        override val title get() = "Message activity"
-    }
-
-    class Reactions(val messageId: String, val peerIp: String) : SheetRequest {
-        override val title get() = "Reactions"
-    }
-
-    class ReactionPicker(val messageId: String, val peerIp: String) : SheetRequest {
-        override val title get() = "React"
-    }
-
-    class QuickReaction(val slot: Int) : SheetRequest {
-        override val title get() = "Choose a reaction"
-    }
-}
+/**
+ * What the root bottom sheet shows: a title and the content. The content is a root component that
+ * reads its own data from the graph, so a request captures plain values — an id, a slot — and never
+ * a view model; the sheet keeps updating after the screen that opened it is gone.
+ */
+class SheetRequest(val title: String, val content: @Composable () -> Unit)
 
 class SheetCenter {
     private val mutable = MutableStateFlow<SheetRequest?>(null)

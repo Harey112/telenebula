@@ -10,6 +10,9 @@ import android.os.PersistableBundle
 import com.telenebula.app.sheets.MediaViewerCenter
 import com.telenebula.app.sheets.SheetCenter
 import com.telenebula.app.sheets.SheetRequest
+import com.telenebula.app.ui.root.MessageActivitySheet
+import com.telenebula.app.ui.root.ReactionPickerSheet
+import com.telenebula.app.ui.root.ReactionsSheet
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -1001,7 +1004,7 @@ class ChatViewModel(
 
     override fun openReactions(msg: ChatMessage) {
         if (msg.reactions.isEmpty()) return
-        sheets.open(SheetRequest.Reactions(msg.id, peerIp))
+        sheets.open(SheetRequest("Reactions") { ReactionsSheet(msg.id, peerIp) })
     }
 
     override fun reactWith(emoji: String) {
@@ -1017,7 +1020,7 @@ class ChatViewModel(
     override fun openReactionPicker() {
         val id = menuId() ?: return
         closeOverlay()
-        sheets.open(SheetRequest.ReactionPicker(id, peerIp))
+        sheets.open(SheetRequest("React") { ReactionPickerSheet(id, peerIp) })
     }
 
     override fun beginEdit() {
@@ -1052,7 +1055,7 @@ class ChatViewModel(
     override fun openActionsSheet() {
         val id = menuId() ?: return
         closeOverlay()
-        sheets.open(SheetRequest.MessageActivity(id, peerIp))
+        sheets.open(SheetRequest("Message activity") { MessageActivitySheet(id, peerIp) })
     }
 
     override fun replyFromMenu() {

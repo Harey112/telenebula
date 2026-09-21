@@ -1,14 +1,12 @@
 package com.telenebula.app.ui.root
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.telenebula.app.AppGraph
 import com.telenebula.app.LocalAppGraph
 import com.telenebula.app.platform.ContactLabels
-import com.telenebula.app.sheets.SheetRequest
 import com.telenebula.app.ui.fragments.ActionsList
 import com.telenebula.app.ui.fragments.EmojiPicker
 import com.telenebula.app.ui.fragments.ReactionEntry
@@ -32,38 +30,36 @@ fun SheetHost() {
     val request by graph.sheets.request.collectAsStateWithLifecycle()
     val current = request
     TnBottomSheet(isVisible = current != null, title = current?.title.orEmpty(), onClose = graph.sheets::close) {
-        when (current) {
-            is SheetRequest.MessageActivity -> MessageActivitySheet(current, graph)
-            is SheetRequest.Reactions -> ReactionsSheet(current, graph)
-            is SheetRequest.ReactionPicker -> ReactionPickerSheet(current, graph)
-            is SheetRequest.QuickReaction -> QuickReactionSheet(current, graph)
-            null -> Unit
-        }
+        current?.content?.invoke()
     }
 }
 
+/** Every action on one message, with retry and cancel. */
 @Composable
-private fun MessageActivitySheet(request: SheetRequest.MessageActivity, graph: AppGraph) {
-    val message by graph.core.messageFlow(request.messageId, request.peerIp).collectAsStateWithLifecycle(initialValue = LOADING)
-    val actions by graph.core.messageActionsFlow(request.messageId, request.peerIp).collectAsStateWithLifecycle(initialValue = emptyList())
+fun MessageActivitySheet(messageId: String, peerIp: String) {
+    val graph = LocalAppGraph.current
+    val message by graph.core.messageFlow(messageId, peerIp).collectAsStateWithLifecycle(initialValue = LOADING)
+    val actions by graph.core.messageActionsFlow(messageId, peerIp).collectAsStateWithLifecycle(initialValue = emptyList())
     LaunchedEffect(message) { if (message == null) graph.sheets.close() }
     val queue by graph.peerQueues.queues.collectAsStateWithLifecycle()
     ActionsList(
         actions = actions,
         // nothing queued for this peer means nothing is waiting on it, so it reads as reachable
-        isPeerReachable = queue[request.peerIp]?.isReachable ?: true,
+        isPeerReachable = queue[peerIp]?.isReachable ?: true,
         onRetry = { id -> graph.appScope.launch { graph.core.retryAction(id) } },
         onCancel = { id -> graph.appScope.launch { graph.core.cancelAction(id) } },
     )
 }
 
+/** Who reacted with what; the reader's own reaction can be removed. */
 @Composable
-private fun ReactionsSheet(request: SheetRequest.Reactions, graph: AppGraph) {
+fun ReactionsSheet(messageId: String, peerIp: String) {
+    val graph = LocalAppGraph.current
     val profile by graph.runtime.profile.collectAsStateWithLifecycle()
     val myIp = profile?.overlayIp.orEmpty()
-    val entries by remember(request, myIp) {
-        combine(graph.core.messageFlow(request.messageId, request.peerIp), graph.core.contactFlow(request.peerIp)) { message, contact ->
-            val peerName = contact?.let(ContactLabels::chatLabel) ?: request.peerIp
+    val entries by remember(messageId, peerIp, myIp) {
+        combine(graph.core.messageFlow(messageId, peerIp), graph.core.contactFlow(peerIp)) { message, contact ->
+            val peerName = contact?.let(ContactLabels::chatLabel) ?: peerIp
             message?.reactions?.map { (ip, emoji) -> ReactionEntry(ip, emoji, if (ip == myIp) "You" else peerName, isMine = ip == myIp) }
         }
     }.collectAsStateWithLifecycle(initialValue = INITIAL_ENTRIES)
@@ -73,18 +69,20 @@ private fun ReactionsSheet(request: SheetRequest.Reactions, graph: AppGraph) {
     ReactionsList(
         entries = current.orEmpty(),
         onRemove = {
-            current?.firstOrNull { it.isMine }?.let { mine -> graph.appScope.launch { graph.core.reactToMessage(request.messageId, mine.emoji) } }
+            current?.firstOrNull { it.isMine }?.let { mine -> graph.appScope.launch { graph.core.reactToMessage(messageId, mine.emoji) } }
             graph.sheets.close()
         },
     )
 }
 
+/** The whole catalog, to react to one message. */
 @Composable
-private fun ReactionPickerSheet(request: SheetRequest.ReactionPicker, graph: AppGraph) {
+fun ReactionPickerSheet(messageId: String, peerIp: String) {
+    val graph = LocalAppGraph.current
     val profile by graph.runtime.profile.collectAsStateWithLifecycle()
     val myIp = profile?.overlayIp.orEmpty()
     val p by graph.prefs.prefs.collectAsStateWithLifecycle()
-    val message by graph.core.messageFlow(request.messageId, request.peerIp).collectAsStateWithLifecycle(initialValue = LOADING)
+    val message by graph.core.messageFlow(messageId, peerIp).collectAsStateWithLifecycle(initialValue = LOADING)
     val recent = remember(p.recentReactions, p.quickReactions) { p.recentReactions.filterNot { it in p.quickReactions } }
     val groups by graph.emojis.groups.collectAsStateWithLifecycle()
     EmojiPicker(
@@ -93,24 +91,26 @@ private fun ReactionPickerSheet(request: SheetRequest.ReactionPicker, graph: App
         recentReactions = recent,
         currentReaction = message?.takeIf { it !== LOADING }?.reactions?.get(myIp),
         onPick = { emoji ->
-            graph.appScope.launch { graph.core.reactToMessage(request.messageId, emoji) }
+            graph.appScope.launch { graph.core.reactToMessage(messageId, emoji) }
             graph.prefs.recordRecentReaction(emoji)
             graph.sheets.close()
         },
     )
 }
 
+/** The whole catalog, to fill one quick-reaction slot. */
 @Composable
-private fun QuickReactionSheet(request: SheetRequest.QuickReaction, graph: AppGraph) {
+fun QuickReactionSheet(slot: Int) {
+    val graph = LocalAppGraph.current
     val p by graph.prefs.prefs.collectAsStateWithLifecycle()
     val groups by graph.emojis.groups.collectAsStateWithLifecycle()
     EmojiPicker(
         groups = groups,
         yourReactions = emptyList(),
         recentReactions = emptyList(),
-        currentReaction = p.quickReactions.getOrNull(request.slot),
+        currentReaction = p.quickReactions.getOrNull(slot),
         onPick = { emoji ->
-            graph.prefs.setQuickReaction(request.slot, emoji)
+            graph.prefs.setQuickReaction(slot, emoji)
             graph.sheets.close()
         },
     )
