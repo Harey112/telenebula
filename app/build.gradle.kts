@@ -187,6 +187,10 @@ abstract class BundleDexWeb : DefaultTask() {
     @get:InputFiles
     abstract val resources: ConfigurableFileCollection
 
+    /** the phone's own emoji catalogue, so the browser offers exactly what the phone does */
+    @get:InputFiles
+    abstract val shared: ConfigurableFileCollection
+
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
 
@@ -197,10 +201,11 @@ abstract class BundleDexWeb : DefaultTask() {
         target.mkdirs()
         val wanted = setOf("index.html", "app.css", "favicon.svg")
         for (file in resources.asFileTree.files) if (file.name in wanted) file.copyTo(target.resolve(file.name), overwrite = true)
+        for (file in shared.asFileTree.files) file.copyTo(target.resolve(file.name), overwrite = true)
         // the webpack task reports its output directory; the bundle is one file inside it
         val js = bundle.asFileTree.files.firstOrNull { it.name == "web.js" } ?: throw GradleException("The :web bundle (web.js) was not produced")
         js.copyTo(target.resolve("web.js"), overwrite = true)
-        for (name in wanted + "web.js") if (!target.resolve(name).isFile) throw GradleException("Dex web asset missing: $name")
+        for (name in wanted + "web.js" + "emoji_catalog.json") if (!target.resolve(name).isFile) throw GradleException("Dex web asset missing: $name")
     }
 }
 
@@ -209,6 +214,7 @@ val bundleDexWeb = tasks.register<BundleDexWeb>("bundleDexWeb") {
     dependsOn(webpack)
     bundle.from(webpack.map { it.outputs.files })
     resources.from(project(":web").layout.projectDirectory.dir("src/jsMain/resources"))
+    shared.from(layout.projectDirectory.file("src/main/assets/emoji_catalog.json"))
     outputDir.set(layout.buildDirectory.dir("generated/dexWeb"))
 }
 

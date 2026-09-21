@@ -6,6 +6,7 @@ import kotlinx.browser.window
 import kotlinx.coroutines.await
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import org.w3c.dom.url.URL
 import org.w3c.fetch.RequestInit
 import org.w3c.fetch.Response
@@ -52,6 +53,10 @@ sealed interface UploadOutcome {
     data class Failed(val message: String) : UploadOutcome
 }
 
+/** One group of the phone's own emoji catalogue, served at `/emoji_catalog.json`. */
+@Serializable
+data class EmojiGroup(val title: String, val emojis: List<String>)
+
 @Serializable
 private data class LoginBody(val username: String, val password: String)
 
@@ -95,6 +100,18 @@ object Api {
         DexJson.decodeFromString(ErrorBody.serializer(), response.text().await()).error
     } catch (e: Throwable) {
         null
+    }
+
+    /** The phone's own catalogue, so the browser offers exactly what the phone does; empty when it cannot be read. */
+    suspend fun emojiCatalog(): List<EmojiGroup> = try {
+        val response = window.fetch("/emoji_catalog.json", requestInit("GET")).await()
+        if (response.status.toInt() != 200) {
+            emptyList()
+        } else {
+            DexJson.decodeFromString(ListSerializer(EmojiGroup.serializer()), response.text().await())
+        }
+    } catch (e: Throwable) {
+        emptyList()
     }
 
     fun attachmentUrl(messageId: String): String = "/a/${encodeURIComponent(messageId)}"

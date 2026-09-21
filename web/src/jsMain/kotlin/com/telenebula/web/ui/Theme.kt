@@ -1,12 +1,12 @@
 package com.telenebula.web.ui
 
+import com.telenebula.web.state.Effective
 import com.telenebula.web.wire.DexDensity
-import com.telenebula.web.wire.DexSettings
 import com.telenebula.web.wire.DexTextSize
 import com.telenebula.web.wire.DexThemeMode
 import kotlinx.browser.document
 
-/** What the phone's Appearance screen sets, applied to this browser too. */
+/** What this browser resolved for itself, painted onto the document. */
 object Theme {
     private val palettes = mapOf(
         "sky" to ("#5FA3DB" to "#7FB7E6"),
@@ -17,26 +17,22 @@ object Theme {
         "slate" to ("#5A6B7C" to "#8AA0B4"),
     )
 
-    fun apply(settings: DexSettings?) {
+    fun apply(s: Effective) {
         val root = document.documentElement ?: return
-        val s = settings ?: return
-        root.setAttribute(
-            "data-theme",
-            when (s.themeMode) {
-                DexThemeMode.SYSTEM -> "system"
-                DexThemeMode.LIGHT -> "light"
-                DexThemeMode.DARK -> "dark"
-            },
-        )
-        root.setAttribute(
-            "data-text",
-            when (s.chatTextSize) {
-                DexTextSize.SMALL -> "small"
-                DexTextSize.MEDIUM -> "medium"
-                DexTextSize.LARGE -> "large"
-            },
-        )
-        root.setAttribute("data-density", if (s.messageDensity == DexDensity.COMPACT) "compact" else "comfortable")
+        val theme = when (s.themeMode) {
+            DexThemeMode.SYSTEM -> "system"
+            DexThemeMode.LIGHT -> "light"
+            DexThemeMode.DARK -> "dark"
+        }
+        root.setAttribute("data-theme", theme)
+        val text = when (s.chatTextSize) {
+            DexTextSize.SMALL -> "small"
+            DexTextSize.MEDIUM -> "medium"
+            DexTextSize.LARGE -> "large"
+        }
+        root.setAttribute("data-text", text)
+        val density = if (s.messageDensity == DexDensity.COMPACT) "compact" else "comfortable"
+        root.setAttribute("data-density", density)
         val custom = s.customAccent.takeIf { it.startsWith("#") && it.length == 7 }
         val pair = palettes[s.colorTheme]
         val light = if (s.colorTheme == "custom") custom else pair?.first

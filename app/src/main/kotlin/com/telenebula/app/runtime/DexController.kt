@@ -15,6 +15,7 @@ import com.telenebula.dex.DexServerState
 import com.telenebula.dex.Limits
 import com.telenebula.dex.PasswordHash
 import com.telenebula.dex.auth.Passwords
+import com.telenebula.dex.http.Cidr
 import com.telenebula.dex.tls.DexTls
 import com.telenebula.dex.turn.TurnServer
 import com.telenebula.dex.turn.TurnState
@@ -176,7 +177,8 @@ class DexController(
     }
 
     private fun isOverlay(address: InetAddress): Boolean {
-        for (cidr in backend.overlayNetworks.value) if (Cidr.contains(cidr, address)) return true
+        val networks = backend.overlayNetworks.value.mapNotNull(Cidr::parse)
+        if (Cidr.anyContains(networks, address)) return true
         val own = overlayAddress
         return own != null && own == address
     }
@@ -188,30 +190,3 @@ class DexController(
     }
 }
 
-/** CIDR membership for both families; malformed input never matches. */
-object Cidr {
-    fun contains(cidr: String, address: InetAddress): Boolean {
-        val slash = cidr.indexOf('/')
-        val host = if (slash >= 0) cidr.substring(0, slash) else cidr
-        val bits = if (slash >= 0) cidr.substring(slash + 1).toIntOrNull() ?: return false else null
-        val network = try {
-            if (host.isBlank() || host.any { it.isLetter() && it !in "abcdefABCDEF" }) return false
-            InetAddress.getByName(host)
-        } catch (e: UnknownHostException) {
-            return false
-        }
-        val a = network.address
-        val b = address.address
-        if (a.size != b.size) return false
-        val prefix = bits ?: (a.size * 8)
-        if (prefix < 0 || prefix > a.size * 8) return false
-        var remaining = prefix
-        for (i in a.indices) {
-            if (remaining <= 0) return true
-            val mask = if (remaining >= 8) 0xFF else (0xFF shl (8 - remaining)) and 0xFF
-            if ((a[i].toInt() and mask) != (b[i].toInt() and mask)) return false
-            remaining -= 8
-        }
-        return true
-    }
-}

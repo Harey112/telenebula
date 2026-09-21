@@ -1,8 +1,11 @@
 package com.telenebula.web.ui
 
 import com.telenebula.web.net.Api
+import com.telenebula.web.net.EmojiGroup
 import com.telenebula.web.state.Actions
 import com.telenebula.web.state.AppState
+import com.telenebula.web.state.Dialog
+import com.telenebula.web.state.EmojiTarget
 import com.telenebula.web.state.Recording
 import com.telenebula.web.state.Upload
 import com.telenebula.web.util.Format
@@ -24,8 +27,6 @@ import org.w3c.dom.events.KeyboardEvent
 import org.w3c.files.File
 import org.w3c.files.get
 import kotlin.js.Date
-
-val QUICK_REACTIONS = listOf("👍", "❤️", "😂", "😮", "😢", "🔥")
 
 sealed interface TimelineItem {
     val key: String
@@ -63,6 +64,10 @@ class ConversationView(root: HTMLElement, private val actions: Actions) {
     private val items = div("timeline-items")
     private val newBelow = button("pill new-below hidden", "Scroll to newest messages", { scrollToBottom(true) }, Icon.ARROW_DOWN, "New messages")
     private val list = KeyedList<TimelineItem>(items, ::createItem, ::updateItem)
+    private var quickReactions: List<String> = DEFAULT_QUICK_REACTIONS
+    private var emojiGroups: List<EmojiGroup> = emptyList()
+    private var isEnterToSend = false
+    private var reactPeer = ""
 
     private val composer = div("composer")
     private val replyStrip = div("reply-strip hidden")
@@ -106,7 +111,8 @@ class ConversationView(root: HTMLElement, private val actions: Actions) {
         }
         textarea.on("keydown") { e ->
             val k = e as? KeyboardEvent ?: return@on
-            if (k.key == "Enter" && !k.shiftKey) {
+            val isSend = if (isEnterToSend) k.key == "Enter" && !k.shiftKey else k.key == "Enter" && (k.shiftKey || k.ctrlKey || k.metaKey)
+            if (isSend) {
                 k.preventDefault()
                 submit()
             }
@@ -121,8 +127,14 @@ class ConversationView(root: HTMLElement, private val actions: Actions) {
             fileInput.value = ""
         }
         window.addEventListener("focus", { actions.markRead() })
-        for (e in QUICK_REACTIONS) emojiBar.appendChild(button("emoji", "Insert $e", { insertText(e) }, text = e))
         items.on("click") { e -> if ((e.target as? HTMLElement)?.closest(".msg-menu, .react-bar") == null) closeMenus() }
+    }
+
+    private fun buildEmojiBar() {
+        emojiBar.clear()
+        val quick = div("emoji-quick")
+        for (e in quickReactions) quick.add(button("emoji", "Insert $e", { insertText(e) }, text = e))
+        emojiBar.add(quick, emojiPicker(emojiGroups) { e -> insertText(e) })
     }
 
     private fun closeMenus() {
@@ -239,7 +251,13 @@ class ConversationView(root: HTMLElement, private val actions: Actions) {
             autosize()
             cancelTyping(sendFalse = false)
         }
-        if (prev.view !== view || prev.revealed !== next.revealed || prev.menuFor != next.menuFor || prev.reactFor != next.reactFor || prev.openPeer != peer || prev.isLoadingMore != next.isLoadingMore) {
+        val quick = next.quickReactions
+        val hasQuickChanged = quick != quickReactions
+        quickReactions = quick
+        emojiGroups = next.emoji
+        isEnterToSend = next.isEnterToSend
+        reactPeer = peer.orEmpty()
+        if (prev.view !== view || prev.revealed !== next.revealed || prev.menuFor != next.menuFor || prev.reactFor != next.reactFor || prev.openPeer != peer || prev.isLoadingMore != next.isLoadingMore || hasQuickChanged) {
             renderTimeline(prev, next, view?.messages.orEmpty(), label, contact, view?.freeBytes ?: next.freeBytes, view?.hasMore == true, next.isLoadingMore)
         }
         renderComposer(prev, next)
@@ -414,15 +432,8 @@ class ConversationView(root: HTMLElement, private val actions: Actions) {
 
     private fun reactBar(m: DexMessage, meIp: String): HTMLElement {
         val bar = div("react-bar")
-        for (e in QUICK_REACTIONS) bar.appendChild(button("emoji" + if (m.reactions[meIp] == e) " mine" else "", "React $e", { actions.react(m, e) }, text = e))
-        val custom = el("input", "react-custom") { setAttribute("placeholder", "…"); setAttribute("aria-label", "Custom reaction"); setAttribute("maxlength", "8") } as HTMLInputElement
-        custom.on("keydown") { e ->
-            if ((e as? KeyboardEvent)?.key == "Enter") {
-                val v = custom.value.trim()
-                if (v.isNotEmpty()) actions.react(m, v)
-            }
-        }
-        bar.appendChild(custom)
+        for (e in quickReactions) bar.appendChild(button("emoji" + if (m.reactions[meIp] == e) " mine" else "", "React $e", { actions.react(m, e) }, text = e))
+        bar.appendChild(button("emoji react-more", "More emoji", { actions.openDialog(Dialog.EmojiPick(EmojiTarget.React(m.id, reactPeer))) }, text = "＋"))
         return bar
     }
 
@@ -563,6 +574,7 @@ class ConversationView(root: HTMLElement, private val actions: Actions) {
             coverBtn.title = if (c.isCovered) "Cover message · on" else "Cover message"
             textarea.setAttribute("placeholder", if (c.isCovered) "Covered message" else if (c.editing != null) "Edit message" else "Message")
             emojiBar.toggle("hidden", !c.isEmojiOpen)
+            if (c.isEmojiOpen) buildEmojiBar()
             emojiBtn.toggle("on", c.isEmojiOpen)
             replyStrip.clear()
             val quoted = c.editing ?: c.replyTo

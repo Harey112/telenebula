@@ -31,12 +31,12 @@ class WebAssets(context: Context) : DexAssets {
         "js" -> "application/javascript; charset=utf-8"
         "css" -> "text/css; charset=utf-8"
         "svg" -> "image/svg+xml"
-        "map" -> "application/json"
+        "map", "json" -> "application/json"
         else -> "application/octet-stream"
     }
 
     companion object {
         const val DIR = "dex"
-        val FILES: Set<String> = setOf("index.html", "web.js", "app.css", "favicon.svg")
+        val FILES: Set<String> = setOf("index.html", "web.js", "app.css", "favicon.svg", "emoji_catalog.json")
     }
 }

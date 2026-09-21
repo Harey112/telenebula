@@ -23,6 +23,7 @@ interface Actions {
     fun toggleCover()
     fun startEdit(msg: DexMessage?)
     fun react(msg: DexMessage, emoji: String)
+    fun reactById(messageId: String, emoji: String)
     fun deleteMessage(msg: DexMessage, forEveryone: Boolean)
     fun copyMessage(msg: DexMessage)
     fun retrySend(msg: DexMessage)

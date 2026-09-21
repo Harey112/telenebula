@@ -114,7 +114,7 @@ class App(root: HTMLElement) : Actions, CallMediaPort {
             prompt.render(prev, next)
             toasts.render(prev, next)
             if (prev.chats !== next.chats) updateTitle(next)
-            if (prev.settings != next.settings) Theme.apply(next.settings)
+            if (prev.settings != next.settings) Theme.apply(next.effective)
             if (prev.screen !== next.screen && next.screen is Screen.Login) socket.stop()
         }
         document.addEventListener("keydown", ::onKey)
@@ -127,10 +127,19 @@ class App(root: HTMLElement) : Actions, CallMediaPort {
                 is SessionResult.Active -> {
                     store.update { it.copy(screen = Screen.App, me = s.me) }
                     socket.start()
+                    loadEmoji()
                 }
                 SessionResult.None -> store.update { it.copy(screen = Screen.Login()) }
                 is SessionResult.Failed -> store.update { it.copy(screen = Screen.Login(error = "Can't reach the phone: ${s.message}")) }
             }
+        }
+    }
+
+    private fun loadEmoji() {
+        if (state.emoji.isNotEmpty()) return
+        scope.launch {
+            val groups = Api.emojiCatalog()
+            if (groups.isNotEmpty()) store.update { it.copy(emoji = groups) }
         }
     }
 
@@ -210,7 +219,10 @@ class App(root: HTMLElement) : Actions, CallMediaPort {
     private fun onFrame(frame: ServerFrame) {
         when (frame) {
             ServerFrame.Pong -> Unit
-            is ServerFrame.Hello -> store.update { it.copy(me = frame.me, clientId = frame.clientId, freeBytes = frame.freeBytes, screen = Screen.App) }
+            is ServerFrame.Hello -> {
+                store.update { it.copy(me = frame.me, clientId = frame.clientId, freeBytes = frame.freeBytes, screen = Screen.App) }
+                loadEmoji()
+            }
             is ServerFrame.Chats -> {
                 notifyNewMessages(state.chats, frame.items)
                 store.update { it.copy(chats = frame.items) }
@@ -268,12 +280,33 @@ class App(root: HTMLElement) : Actions, CallMediaPort {
 
     private fun notifyNewMessages(previous: List<DexChat>, next: List<DexChat>) {
         if (previous.isEmpty() || !document.asDynamic().hidden.unsafeCast<Boolean>()) return
+        if (!store.state.effective.notificationsEnabled) return
         val before = previous.associateBy { it.peer }
         for (chat in next) {
             val old = before[chat.peer]
             if (chat.lastDir != DexDirection.IN || chat.isMuted || chat.unread == 0) continue
             if (old != null && old.lastTs == chat.lastTs) continue
-            notify(chat.label, chat.lastBody ?: "New message", "msg-${chat.peer}")
+            val body = if (store.state.effective.notificationPreview) chat.lastBody ?: "New message" else "New message"
+            notify(chat.label, body, "msg-${chat.peer}")
+        }
+    }
+
+    /** A short tone built in the page; the stylesheet's origin forbids fetching an audio file. */
+    private fun beep() {
+        if (!store.state.effective.notificationSound) return
+        try {
+            val ctx: dynamic = js("new (window.AudioContext || window.webkitAudioContext)()")
+            val osc: dynamic = ctx.createOscillator()
+            val gain: dynamic = ctx.createGain()
+            osc.type = "sine"
+            osc.frequency.value = 880
+            gain.gain.value = 0.04
+            osc.connect(gain)
+            gain.connect(ctx.destination)
+            osc.start()
+            window.setTimeout({ runCatching { osc.stop(); ctx.close() }; Unit }, 120)
+        } catch (e: Throwable) {
+            // no audio on this page; the notification itself still shows
         }
     }
 
@@ -282,6 +315,7 @@ class App(root: HTMLElement) : Actions, CallMediaPort {
             if (js("typeof Notification === 'undefined'").unsafeCast<Boolean>()) return
             if (js("Notification.permission") as String != "granted") return
             val n: dynamic = js("new Notification(title, { body: body, tag: tag })")
+            beep()
             n.onclick = {
                 window.focus()
                 n.close()
@@ -583,9 +617,11 @@ class App(root: HTMLElement) : Actions, CallMediaPort {
 
     override fun startEdit(msg: DexMessage?) = store.update { it.copy(composer = it.composer.copy(editing = msg, replyTo = null), menuFor = null) }
 
-    override fun react(msg: DexMessage, emoji: String) {
+    override fun react(msg: DexMessage, emoji: String) = reactById(msg.id, emoji)
+
+    override fun reactById(messageId: String, emoji: String) {
         store.update { it.copy(reactFor = null) }
-        send(ClientFrame.React(msg.id, emoji.take(16)))
+        send(ClientFrame.React(messageId, emoji.take(16)))
     }
 
     override fun deleteMessage(msg: DexMessage, forEveryone: Boolean) {

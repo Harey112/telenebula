@@ -283,6 +283,20 @@ data class DexPresencePrefs(val isShared: Boolean = true, val pauseMinutes: Int 
 @Serializable
 data class DexUpdatePrefs(val isDailyCheckEnabled: Boolean = true, val lastCheckedAt: Long = 0, val latestVersion: String? = null)
 
+/** What the browser sets for itself; a null field follows the app's own value. */
+@Serializable
+data class DexSurface(
+    val themeMode: DexThemeMode? = null,
+    val colorTheme: String? = null,
+    val customAccent: String? = null,
+    val chatTextSize: DexTextSize? = null,
+    val messageDensity: DexDensity? = null,
+    val isEnterToSend: Boolean? = null,
+    val notificationsEnabled: Boolean? = null,
+    val notificationPreview: Boolean? = null,
+    val notificationSound: Boolean? = null,
+)
+
 /** Everything the phone's settings screens edit. What only a phone can carry out is not here. */
 @Serializable
 data class DexSettings(
@@ -314,6 +328,8 @@ data class DexSettings(
     val dexUsername: String = "",
     val dexMaxClients: Int = 2,
     val dexPort: Int = 0,
+    /** the same settings again, as the browser has them set for itself */
+    val dexSurface: DexSurface = DexSurface(),
 )
 
 /** A field left out stays as it is, so a browser sends only what it changed. */
@@ -340,6 +356,8 @@ data class DexSettingsPatch(
     val autoCleanOrphans: Boolean? = null,
     val appLockAfterSec: Int? = null,
     val quickReactions: List<String>? = null,
+    /** replaces the browser's own settings whole, so clearing one back to "follow the app" is expressible */
+    val dexSurface: DexSurface? = null,
 )
 
 // --- what the phone reports about itself -----------------------------------------------------

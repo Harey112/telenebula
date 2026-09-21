@@ -1,5 +1,6 @@
 package com.telenebula.web.state
 
+import com.telenebula.web.net.EmojiGroup
 import com.telenebula.web.wire.DexAccount
 import com.telenebula.web.wire.DexCallLog
 import com.telenebula.web.wire.DexCallState
@@ -60,9 +61,15 @@ sealed interface Dialog {
     data class AddContact(val ip: String = "", val name: String = "", val nickname: String = "", val notes: String = "", val error: String? = null) : Dialog
     data class EditContact(val peer: String, val name: String, val nickname: String, val notes: String) : Dialog
     data class ChangeIp(val peer: String, val newIp: String, val error: String? = null) : Dialog
-    data class QuickReaction(val slot: Int, val emoji: String) : Dialog
+    data class EmojiPick(val target: EmojiTarget) : Dialog
     data class MuteFor(val peer: String) : Dialog
     data class Disappearing(val peer: String) : Dialog
+}
+
+/** What a picked emoji is for; the dialog is the same either way. */
+sealed interface EmojiTarget {
+    data class Slot(val slot: Int) : EmojiTarget
+    data class React(val messageId: String, val peer: String) : EmojiTarget
 }
 
 data class Toast(val id: Int, val level: DexNoticeLevel, val message: String)
@@ -136,9 +143,20 @@ data class AppState(
     val chatSearchResults: List<DexMessage>? = null,
     val dialog: Dialog? = null,
     val isRailOpen: Boolean = false,
+    val emoji: List<EmojiGroup> = emptyList(),
 ) {
     val isMySeat: Boolean get() = call.seat == com.telenebula.web.wire.DexSeat.DEX && call.seatClientId != null && call.seatClientId == clientId
     val unreadTotal: Int get() = chats.filter { !it.isArchived }.sumOf { it.unread }
+
+    /** the phone's own six; the constant only stands in until its settings land */
+    val quickReactions: List<String>
+        get() = settings?.quickReactions?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }
+            ?: com.telenebula.web.ui.DEFAULT_QUICK_REACTIONS
+
+    /** the one place the browser's own settings are resolved against the app's */
+    val effective: Effective get() = Effective.of(settings)
+
+    val isEnterToSend: Boolean get() = effective.isEnterToSend
 }
 
 /** One value, replaced whole; listeners run once per animation frame however many updates land. */

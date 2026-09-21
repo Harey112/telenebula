@@ -6,6 +6,7 @@ import com.telenebula.app.platform.ActionQueue
 import com.telenebula.app.platform.CertInspector
 import com.telenebula.app.platform.ContactLabels
 import com.telenebula.app.platform.PrefsRepository
+import com.telenebula.app.ui.shared.CoverGates
 import com.telenebula.core.CoreClient
 import com.telenebula.core.PeerQueueStore
 import com.telenebula.core.PresenceStore
@@ -42,6 +43,7 @@ import com.telenebula.core.model.MessageStatus
 import com.telenebula.core.model.PeerPresence
 import com.telenebula.core.model.PeerQueueState
 import com.telenebula.core.model.Profile
+import com.telenebula.core.model.SurfacePrefs
 import com.telenebula.dex.DexBackend
 import com.telenebula.dex.DexCallCommand
 import com.telenebula.dex.DexCallEvent
@@ -86,6 +88,7 @@ import com.telenebula.dex.wire.DexRevealGate
 import com.telenebula.dex.wire.DexSendState
 import com.telenebula.dex.wire.DexSettings
 import com.telenebula.dex.wire.DexSettingsPatch
+import com.telenebula.dex.wire.DexSurface
 import com.telenebula.dex.wire.DexStorage
 import com.telenebula.dex.wire.DexTextSize
 import com.telenebula.dex.wire.DexThemeMode
@@ -253,6 +256,7 @@ class DexBackendAdapter(
                 autoCleanOrphans = patch.autoCleanOrphans ?: p.autoCleanOrphans,
                 appLockAfterSec = patch.appLockAfterSec?.coerceIn(0, MAX_LOCK_DELAY_SEC) ?: p.appLockAfterSec,
                 quickReactions = patch.quickReactions?.takeIf { it.size == p.quickReactions.size && it.all(::isEmoji) } ?: p.quickReactions,
+                dexSurface = patch.dexSurface?.toCore() ?: p.dexSurface,
             )
         }
         // nebula reads its log level from the site config, which only a reload hands it
@@ -531,9 +535,7 @@ class DexBackendAdapter(
     private fun gateFor(peer: String): DexRevealGate = gateOf(core.cachedContact(peer), prefs.prefs.value.coverRevealGate)
 
     private fun gateOf(contact: Contact?, fallback: CoverRevealGate): DexRevealGate {
-        val gate = contact?.privacy?.revealGate ?: fallback
-        val effective = if (gate == CoverRevealGate.DEVICE && !appLock.canUseDeviceAuth()) CoverRevealGate.ASK else gate
-        return when (effective) {
+        return when (CoverGates.effective(contact?.privacy?.revealGate, fallback, appLock.canUseDeviceAuth())) {
             CoverRevealGate.TAP -> DexRevealGate.TAP
             CoverRevealGate.ASK -> DexRevealGate.ASK
             CoverRevealGate.CODE -> DexRevealGate.CODE
@@ -642,7 +644,7 @@ class DexBackendAdapter(
     }
 
     private fun kindOf(kind: MessageKind, att: MessageAttachment?): DexMessageKind = when {
-        att != null && att.mime.startsWith("audio/") -> DexMessageKind.VOICE
+        att != null && att.isVoice -> DexMessageKind.VOICE
         kind == MessageKind.IMAGE -> DexMessageKind.IMAGE
         kind == MessageKind.VIDEO -> DexMessageKind.VIDEO
         kind == MessageKind.FILE -> DexMessageKind.FILE
@@ -699,23 +701,29 @@ class DexBackendAdapter(
 
     // --- settings mapping --------------------------------------------------------------------------
 
+    private fun ThemeMode.toWire(): DexThemeMode = when (this) {
+        ThemeMode.SYSTEM -> DexThemeMode.SYSTEM
+        ThemeMode.LIGHT -> DexThemeMode.LIGHT
+        ThemeMode.DARK -> DexThemeMode.DARK
+    }
+
+    private fun ChatTextSize.toWire(): DexTextSize = when (this) {
+        ChatTextSize.SMALL -> DexTextSize.SMALL
+        ChatTextSize.MEDIUM -> DexTextSize.MEDIUM
+        ChatTextSize.LARGE -> DexTextSize.LARGE
+    }
+
+    private fun MessageDensity.toWire(): DexDensity = when (this) {
+        MessageDensity.COMFORTABLE -> DexDensity.COMFORTABLE
+        MessageDensity.COMPACT -> DexDensity.COMPACT
+    }
+
     private fun Prefs.toSettings(): DexSettings = DexSettings(
-        themeMode = when (themeMode) {
-            ThemeMode.SYSTEM -> DexThemeMode.SYSTEM
-            ThemeMode.LIGHT -> DexThemeMode.LIGHT
-            ThemeMode.DARK -> DexThemeMode.DARK
-        },
+        themeMode = themeMode.toWire(),
         colorTheme = colorTheme,
         customAccent = customAccent,
-        chatTextSize = when (chatTextSize) {
-            ChatTextSize.SMALL -> DexTextSize.SMALL
-            ChatTextSize.MEDIUM -> DexTextSize.MEDIUM
-            ChatTextSize.LARGE -> DexTextSize.LARGE
-        },
-        messageDensity = when (messageDensity) {
-            MessageDensity.COMFORTABLE -> DexDensity.COMFORTABLE
-            MessageDensity.COMPACT -> DexDensity.COMPACT
-        },
+        chatTextSize = chatTextSize.toWire(),
+        messageDensity = messageDensity.toWire(),
         isEnterToSend = isEnterToSend,
         isVideoSpeakerDefault = isVideoSpeakerDefault,
         isScreenshotBlocked = isScreenshotBlocked,
@@ -746,6 +754,31 @@ class DexBackendAdapter(
         dexUsername = dex.username,
         dexMaxClients = dex.maxClients,
         dexPort = dex.port,
+        dexSurface = dexSurface.toWire(),
+    )
+
+    private fun SurfacePrefs.toWire(): DexSurface = DexSurface(
+        themeMode = themeMode?.toWire(),
+        colorTheme = colorTheme,
+        customAccent = customAccent,
+        chatTextSize = chatTextSize?.toWire(),
+        messageDensity = messageDensity?.toWire(),
+        isEnterToSend = isEnterToSend,
+        notificationsEnabled = notificationsEnabled,
+        notificationPreview = notificationPreview,
+        notificationSound = notificationSound,
+    )
+
+    private fun DexSurface.toCore(): SurfacePrefs = SurfacePrefs(
+        themeMode = themeMode?.toCore(),
+        colorTheme = colorTheme?.trim()?.takeIf { it.isNotEmpty() && it.length <= MAX_THEME_CHARS },
+        customAccent = customAccent?.takeIf { ACCENT.matches(it) },
+        chatTextSize = chatTextSize?.toCore(),
+        messageDensity = messageDensity?.toCore(),
+        isEnterToSend = isEnterToSend,
+        notificationsEnabled = notificationsEnabled,
+        notificationPreview = notificationPreview,
+        notificationSound = notificationSound,
     )
 
     private fun DexNotifications.toCore(): NotificationPrefs = NotificationPrefs(

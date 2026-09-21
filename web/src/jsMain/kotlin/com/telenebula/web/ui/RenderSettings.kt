@@ -3,6 +3,8 @@ package com.telenebula.web.ui
 import com.telenebula.web.state.Actions
 import com.telenebula.web.state.AppState
 import com.telenebula.web.state.Dialog
+import com.telenebula.web.state.Effective
+import com.telenebula.web.state.EmojiTarget
 import com.telenebula.web.state.SettingsTab
 import com.telenebula.web.state.Tab
 import com.telenebula.web.util.Format
@@ -18,6 +20,7 @@ import com.telenebula.web.wire.DexQuietHours
 import com.telenebula.web.wire.DexRevealGate
 import com.telenebula.web.wire.DexSettings
 import com.telenebula.web.wire.DexSettingsPatch
+import com.telenebula.web.wire.DexSurface
 import com.telenebula.web.wire.DexTextSize
 import com.telenebula.web.wire.DexThemeMode
 import kotlinx.browser.document
@@ -78,6 +81,7 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
             prev.storage != next.storage ||
             prev.diagnostics != next.diagnostics ||
             prev.updates != next.updates ||
+            prev.emoji.size != next.emoji.size ||
             prev.contacts !== next.contacts
         if (!changed) return
         val focused = focusKey()
@@ -91,9 +95,9 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         when (next.settingsTab) {
             SettingsTab.ACCOUNT -> account(next)
             SettingsTab.STATUS -> status(s, next)
-            SettingsTab.APPEARANCE -> appearance(s)
+            SettingsTab.APPEARANCE -> appearance(s, next.effective)
             SettingsTab.CHATS -> chats(s)
-            SettingsTab.NOTIFICATIONS -> notifications(s)
+            SettingsTab.NOTIFICATIONS -> notifications(s, next.effective)
             SettingsTab.PRIVACY -> privacy(s, next)
             SettingsTab.CALLS -> calls(s)
             SettingsTab.NETWORK -> network(s, next)
@@ -140,7 +144,7 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         }
         content.add(
             section("Identity") {
-                add(infoRow("Node ID (certificate name)", if (a.certName.isEmpty()) "" else "@${a.certName}"))
+                add(infoRow("Node ID (certificate name)", if (a.certName.isEmpty()) "" else "@${a.certName}", where = Where.PHONE))
                 add(infoRow("Overlay address", a.overlayIp, isMono = true))
                 add(infoRow("Overlay networks", a.networks.joinToString(", "), isMono = true, isWrapped = true))
             },
@@ -148,6 +152,11 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
                 add(infoRow("Status", a.certStatus))
                 add(infoRow("Valid until", a.certNotAfter))
                 add(infoRow("Fingerprint", a.certFingerprint, isMono = true, isWrapped = true))
+            },
+            section("Only on the phone", "Renewing the certificate, resetting the identity, and the About screen's links all need the handset.") {
+                add(infoRow("Renew certificate", "On the phone", where = Where.PHONE))
+                add(infoRow("Reset identity", "On the phone", where = Where.PHONE))
+                add(infoRow("Documentation and reporting a problem", "On the phone, under About", where = Where.PHONE))
             },
             section("Build") {
                 add(infoRow("App version", a.appVersion))
@@ -158,27 +167,38 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         )
     }
 
-    private fun appearance(s: DexSettings) {
+    /** What the browser sets for itself is stored on the phone beside the app's, so both are here. */
+    private fun surface(s: DexSettings, change: DexSurface.() -> DexSurface) =
+        patch(DexSettingsPatch(dexSurface = s.dexSurface.change()))
+
+    private fun labelOf(options: List<Choice>, key: String): String = options.firstOrNull { it.key == key }?.label ?: key
+
+    private fun appearance(s: DexSettings, eff: Effective) {
+        val d = s.dexSurface
         content.add(
-            section("Theme", "The phone and this browser follow the same choice.") {
+            section("Theme", "Each row is the phone's. Leave the browser's own line on Follow app to keep the two the same.") {
                 add(
-                    selectRow(
-                        "Appearance",
-                        null,
-                        listOf(Choice("SYSTEM", "Follow the system"), Choice("LIGHT", "Light"), Choice("DARK", "Dark")),
-                        s.themeMode.name,
-                    ) { key -> patch(DexSettingsPatch(themeMode = DexThemeMode.valueOf(key))) },
+                    withSurface(
+                        selectRow("Appearance", null, THEME_MODES, s.themeMode.name, where = Where.BOTH) { k -> patch(DexSettingsPatch(themeMode = DexThemeMode.valueOf(k))) },
+                        followSelect("Appearance", labelOf(THEME_MODES, s.themeMode.name), THEME_MODES, d.themeMode?.name) { k ->
+                            surface(s) { copy(themeMode = k?.let { DexThemeMode.valueOf(it) }) }
+                        },
+                    ),
                 )
                 add(
-                    selectRow("Colour theme", null, THEMES, s.colorTheme) { key ->
-                        patch(DexSettingsPatch(colorTheme = key))
-                    },
+                    withSurface(
+                        selectRow("Colour theme", null, THEMES, s.colorTheme, where = Where.BOTH) { k -> patch(DexSettingsPatch(colorTheme = k)) },
+                        followSelect("Colour theme", labelOf(THEMES, s.colorTheme), THEMES, d.colorTheme) { k -> surface(s) { copy(colorTheme = k) } },
+                    ),
                 )
-                if (s.colorTheme == "custom") {
-                    add(colorRow("Custom accent", "Used when the colour theme is Custom", s.customAccent) { hex -> patch(DexSettingsPatch(customAccent = hex, colorTheme = "custom")) })
-                } else {
-                    add(actionRow("Custom accent", "Pick your own accent colour", button = "Use custom") { patch(DexSettingsPatch(colorTheme = "custom")) })
-                }
+                add(
+                    withSurface(
+                        colorRow("Custom accent", "Used when the colour theme is Custom", s.customAccent, where = Where.BOTH) { hex ->
+                            patch(DexSettingsPatch(customAccent = hex, colorTheme = "custom"))
+                        },
+                        accentControl(s, eff),
+                    ),
+                )
             },
             section("Messages") {
                 add(textSizeRow(s))
@@ -187,26 +207,46 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         )
     }
 
-    private fun textSizeRow(s: DexSettings): HTMLElement = selectRow(
-        "Text size",
-        null,
-        listOf(Choice("SMALL", "Small"), Choice("MEDIUM", "Medium"), Choice("LARGE", "Large")),
-        s.chatTextSize.name,
-    ) { key -> patch(DexSettingsPatch(chatTextSize = DexTextSize.valueOf(key))) }
+    /** A colour input cannot say "follow the app", so the choice leads and the colour follows it. */
+    private fun accentControl(s: DexSettings, eff: Effective): HTMLElement {
+        val own = s.dexSurface.customAccent
+        val cell = div("cell-pair")
+        cell.add(
+            followSelect("Custom accent", s.customAccent, listOf(Choice("own", "Own colour")), own?.let { "own" }) { k ->
+                surface(s) { copy(customAccent = if (k == null) null else eff.customAccent) }
+            },
+        )
+        if (own != null) cell.add(colorControl("Custom accent, this browser", own) { hex -> surface(s) { copy(customAccent = hex) } })
+        return cell
+    }
 
-    private fun densityRow(s: DexSettings): HTMLElement = selectRow(
-        "Message density",
-        null,
-        listOf(Choice("COMFORTABLE", "Comfortable"), Choice("COMPACT", "Compact")),
-        s.messageDensity.name,
-    ) { key -> patch(DexSettingsPatch(messageDensity = DexDensity.valueOf(key))) }
+    private fun textSizeRow(s: DexSettings): HTMLElement = withSurface(
+        selectRow("Text size", null, TEXT_SIZES, s.chatTextSize.name, where = Where.BOTH) { k -> patch(DexSettingsPatch(chatTextSize = DexTextSize.valueOf(k))) },
+        followSelect("Text size", labelOf(TEXT_SIZES, s.chatTextSize.name), TEXT_SIZES, s.dexSurface.chatTextSize?.name) { k ->
+            surface(s) { copy(chatTextSize = k?.let { DexTextSize.valueOf(it) }) }
+        },
+    )
+
+    private fun densityRow(s: DexSettings): HTMLElement = withSurface(
+        selectRow("Message density", null, DENSITIES, s.messageDensity.name, where = Where.BOTH) { k -> patch(DexSettingsPatch(messageDensity = DexDensity.valueOf(k))) },
+        followSelect("Message density", labelOf(DENSITIES, s.messageDensity.name), DENSITIES, s.dexSurface.messageDensity?.name) { k ->
+            surface(s) { copy(messageDensity = k?.let { DexDensity.valueOf(it) }) }
+        },
+    )
 
     private fun chats(s: DexSettings) {
         content.add(
             section("Composing") {
                 add(textSizeRow(s))
                 add(densityRow(s))
-                add(switchRow("Enter sends the message", "Otherwise Enter starts a new line and Ctrl+Enter sends", s.isEnterToSend) { v -> patch(DexSettingsPatch(isEnterToSend = v)) })
+                add(
+                    withSurface(
+                        switchRow("Enter sends the message", "Otherwise Enter starts a new line and Shift+Enter sends", s.isEnterToSend, where = Where.BOTH) { v ->
+                            patch(DexSettingsPatch(isEnterToSend = v))
+                        },
+                        followSwitch("Enter sends the message", s.isEnterToSend, s.dexSurface.isEnterToSend) { v -> surface(s) { copy(isEnterToSend = v) } },
+                    ),
+                )
             },
         )
         val quick = div("rows")
@@ -214,58 +254,82 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         for (i in 0 until 6) {
             val emoji = slots.getOrNull(i) ?: "·"
             quick.add(
-                actionRow("Slot ${i + 1}", emoji, button = "Change") {
-                    actions.openDialog(Dialog.QuickReaction(i, slots.getOrNull(i).orEmpty()))
+                actionRow("Slot ${i + 1}", emoji, button = "Change", where = Where.BOTH) {
+                    actions.openDialog(Dialog.EmojiPick(EmojiTarget.Slot(i)))
                 },
             )
         }
-        val s2 = div("section").add(div("section-title", "Quick reactions"), quick, div("section-note", "The six offered first when you react to a message."))
-        content.add(s2)
+        content.add(div("section").add(div("section-title", "Quick reactions"), quick, div("section-note", "The six offered first when you react to a message, on the phone and here.")))
     }
 
-    private fun notifications(s: DexSettings) {
+    private fun notifications(s: DexSettings, eff: Effective) {
         val n = s.notifications
         val m = n.messages
+        val d = s.dexSurface
         fun setNotifications(next: DexNotifications) = patch(DexSettingsPatch(notifications = next))
         content.add(
-            section("Messages", "The phone plays the sound and does the vibrating; this browser only sets what it does.") {
-                add(switchRow("Message notifications", null, m.enabled) { v -> setNotifications(n.copy(messages = m.copy(enabled = v))) })
-                add(switchRow("Show who sent it", null, m.showSender, isEnabled = m.enabled) { v -> setNotifications(n.copy(messages = m.copy(showSender = v))) })
-                add(switchRow("Show a preview", null, m.preview, isEnabled = m.enabled) { v -> setNotifications(n.copy(messages = m.copy(preview = v))) })
-                add(switchRow("Sound", null, m.sound, isEnabled = m.enabled) { v -> setNotifications(n.copy(messages = m.copy(sound = v))) })
-                add(switchRow("Vibrate", null, m.vibrate, isEnabled = m.enabled) { v -> setNotifications(n.copy(messages = m.copy(vibrate = v))) })
-                add(switchRow("Pop up on screen", null, m.popup, isEnabled = m.enabled) { v -> setNotifications(n.copy(messages = m.copy(popup = v))) })
-                add(switchRow("Announce reactions", null, m.reactions, isEnabled = m.enabled) { v -> setNotifications(n.copy(messages = m.copy(reactions = v))) })
+            section("Messages", "The phone rings and vibrates; this browser shows a desktop notification. The three below can differ.") {
+                add(
+                    withSurface(
+                        switchRow("Message notifications", null, m.enabled, where = Where.BOTH) { v -> setNotifications(n.copy(messages = m.copy(enabled = v))) },
+                        followSwitch("Message notifications", m.enabled, d.notificationsEnabled) { v -> surface(s) { copy(notificationsEnabled = v) } },
+                    ),
+                )
+                add(
+                    withSurface(
+                        switchRow("Show a preview", "Put the message itself in the notification", m.preview, isEnabled = m.enabled, where = Where.BOTH) { v ->
+                            setNotifications(n.copy(messages = m.copy(preview = v)))
+                        },
+                        followSwitch("Show a preview", m.preview, d.notificationPreview, isEnabled = eff.notificationsEnabled) { v -> surface(s) { copy(notificationPreview = v) } },
+                    ),
+                )
+                add(
+                    withSurface(
+                        switchRow("Sound", "The phone plays its tone; the browser plays a short beep", m.sound, isEnabled = m.enabled, where = Where.BOTH) { v ->
+                            setNotifications(n.copy(messages = m.copy(sound = v)))
+                        },
+                        followSwitch("Sound", m.sound, d.notificationSound, isEnabled = eff.notificationsEnabled) { v -> surface(s) { copy(notificationSound = v) } },
+                    ),
+                )
+                add(switchRow("Show who sent it", null, m.showSender, isEnabled = m.enabled, where = Where.PHONE) { v -> setNotifications(n.copy(messages = m.copy(showSender = v))) })
+                add(switchRow("Vibrate", null, m.vibrate, isEnabled = m.enabled, where = Where.PHONE) { v -> setNotifications(n.copy(messages = m.copy(vibrate = v))) })
+                add(switchRow("Pop up on screen", null, m.popup, isEnabled = m.enabled, where = Where.PHONE) { v -> setNotifications(n.copy(messages = m.copy(popup = v))) })
+                add(switchRow("Announce reactions", null, m.reactions, isEnabled = m.enabled, where = Where.PHONE) { v -> setNotifications(n.copy(messages = m.copy(reactions = v))) })
             },
             section("Calls") {
-                add(switchRow("Ring for calls", null, n.calls.ring) { v -> setNotifications(n.copy(calls = n.calls.copy(ring = v))) })
-                add(switchRow("Vibrate while ringing", null, n.calls.vibrate, isEnabled = n.calls.ring) { v -> setNotifications(n.copy(calls = n.calls.copy(vibrate = v))) })
-                add(switchRow("Missed call notification", null, n.calls.missedNotification) { v -> setNotifications(n.copy(calls = n.calls.copy(missedNotification = v))) })
+                add(switchRow("Ring for calls", null, n.calls.ring, where = Where.PHONE) { v -> setNotifications(n.copy(calls = n.calls.copy(ring = v))) })
+                add(switchRow("Vibrate while ringing", null, n.calls.vibrate, isEnabled = n.calls.ring, where = Where.PHONE) { v -> setNotifications(n.copy(calls = n.calls.copy(vibrate = v))) })
+                add(switchRow("Missed call notification", null, n.calls.missedNotification, where = Where.PHONE) { v -> setNotifications(n.copy(calls = n.calls.copy(missedNotification = v))) })
             },
             section("In the app") {
-                add(switchRow("Vibrate for the chat you are reading", null, n.inApp.vibrate) { v -> setNotifications(n.copy(inApp = DexInAppNotifications(vibrate = v))) })
+                add(switchRow("Vibrate for the chat you are reading", null, n.inApp.vibrate, where = Where.PHONE) { v -> setNotifications(n.copy(inApp = DexInAppNotifications(vibrate = v))) })
             },
             section("Quiet hours", "While quiet hours are on, the phone stays silent; messages still arrive.") {
-                add(switchRow("Quiet hours", null, n.quietHours.enabled) { v -> setNotifications(n.copy(quietHours = n.quietHours.copy(enabled = v))) })
-                add(timeRow("From", n.quietHours.fromHour, n.quietHours.fromMinute, isEnabled = n.quietHours.enabled) { h, mi -> setNotifications(n.copy(quietHours = n.quietHours.copy(fromHour = h, fromMinute = mi))) })
-                add(timeRow("Until", n.quietHours.toHour, n.quietHours.toMinute, isEnabled = n.quietHours.enabled) { h, mi -> setNotifications(n.copy(quietHours = n.quietHours.copy(toHour = h, toMinute = mi))) })
+                add(switchRow("Quiet hours", null, n.quietHours.enabled, where = Where.PHONE) { v -> setNotifications(n.copy(quietHours = n.quietHours.copy(enabled = v))) })
+                add(timeRow("From", n.quietHours.fromHour, n.quietHours.fromMinute, isEnabled = n.quietHours.enabled, where = Where.PHONE) { h, mi -> setNotifications(n.copy(quietHours = n.quietHours.copy(fromHour = h, fromMinute = mi))) })
+                add(timeRow("Until", n.quietHours.toHour, n.quietHours.toMinute, isEnabled = n.quietHours.enabled, where = Where.PHONE) { h, mi -> setNotifications(n.copy(quietHours = n.quietHours.copy(toHour = h, toMinute = mi))) })
+            },
+            section("Only on the phone", "Android's own notification screens, for the tunnel's channel and for the app, open on the handset.") {
+                add(infoRow("Tunnel notification settings", "On the phone", where = Where.PHONE))
+                add(infoRow("Android notification settings", "On the phone", where = Where.PHONE))
             },
             section(null, null) {
-                add(actionRow("Reset notifications", "Put every notification setting back to its default", button = "Reset") { setNotifications(DexNotifications(DexMessageNotifications(), DexCallNotifications(), DexInAppNotifications(), DexQuietHours())) })
+                add(actionRow("Reset notifications", "Put every notification setting back to its default", button = "Reset", where = Where.PHONE) { setNotifications(DexNotifications(DexMessageNotifications(), DexCallNotifications(), DexInAppNotifications(), DexQuietHours())) })
             },
         )
     }
 
     private fun privacy(s: DexSettings, state: AppState) {
+        val isPhoneOnlyGate = s.coverRevealGate == DexRevealGate.CODE || s.coverRevealGate == DexRevealGate.DEVICE
         val blocked = state.contacts.values.filter { it.isBlocked }.sortedBy { it.label.lowercase() }
         content.add(
             section("What your contacts see") {
-                add(switchRow("Send read receipts", "They see when you have read their message", s.sendReadReceipts) { v -> patch(DexSettingsPatch(sendReadReceipts = v)) })
-                add(switchRow("Send typing indicators", "They see when you are writing", s.sendTypingIndicators) { v -> patch(DexSettingsPatch(sendTypingIndicators = v)) })
+                add(switchRow("Send read receipts", "They see when you have read their message", s.sendReadReceipts, where = Where.BOTH) { v -> patch(DexSettingsPatch(sendReadReceipts = v)) })
+                add(switchRow("Send typing indicators", "They see when you are writing", s.sendTypingIndicators, where = Where.BOTH) { v -> patch(DexSettingsPatch(sendTypingIndicators = v)) })
             },
             section("On this phone", "The app lock is the phone's own, so it is set there.") {
-                add(switchRow("Block screenshots", null, s.isScreenshotBlocked) { v -> patch(DexSettingsPatch(isScreenshotBlocked = v)) })
-                add(infoRow("App lock", if (s.isAppLockEnabled) "On" else "Off"))
+                add(switchRow("Block screenshots", "A browser cannot stop a screenshot; this is the phone\u2019s own window flag", s.isScreenshotBlocked, where = Where.PHONE) { v -> patch(DexSettingsPatch(isScreenshotBlocked = v)) })
+                add(infoRow("App lock", if (s.isAppLockEnabled) "On" else "Off", where = Where.PHONE))
                 add(
                     selectRow(
                         "Lock after",
@@ -273,16 +337,30 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
                         listOf(Choice("0", "Immediately"), Choice("30", "30 seconds"), Choice("60", "1 minute"), Choice("300", "5 minutes"), Choice("900", "15 minutes")),
                         s.appLockAfterSec.toString(),
                         isEnabled = s.isAppLockEnabled,
+                        where = Where.PHONE,
                     ) { key -> key.toIntOrNull()?.let { patch(DexSettingsPatch(appLockAfterSec = it)) } },
                 )
             },
-            section("Covered messages", "How a covered message is opened. A code or the phone's lock can only be answered on the phone.") {
+            section(
+                "Covered messages",
+                if (isPhoneOnlyGate) {
+                    "A code and the phone's lock are both answered on the handset, so while one of them is chosen a covered message cannot be opened in this browser, and its attachment is not sent here."
+                } else {
+                    "How a covered message is opened. Tap and Ask work here; a code and the phone's lock are answered on the handset."
+                },
+            ) {
                 add(
                     selectRow(
                         "Reveal with",
                         null,
-                        listOf(Choice("TAP", "Just tap"), Choice("ASK", "Ask first"), Choice("CODE", "A code"), Choice("DEVICE", "The phone's lock")),
+                        listOf(
+                            Choice("TAP", "Just tap — phone and browser"),
+                            Choice("ASK", "Ask first — phone and browser"),
+                            Choice("CODE", "A code — phone only"),
+                            Choice("DEVICE", "The phone's lock — phone only"),
+                        ),
                         s.coverRevealGate.name,
+                        where = if (isPhoneOnlyGate) Where.PHONE else Where.BOTH,
                     ) { key -> patch(DexSettingsPatch(coverRevealGate = DexRevealGate.valueOf(key))) },
                 )
             },
@@ -306,14 +384,14 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         content.add(
             section("Status", "What a contact sees when they check on you.") {
                 add(
-                    switchRow("Share when I am online", null, isActive) { _ ->
+                    switchRow("Share when I am online", null, isActive, where = Where.BOTH) { _ ->
                         // off while paused means end the pause, not stop sharing
                         val next = if (isPaused) DexPresencePrefs(isShared = true) else DexPresencePrefs(isShared = !p.isShared)
                         patch(DexSettingsPatch(presence = next))
                     },
                 )
                 add(
-                    selectRow("Pause sharing", null, PAUSES, if (isPaused) p.pauseMinutes.toString() else "0", isEnabled = p.isShared) { key ->
+                    selectRow("Pause sharing", null, PAUSES, if (isPaused) p.pauseMinutes.toString() else "0", isEnabled = p.isShared, where = Where.BOTH) { key ->
                         val minutes = key.toIntOrNull() ?: 0
                         val until = if (minutes > 0) now + minutes * 60_000L else 0L
                         patch(DexSettingsPatch(presence = DexPresencePrefs(isShared = true, pauseMinutes = minutes, pausedUntil = until)))
@@ -337,7 +415,7 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
     private fun calls(s: DexSettings) {
         content.add(
             section("Calls on the phone", "A call this browser holds always uses the machine's own speakers.") {
-                add(switchRow("Video calls start on speaker", null, s.isVideoSpeakerDefault) { v -> patch(DexSettingsPatch(isVideoSpeakerDefault = v)) })
+                add(switchRow("Video calls start on speaker", "A call this browser holds uses the machine\u2019s own output either way", s.isVideoSpeakerDefault, where = Where.PHONE) { v -> patch(DexSettingsPatch(isVideoSpeakerDefault = v)) })
             },
         )
     }
@@ -347,7 +425,7 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         val a = state.account
         content.add(
             section("Tunnel", "Turning the tunnel on needs the phone's permission the first time; until it is given, the phone has to do it.") {
-                add(switchRow("Nebula tunnel", if (n?.isTunnelOn == true) "Connected" else "Disconnected", n?.isTunnelOn ?: false) { v -> actions.setTunnel(v) })
+                add(switchRow("Nebula tunnel", if (n?.isTunnelOn == true) "Connected" else "Disconnected", n?.isTunnelOn ?: false, where = Where.PHONE) { v -> actions.setTunnel(v) })
                 add(infoRow("Tunnel uptime", if (n == null || !n.isTunnelOn) "" else Format.duration(n.tunnelUptimeMs)))
                 add(infoRow("Messaging engine uptime", if (n == null) "" else Format.duration(n.engineUptimeMs)))
                 add(infoRow("Peers with a live link", n?.connectedCount?.toString().orEmpty()))
@@ -359,6 +437,8 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
                     add(infoRow("Address", a.lighthouseIp, isMono = true))
                     add(infoRow("Underlay", a.lighthouseUnderlay, isMono = true))
                     add(infoRow("Status", n?.lighthouseStatus.orEmpty()))
+                    add(infoRow("Change the lighthouse", "On the phone", where = Where.PHONE))
+                    add(infoRow("Reconnect the tunnel", "On the phone; switching it off and on here does the same", where = Where.PHONE))
                 },
             )
         }
@@ -387,14 +467,14 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
                 add(infoRow("Outbox", if (n == null) "" else "${n.pendingActions} pending · ${n.failedActions} failed"))
             },
             section("Advanced") {
-                add(switchRow("Start when the phone starts", "Also after an update; the tunnel comes up on its own", s.isStartOnBootEnabled) { v -> patch(DexSettingsPatch(isStartOnBootEnabled = v)) })
-                add(switchRow("Keep the connection in the background", null, s.isBackgroundConnectionEnabled) { v -> patch(DexSettingsPatch(isBackgroundConnectionEnabled = v)) })
+                add(switchRow("Start when the phone starts", "Also after an update; the tunnel comes up on its own", s.isStartOnBootEnabled, where = Where.PHONE) { v -> patch(DexSettingsPatch(isStartOnBootEnabled = v)) })
+                add(switchRow("Keep the connection in the background", "Dex is served by the phone, so this keeps this browser connected too", s.isBackgroundConnectionEnabled, where = Where.PHONE) { v -> patch(DexSettingsPatch(isBackgroundConnectionEnabled = v)) })
                 add(
-                    selectRow("Nebula log level", null, listOf(Choice("INFO", "Info"), Choice("DEBUG", "Debug")), s.nebulaLogLevel.name) { key ->
+                    selectRow("Nebula log level", null, listOf(Choice("INFO", "Info"), Choice("DEBUG", "Debug")), s.nebulaLogLevel.name, where = Where.PHONE) { key ->
                         patch(DexSettingsPatch(nebulaLogLevel = DexLogLevel.valueOf(key)))
                     },
                 )
-                add(switchRow("Developer mode", null, s.isDeveloperMode) { v -> patch(DexSettingsPatch(isDeveloperMode = v)) })
+                add(switchRow("Developer mode", null, s.isDeveloperMode, where = Where.BOTH) { v -> patch(DexSettingsPatch(isDeveloperMode = v)) })
             },
         )
     }
@@ -414,11 +494,11 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
             },
             section("Tidying up") {
                 add(infoRow("Media no message refers to", "${Format.bytes(st.orphanBytes)} · ${st.orphanCount} files"))
-                add(actionRow("Clean up", "Remove media no message refers to", button = "Clean up", isEnabled = st.orphanCount > 0) { actions.clearOrphans() })
-                add(switchRow("Clean up automatically", "Every time the app starts", s.autoCleanOrphans) { v -> patch(DexSettingsPatch(autoCleanOrphans = v)) })
+                add(actionRow("Clean up", "Remove media no message refers to", button = "Clean up", isEnabled = st.orphanCount > 0, where = Where.PHONE) { actions.clearOrphans() })
+                add(switchRow("Clean up automatically", "Every time the app starts", s.autoCleanOrphans, where = Where.PHONE) { v -> patch(DexSettingsPatch(autoCleanOrphans = v)) })
             },
             section("Danger", "This cannot be undone, and it happens on the phone.") {
-                add(actionRow("Clear all history", "Every message in every chat", button = "Clear", isDanger = true) { actions.clearAllHistory() })
+                add(actionRow("Clear all history", "Every message in every chat", button = "Clear", isDanger = true, where = Where.BOTH) { actions.clearAllHistory() })
             },
         )
     }
@@ -433,7 +513,7 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
         content.add(
             section("Outbox") {
                 add(infoRow("Lighthouse", d.lighthouseStatus))
-                add(actionRow("Retry everything that failed", null, button = "Retry", isEnabled = d.failedCount > 0) { actions.retryFailed("") })
+                add(actionRow("Retry everything that failed", null, button = "Retry", isEnabled = d.failedCount > 0, where = Where.PHONE) { actions.retryFailed("") })
             },
         )
         if (d.callTrail.isNotEmpty()) {
@@ -461,8 +541,9 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
                 u.lastError?.let { add(infoRow("Last error", it, isWrapped = true)) }
             },
             section("Checking") {
-                add(switchRow("Check daily", null, u.isDailyCheckEnabled) { v -> patch(DexSettingsPatch(isDailyUpdateCheckEnabled = v)) })
-                add(actionRow("Check now", null, button = "Check") { actions.checkUpdates() })
+                add(switchRow("Check daily", null, u.isDailyCheckEnabled, where = Where.PHONE) { v -> patch(DexSettingsPatch(isDailyUpdateCheckEnabled = v)) })
+                add(actionRow("Check now", null, button = "Check", where = Where.PHONE) { actions.checkUpdates() })
+                add(infoRow("Releases page, download and install", "On the phone", where = Where.PHONE))
             },
         )
     }
@@ -470,8 +551,8 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
     private fun dex(s: DexSettings) {
         content.add(
             section("This browser's way in", "Dex is set up on the phone. A browser Dex is serving does not get to change the lock on its own door.") {
-                add(infoRow("Username", s.dexUsername))
-                add(infoRow("Client limit", s.dexMaxClients.toString()))
+                add(infoRow("Username", s.dexUsername, where = Where.PHONE))
+                add(infoRow("Client limit", s.dexMaxClients.toString(), where = Where.PHONE))
                 add(infoRow("Port", if (s.dexPort == 0) "" else s.dexPort.toString(), isMono = true))
             },
         )
@@ -480,6 +561,10 @@ class SettingsView(root: HTMLElement, private val actions: Actions) {
     private companion object {
         /** the phone's own Status screen offers exactly these */
         val PAUSES = listOf(Choice("0", "Off"), Choice("30", "30 minutes"), Choice("60", "1 hour"), Choice("480", "8 hours"), Choice("1440", "24 hours"))
+
+        val THEME_MODES = listOf(Choice("SYSTEM", "Follow the system"), Choice("LIGHT", "Light"), Choice("DARK", "Dark"))
+        val TEXT_SIZES = listOf(Choice("SMALL", "Small"), Choice("MEDIUM", "Medium"), Choice("LARGE", "Large"))
+        val DENSITIES = listOf(Choice("COMFORTABLE", "Comfortable"), Choice("COMPACT", "Compact"))
 
         val THEMES = listOf(
             Choice("sky", "Sky"),

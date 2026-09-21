@@ -110,6 +110,23 @@ data class UpdatePrefs(
     val notifiedVersion: String? = null,
 )
 
+/**
+ * What one surface sets for itself. A null field follows the app, so a phone that never opens Dex
+ * behaves exactly as before and an older prefs file needs no migration.
+ */
+@Serializable
+data class SurfacePrefs(
+    val themeMode: ThemeMode? = null,
+    val colorTheme: String? = null,
+    val customAccent: String? = null,
+    val chatTextSize: ChatTextSize? = null,
+    val messageDensity: MessageDensity? = null,
+    val isEnterToSend: Boolean? = null,
+    val notificationsEnabled: Boolean? = null,
+    val notificationPreview: Boolean? = null,
+    val notificationSound: Boolean? = null,
+)
+
 /** The web frontend served by the phone; the password is stored as a salted PBKDF2 hash, never in clear. */
 @Serializable
 data class DexPrefs(
@@ -160,6 +177,8 @@ data class Prefs(
     /** the six reactions offered first */
     val quickReactions: List<String> = DEFAULT_QUICK_REACTIONS,
     val dex: DexPrefs = DexPrefs(),
+    /** what the browser sets for itself; every unset field follows the app's own value above */
+    val dexSurface: SurfacePrefs = SurfacePrefs(),
 ) {
     companion object {
         val DEFAULT_QUICK_REACTIONS: List<String> = listOf("👍", "❤️", "😂", "😮", "😢", "🔥")

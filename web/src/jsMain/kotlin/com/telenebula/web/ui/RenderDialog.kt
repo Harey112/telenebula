@@ -3,11 +3,10 @@ package com.telenebula.web.ui
 import com.telenebula.web.state.Actions
 import com.telenebula.web.state.AppState
 import com.telenebula.web.state.Dialog
+import com.telenebula.web.state.EmojiTarget
 import com.telenebula.web.wire.DexContactFlags
 import kotlinx.browser.window
 import org.w3c.dom.HTMLElement
-import org.w3c.dom.HTMLInputElement
-import org.w3c.dom.HTMLTextAreaElement
 import kotlin.js.Date
 
 /** The one modal: a title, the form the request carries, and a row of actions. */
@@ -15,6 +14,8 @@ class DialogView(root: HTMLElement, private val actions: Actions) {
     private val host = div("modal-scrim hidden").also { root.appendChild(it) }
     private val card = div("modal").also { it.setAttribute("role", "dialog"); it.setAttribute("aria-modal", "true") }
     private var shown: Dialog? = null
+    private var shownEmojiCount = -1
+    private var emojiCount = -1
 
     init {
         host.add(card)
@@ -22,6 +23,7 @@ class DialogView(root: HTMLElement, private val actions: Actions) {
     }
 
     fun render(prev: AppState, next: AppState) {
+        emojiCount = next.emoji.size
         val d = next.dialog
         host.toggle("hidden", d == null)
         if (d == null) {
@@ -37,7 +39,7 @@ class DialogView(root: HTMLElement, private val actions: Actions) {
             is Dialog.AddContact -> addContact(d)
             is Dialog.EditContact -> editContact(d)
             is Dialog.ChangeIp -> changeIp(d)
-            is Dialog.QuickReaction -> quickReaction(d)
+            is Dialog.EmojiPick -> emojiPick(d, next)
             is Dialog.MuteFor -> muteFor(d)
             is Dialog.Disappearing -> disappearing(d)
         }
@@ -47,7 +49,7 @@ class DialogView(root: HTMLElement, private val actions: Actions) {
         a is Dialog.AddContact && b is Dialog.AddContact -> a.error == b.error
         a is Dialog.EditContact && b is Dialog.EditContact -> a.peer == b.peer
         a is Dialog.ChangeIp && b is Dialog.ChangeIp -> a.peer == b.peer && a.error == b.error
-        a is Dialog.QuickReaction && b is Dialog.QuickReaction -> a.slot == b.slot
+        a is Dialog.EmojiPick && b is Dialog.EmojiPick -> a.target == b.target && emojiCount == shownEmojiCount
         a is Dialog.MuteFor && b is Dialog.MuteFor -> a.peer == b.peer
         a is Dialog.Disappearing && b is Dialog.Disappearing -> a.peer == b.peer
         else -> false
@@ -96,25 +98,23 @@ class DialogView(root: HTMLElement, private val actions: Actions) {
         window.setTimeout({ ip.focus() }, 0)
     }
 
-    private fun quickReaction(d: Dialog.QuickReaction) {
-        val (emojiField, emoji) = textField("Emoji", d.emoji, "🙂")
-        val body = div("modal-body").add(emojiField)
-        val picks = div("emoji-picks")
-        for (e in COMMON) {
-            val b = el("button", "emoji-pick") { setAttribute("type", "button"); setAttribute("aria-label", e) }
-            b.textContent = e
-            b.on("click") {
-                actions.setQuickReaction(d.slot, e)
-                actions.openDialog(null)
-            }
-            picks.add(b)
+    /** The phone's whole catalogue, for a quick-reaction slot or for reacting to one message. */
+    private fun emojiPick(d: Dialog.EmojiPick, state: AppState) {
+        shownEmojiCount = state.emoji.size
+        val title = when (d.target) {
+            is EmojiTarget.Slot -> "Quick reaction ${d.target.slot + 1}"
+            is EmojiTarget.React -> "React"
         }
-        body.add(picks)
-        shell("Quick reaction ${d.slot + 1}", body, "Save", {
-            val value = emoji.value.trim()
-            if (value.isNotEmpty()) actions.setQuickReaction(d.slot, value)
-            actions.openDialog(null)
-        })
+        val body = div("modal-body").add(
+            emojiPicker(state.emoji) { e ->
+                when (d.target) {
+                    is EmojiTarget.Slot -> actions.setQuickReaction(d.target.slot, e)
+                    is EmojiTarget.React -> actions.reactById(d.target.messageId, e)
+                }
+                actions.openDialog(null)
+            },
+        )
+        shell(title, body, null, null)
     }
 
     private fun muteFor(d: Dialog.MuteFor) {
@@ -154,7 +154,4 @@ class DialogView(root: HTMLElement, private val actions: Actions) {
         shell("Disappearing messages", body, null, null)
     }
 
-    private companion object {
-        val COMMON = listOf("👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "🙏", "👏", "✅")
-    }
 }
