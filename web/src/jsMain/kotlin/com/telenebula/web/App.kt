@@ -13,31 +13,46 @@ import com.telenebula.web.net.UploadOutcome
 import com.telenebula.web.net.UploadRequest
 import com.telenebula.web.state.Actions
 import com.telenebula.web.state.AppState
+import com.telenebula.web.state.CallFilter
 import com.telenebula.web.state.Composer
 import com.telenebula.web.state.Connection
+import com.telenebula.web.state.Dialog
 import com.telenebula.web.state.Prompt
 import com.telenebula.web.state.Recording
 import com.telenebula.web.state.Screen
+import com.telenebula.web.state.SettingsTab
 import com.telenebula.web.state.Store
+import com.telenebula.web.state.Tab
 import com.telenebula.web.state.Toast
 import com.telenebula.web.state.Upload
+import com.telenebula.web.ui.CallLogsView
 import com.telenebula.web.ui.CallsView
+import com.telenebula.web.ui.ChatInfoView
 import com.telenebula.web.ui.ChatListView
+import com.telenebula.web.ui.ContactsView
 import com.telenebula.web.ui.ConversationView
+import com.telenebula.web.ui.DialogView
 import com.telenebula.web.ui.LightboxView
 import com.telenebula.web.ui.LoginView
 import com.telenebula.web.ui.PromptView
+import com.telenebula.web.ui.RailView
+import com.telenebula.web.ui.SettingsView
 import com.telenebula.web.ui.ShellView
 import com.telenebula.web.ui.ToastsView
+import com.telenebula.web.ui.Theme
 import com.telenebula.web.wire.ClientFrame
 import com.telenebula.web.wire.DexCallPhase
 import com.telenebula.web.wire.DexChat
+import com.telenebula.web.wire.DexContactFlags
+import com.telenebula.web.wire.DexContactNotifications
+import com.telenebula.web.wire.DexContactPrivacy
 import com.telenebula.web.wire.DexDirection
 import com.telenebula.web.wire.DexIceCandidate
 import com.telenebula.web.wire.DexMessage
 import com.telenebula.web.wire.DexMessageKind
 import com.telenebula.web.wire.DexNoticeLevel
 import com.telenebula.web.wire.DexRevealGate
+import com.telenebula.web.wire.DexSettingsPatch
 import com.telenebula.web.wire.ServerFrame
 import kotlinx.browser.document
 import kotlinx.browser.window
@@ -66,11 +81,17 @@ class App(root: HTMLElement) : Actions, CallMediaPort {
     private var lastMarkRead: Pair<String, Long> = "" to 0L
 
     private val login = LoginView(root, this)
+    private val rail = RailView(root, this)
     private val shell = ShellView(root, this)
     private val chatList = ChatListView(shell.paneHost(), this)
     private val conversation = ConversationView(shell.paneHost(), this)
+    private val chatInfo = ChatInfoView(shell.paneHost(), this)
+    private val contactsView = ContactsView(shell.paneHost(), this)
+    private val callLogs = CallLogsView(shell.paneHost(), this)
+    private val settingsView = SettingsView(shell.paneHost(), this)
     private val calls = CallsView(root, shell.callBannerSlot, this)
     private val lightbox = LightboxView(root, this)
+    private val dialog = DialogView(root, this)
     private val prompt = PromptView(root, this)
     private val toasts = ToastsView(root, this)
 
@@ -79,19 +100,24 @@ class App(root: HTMLElement) : Actions, CallMediaPort {
     init {
         store.listen { prev, next ->
             login.render(prev, next)
+            rail.render(prev, next)
             shell.render(prev, next)
             chatList.render(prev, next)
             conversation.render(prev, next)
+            chatInfo.render(prev, next)
+            contactsView.render(prev, next)
+            callLogs.render(prev, next)
+            settingsView.render(prev, next)
             calls.render(prev, next)
             lightbox.render(prev, next, Api::attachmentUrl)
+            dialog.render(prev, next)
             prompt.render(prev, next)
             toasts.render(prev, next)
             if (prev.chats !== next.chats) updateTitle(next)
+            if (prev.settings != next.settings) Theme.apply(next.settings)
             if (prev.screen !== next.screen && next.screen is Screen.Login) socket.stop()
         }
-        document.addEventListener("keydown", { e ->
-            if ((e as? org.w3c.dom.events.KeyboardEvent)?.key == "Escape") store.update { it.copy(lightbox = null, menuFor = null, reactFor = null, prompt = null) }
-        })
+        document.addEventListener("keydown", ::onKey)
         document.addEventListener("visibilitychange", { if (!document.asDynamic().hidden.unsafeCast<Boolean>()) markRead() })
     }
 
@@ -113,6 +139,30 @@ class App(root: HTMLElement) : Actions, CallMediaPort {
     private fun onSocketOpen() {
         reconnectChecks = 0
         state.openPeer?.let { send(ClientFrame.OpenChat(it)) }
+        sendWatch()
+        refreshTab(state)
+    }
+
+    /** Only what a visible pane needs is computed on the phone. */
+    private fun sendWatch() {
+        val s = state
+        val sections = if (s.tab == Tab.SETTINGS) s.settingsTab.sections else emptyList()
+        socket.send(ClientFrame.Watch(sections))
+    }
+
+    private fun refreshTab(s: AppState) {
+        when (s.tab) {
+            Tab.CALLS -> socket.send(ClientFrame.RequestCallLogs(null, 200))
+            Tab.CONTACTS -> s.selectedContact?.let { socket.send(ClientFrame.RequestContactDetail(it)) }
+            Tab.CHATS -> if (s.isInfoOpen) s.openPeer?.let { requestChatExtras(it) }
+            Tab.SETTINGS -> Unit
+        }
+    }
+
+    private fun requestChatExtras(peer: String) {
+        socket.send(ClientFrame.RequestContactDetail(peer))
+        socket.send(ClientFrame.RequestChatMedia(peer))
+        socket.send(ClientFrame.RequestChatLinks(peer))
     }
 
     private fun onSocketStatus(status: SocketStatus) {
@@ -192,6 +242,19 @@ class App(root: HTMLElement) : Actions, CallMediaPort {
             is ServerFrame.CallMedia -> onCallMedia(frame)
             is ServerFrame.CallSdp -> media.remoteSdp(frame.callId, frame.sdp, frame.sdpType)
             is ServerFrame.CallIce -> media.remoteIce(frame.callId, frame.candidate)
+            is ServerFrame.Settings -> store.update { it.copy(settings = frame.settings) }
+            is ServerFrame.Account -> store.update { it.copy(account = frame.account) }
+            is ServerFrame.Network -> store.update { it.copy(network = frame.network) }
+            is ServerFrame.Storage -> store.update { it.copy(storage = frame.storage) }
+            is ServerFrame.Diagnostics -> store.update { it.copy(diagnostics = frame.diagnostics) }
+            is ServerFrame.Updates -> store.update { it.copy(updates = frame.updates) }
+            is ServerFrame.CallLogs -> store.update { it.copy(callLogs = frame.items) }
+            is ServerFrame.ContactDetail -> store.update { it.copy(contactDetail = frame.detail) }
+            is ServerFrame.ChatMedia -> store.update { it.copy(chatMedia = frame.items, chatMediaPeer = frame.peer) }
+            is ServerFrame.ChatLinks -> store.update { it.copy(chatLinks = frame.items, chatLinksPeer = frame.peer) }
+            is ServerFrame.PingResult -> store.update { it.copy(pings = it.pings + (frame.result.peer to frame.result)) }
+            is ServerFrame.SearchResults -> store.update { if (it.openPeer == frame.peer) it.copy(chatSearchResults = frame.items) else it }
+            is ServerFrame.Done -> toast(DexNoticeLevel.INFO, frame.message ?: doneLabel(frame.what))
             is ServerFrame.CallRelease -> {
                 if (media.currentCallId == frame.callId || media.currentCallId == null) {
                     media.close()
@@ -236,6 +299,51 @@ class App(root: HTMLElement) : Actions, CallMediaPort {
         } catch (e: Throwable) {
             // unsupported
         }
+    }
+
+    private fun onKey(event: org.w3c.dom.events.Event) {
+        val e = event as? org.w3c.dom.events.KeyboardEvent ?: return
+        if (e.key == "Escape") {
+            if (state.dialog != null) {
+                openDialog(null)
+            } else {
+                store.update { it.copy(lightbox = null, menuFor = null, reactFor = null, prompt = null) }
+            }
+            return
+        }
+        val target = e.target
+        val isTyping = target is HTMLElement && (target.tagName == "INPUT" || target.tagName == "TEXTAREA" || target.isContentEditable)
+        if (e.key == "/" && !isTyping && state.screen is Screen.App) {
+            e.preventDefault()
+            focusSearch()
+            return
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key.lowercase() == "k" && state.screen is Screen.App) {
+            e.preventDefault()
+            if (state.tab != Tab.CHATS) openTab(Tab.CHATS)
+            focusSearch()
+        }
+    }
+
+    private fun focusSearch() {
+        val selector = when (state.tab) {
+            Tab.CHATS -> ".pane-list .search"
+            Tab.CONTACTS -> ".pane-contacts .search"
+            Tab.CALLS -> ".pane-calls .search"
+            Tab.SETTINGS -> null
+        } ?: return
+        (document.querySelector(selector) as? HTMLElement)?.focus()
+    }
+
+    private fun doneLabel(what: String): String = when (what) {
+        "clear_orphans" -> "Media nothing refers to was removed."
+        "clear_history" -> "History cleared on the phone."
+        "clear_all_history" -> "Every chat was cleared on the phone."
+        "contact_add" -> "Contact added."
+        "contact_delete" -> "Contact deleted."
+        "check_updates" -> "Checked for updates."
+        "retry_failed" -> "Retrying what failed."
+        else -> "Done."
     }
 
     private fun updateTitle(s: AppState) {
@@ -411,8 +519,9 @@ class App(root: HTMLElement) : Actions, CallMediaPort {
             socket.send(ClientFrame.CloseChat(previous))
             if (state.recording != null) discardRecording()
         }
-        store.update { it.copy(openPeer = peer, view = null, composer = Composer(), menuFor = null, reactFor = null, isLoadingMore = false) }
+        store.update { it.copy(openPeer = peer, view = null, composer = Composer(), menuFor = null, reactFor = null, isLoadingMore = false, tab = Tab.CHATS, chatSearchResults = null, chatMedia = emptyList(), chatMediaPeer = null, chatLinks = emptyList(), chatLinksPeer = null) }
         send(ClientFrame.OpenChat(peer))
+        if (state.isInfoOpen) requestChatExtras(peer)
     }
 
     override fun closeChat() {
@@ -693,6 +802,198 @@ class App(root: HTMLElement) : Actions, CallMediaPort {
             val request = UploadRequest(peer, name, r.mime, r.blob, c.replyTo?.id, c.isCovered, isVoice = true, durationMs = r.durationMs, width = null, height = null)
             finishUpload(id, Api.upload(request, { h -> uploadHandles[id] = h }) { pct -> setUploadPct(id, pct) })
         }
+    }
+
+
+    // --- shell ----------------------------------------------------------------------------------
+
+    override fun openTab(tab: Tab) {
+        if (state.tab == tab) return
+        store.update { it.copy(tab = tab, isRailOpen = false, callSelection = emptySet()) }
+        sendWatch()
+        refreshTab(state)
+    }
+
+    override fun toggleRail() = store.update { it.copy(isRailOpen = !it.isRailOpen) }
+
+    override fun openSettingsTab(tab: SettingsTab) {
+        if (state.settingsTab == tab) return
+        store.update { it.copy(settingsTab = tab) }
+        sendWatch()
+    }
+
+    override fun openDialog(dialog: Dialog?) = store.update { it.copy(dialog = dialog) }
+
+    override fun updateDialog(dialog: Dialog) = store.update { it.copy(dialog = dialog) }
+
+    override fun submitDialog() {
+        when (val d = state.dialog) {
+            is Dialog.AddContact -> {
+                val ip = d.ip.trim()
+                if (ip.isEmpty()) {
+                    store.update { it.copy(dialog = d.copy(error = "Enter their overlay address.")) }
+                    return
+                }
+                send(ClientFrame.ContactAdd(ip, d.name.trim().ifEmpty { ip }, d.nickname.trim(), d.notes.trim()))
+                store.update { it.copy(dialog = null, selectedContact = ip) }
+            }
+            else -> store.update { it.copy(dialog = null) }
+        }
+    }
+
+    // --- settings -------------------------------------------------------------------------------
+
+    override fun patchSettings(patch: DexSettingsPatch) {
+        send(ClientFrame.SetSettings(patch))
+    }
+
+    override fun setQuickReaction(slot: Int, emoji: String) {
+        send(ClientFrame.SetQuickReaction(slot, emoji.take(16)))
+    }
+
+    override fun setTunnel(isOn: Boolean) {
+        send(ClientFrame.SetTunnel(isOn))
+    }
+
+    override fun clearOrphans() {
+        send(ClientFrame.ClearOrphans)
+    }
+
+    override fun clearAllHistory() {
+        store.update {
+            it.copy(prompt = Prompt("Clear every message in every chat on the phone? This cannot be undone.", "Clear") { send(ClientFrame.ClearAllHistory) })
+        }
+    }
+
+    override fun checkUpdates() {
+        send(ClientFrame.CheckUpdates)
+    }
+
+    override fun retryFailed(peer: String) {
+        send(ClientFrame.RetryFailed(peer))
+    }
+
+    override fun drain(peer: String) {
+        send(ClientFrame.Drain(peer))
+    }
+
+    // --- contacts -------------------------------------------------------------------------------
+
+    override fun setContactSearch(text: String) = store.update { it.copy(contactSearch = text) }
+
+    override fun selectContact(peer: String?) {
+        store.update { it.copy(selectedContact = peer, contactDetail = if (peer == null) null else it.contactDetail?.takeIf { d -> d.contact.ip == peer }) }
+        if (peer != null) send(ClientFrame.RequestContactDetail(peer))
+    }
+
+    override fun saveContact(peer: String, name: String, nickname: String, notes: String) {
+        send(ClientFrame.ContactSave(peer, name, nickname, notes))
+    }
+
+    override fun addContact(ip: String, name: String, nickname: String, notes: String) {
+        send(ClientFrame.ContactAdd(ip, name, nickname, notes))
+    }
+
+    override fun deleteContact(peer: String) {
+        val label = state.contacts[peer]?.label ?: peer
+        store.update {
+            it.copy(
+                prompt = Prompt("Delete $label from the phone? The conversation stays.", "Delete") {
+                    send(ClientFrame.ContactDelete(peer))
+                    store.update { s -> s.copy(selectedContact = null, contactDetail = null) }
+                },
+            )
+        }
+    }
+
+    override fun setContactFlags(peer: String, flags: DexContactFlags) {
+        send(ClientFrame.ContactFlagsSet(peer, flags))
+    }
+
+    override fun setContactPrivacy(peer: String, privacy: DexContactPrivacy) {
+        send(ClientFrame.ContactPrivacySet(peer, privacy))
+    }
+
+    override fun setContactNotifications(peer: String, prefs: DexContactNotifications?) {
+        send(ClientFrame.ContactNotificationsSet(peer, prefs))
+    }
+
+    override fun changeContactIp(peer: String, newIp: String) {
+        val ip = newIp.trim()
+        if (ip.isEmpty() || ip == peer) {
+            store.update { it.copy(dialog = (it.dialog as? Dialog.ChangeIp)?.copy(error = "Enter a different overlay address.")) }
+            return
+        }
+        send(ClientFrame.ContactChangeIp(peer, ip))
+        store.update { it.copy(dialog = null, selectedContact = ip) }
+    }
+
+    override fun clearHistory(peer: String) {
+        val label = state.contacts[peer]?.label ?: peer
+        store.update {
+            it.copy(prompt = Prompt("Clear every message with $label? This cannot be undone.", "Clear") { send(ClientFrame.ClearHistory(peer)) })
+        }
+    }
+
+    override fun pingPeer(peer: String) {
+        send(ClientFrame.PingPeer(peer))
+    }
+
+    // --- calls ----------------------------------------------------------------------------------
+
+    override fun setCallFilter(filter: CallFilter) = store.update { it.copy(callFilter = filter) }
+
+    override fun setCallSearch(text: String) = store.update { it.copy(callSearch = text) }
+
+    override fun toggleCallSelected(id: String) = store.update {
+        it.copy(callSelection = if (id in it.callSelection) it.callSelection - id else it.callSelection + id)
+    }
+
+    override fun clearCallSelection() = store.update { it.copy(callSelection = emptySet()) }
+
+    override fun deleteSelectedCalls() {
+        val ids = state.callSelection.toList()
+        if (ids.isEmpty()) return
+        store.update {
+            it.copy(
+                prompt = Prompt(if (ids.size == 1) "Delete this call from the log?" else "Delete ${ids.size} calls from the log?", "Delete") {
+                    send(ClientFrame.DeleteCallLogs(ids))
+                    store.update { s -> s.copy(callSelection = emptySet()) }
+                },
+            )
+        }
+    }
+
+    override fun callPeer(peer: String, video: Boolean) {
+        val phase = state.call.phase
+        if (phase != DexCallPhase.IDLE && phase != DexCallPhase.ENDED) {
+            toast(DexNoticeLevel.WARNING, "A call is already in progress.")
+            return
+        }
+        if (!CallMedia.isSupported) {
+            toast(DexNoticeLevel.ERROR, "Calls need a secure origin and a modern browser")
+            return
+        }
+        requestNotificationPermission()
+        send(ClientFrame.CallStart(peer, video))
+    }
+
+    // --- chat info ------------------------------------------------------------------------------
+
+    override fun toggleInfo() {
+        val open = !state.isInfoOpen
+        store.update { it.copy(isInfoOpen = open) }
+        if (open) state.openPeer?.let { requestChatExtras(it) }
+    }
+
+    override fun searchChat(text: String) {
+        val peer = state.openPeer ?: return
+        val query = text.trim()
+        if (query.isEmpty()) {
+            store.update { it.copy(chatSearchResults = null) }
+            return
+        }
+        send(ClientFrame.Search(peer, query))
     }
 
     private companion object {

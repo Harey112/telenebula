@@ -143,7 +143,10 @@ class AppGraph(app: Application) {
         scope = appScope,
         prefs = prefs,
         profile = runtime.profile,
-        backend = DexBackendAdapter(appScope, runtime.profile, core, prefs, typing, peerPresence, transfers, peerQueues, attachments, appLock, dexCalls),
+        backend = DexBackendAdapter(
+            appScope, runtime, core, prefs, typing, peerPresence, transfers, peerQueues, attachments, appLock, dexCalls,
+            vpn, updateMonitor, callEngine.diagnostics::value, BuildConfig.VERSION_NAME,
+        ),
         bridge = dexCalls,
         assets = WebAssets(app),
         notices = notices,

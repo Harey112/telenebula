@@ -1,7 +1,17 @@
 package com.telenebula.web.state
 
+import com.telenebula.web.wire.DexAccount
+import com.telenebula.web.wire.DexCallLog
 import com.telenebula.web.wire.DexCallState
 import com.telenebula.web.wire.DexChat
+import com.telenebula.web.wire.DexChatLink
+import com.telenebula.web.wire.DexContactDetail
+import com.telenebula.web.wire.DexDiagnostics
+import com.telenebula.web.wire.DexNetwork
+import com.telenebula.web.wire.DexPingResult
+import com.telenebula.web.wire.DexSettings
+import com.telenebula.web.wire.DexStorage
+import com.telenebula.web.wire.DexUpdates
 import com.telenebula.web.wire.DexChatView
 import com.telenebula.web.wire.DexContact
 import com.telenebula.web.wire.DexIdentity
@@ -18,6 +28,42 @@ sealed interface Screen {
 }
 
 enum class Connection { CONNECTING, CONNECTED, RECONNECTING }
+
+/** The left rail's destinations; the phone's bottom tabs, given a desktop's room. */
+enum class Tab(val label: String) {
+    CHATS("Chats"),
+    CONTACTS("Contacts"),
+    CALLS("Calls"),
+    SETTINGS("Settings"),
+}
+
+/** One pane of the preferences window, each the phone's screen of the same name. */
+enum class SettingsTab(val label: String, val sections: List<String> = emptyList()) {
+    ACCOUNT("Account", listOf("account")),
+    STATUS("Status", listOf("network")),
+    APPEARANCE("Appearance"),
+    CHATS("Chats"),
+    NOTIFICATIONS("Notifications"),
+    PRIVACY("Privacy"),
+    CALLS("Calls"),
+    NETWORK("Network", listOf("network", "account")),
+    STORAGE("Storage", listOf("storage")),
+    DIAGNOSTICS("Diagnostics", listOf("diagnostics", "network")),
+    UPDATES("Updates", listOf("updates")),
+    DEX("Dex"),
+}
+
+enum class CallFilter(val label: String) { ALL("All"), MISSED("Missed"), IN("Incoming"), OUT("Outgoing") }
+
+/** A form the shell draws over everything; the fields it carries are its own. */
+sealed interface Dialog {
+    data class AddContact(val ip: String = "", val name: String = "", val nickname: String = "", val notes: String = "", val error: String? = null) : Dialog
+    data class EditContact(val peer: String, val name: String, val nickname: String, val notes: String) : Dialog
+    data class ChangeIp(val peer: String, val newIp: String, val error: String? = null) : Dialog
+    data class QuickReaction(val slot: Int, val emoji: String) : Dialog
+    data class MuteFor(val peer: String) : Dialog
+    data class Disappearing(val peer: String) : Dialog
+}
 
 data class Toast(val id: Int, val level: DexNoticeLevel, val message: String)
 
@@ -66,6 +112,30 @@ data class AppState(
     val prompt: Prompt? = null,
     val hasNewBelow: Boolean = false,
     val isCallMediaSupported: Boolean = true,
+    val tab: Tab = Tab.CHATS,
+    val settingsTab: SettingsTab = SettingsTab.ACCOUNT,
+    val settings: DexSettings? = null,
+    val account: DexAccount? = null,
+    val network: DexNetwork? = null,
+    val storage: DexStorage? = null,
+    val diagnostics: DexDiagnostics? = null,
+    val updates: DexUpdates? = null,
+    val callLogs: List<DexCallLog> = emptyList(),
+    val callFilter: CallFilter = CallFilter.ALL,
+    val callSearch: String = "",
+    val callSelection: Set<String> = emptySet(),
+    val contactSearch: String = "",
+    val selectedContact: String? = null,
+    val contactDetail: DexContactDetail? = null,
+    val chatMedia: List<DexMessage> = emptyList(),
+    val chatMediaPeer: String? = null,
+    val chatLinks: List<DexChatLink> = emptyList(),
+    val chatLinksPeer: String? = null,
+    val isInfoOpen: Boolean = false,
+    val pings: Map<String, DexPingResult> = emptyMap(),
+    val chatSearchResults: List<DexMessage>? = null,
+    val dialog: Dialog? = null,
+    val isRailOpen: Boolean = false,
 ) {
     val isMySeat: Boolean get() = call.seat == com.telenebula.web.wire.DexSeat.DEX && call.seatClientId != null && call.seatClientId == clientId
     val unreadTotal: Int get() = chats.filter { !it.isArchived }.sumOf { it.unread }

@@ -121,8 +121,12 @@ data class DexContact(
     val label: String,
     val name: String,
     val nickname: String = "",
+    val notes: String = "",
     val isBlocked: Boolean = false,
     val isArchived: Boolean = false,
+    val isPinned: Boolean = false,
+    val muteUntil: Long = 0,
+    val addedAt: Long = 0,
     val lastSeenAt: Long? = null,
     val revealGate: DexRevealGate = DexRevealGate.TAP,
     val disappearSeconds: Int = 0,
@@ -210,6 +214,304 @@ data class DexIceServer(val urls: List<String>, val username: String? = null, va
 @Serializable
 data class DexIceCandidate(val candidate: String, val sdpMid: String? = null, val sdpMLineIndex: Int? = null)
 
+
+// --- settings, as one document ---------------------------------------------------------------
+
+@Serializable
+enum class DexThemeMode {
+    @SerialName("system") SYSTEM,
+    @SerialName("light") LIGHT,
+    @SerialName("dark") DARK,
+}
+
+@Serializable
+enum class DexTextSize {
+    @SerialName("small") SMALL,
+    @SerialName("medium") MEDIUM,
+    @SerialName("large") LARGE,
+}
+
+@Serializable
+enum class DexDensity {
+    @SerialName("comfortable") COMFORTABLE,
+    @SerialName("compact") COMPACT,
+}
+
+@Serializable
+enum class DexLogLevel {
+    @SerialName("info") INFO,
+    @SerialName("debug") DEBUG,
+}
+
+@Serializable
+data class DexQuietHours(
+    val enabled: Boolean = false,
+    val fromHour: Int = 22,
+    val fromMinute: Int = 0,
+    val toHour: Int = 7,
+    val toMinute: Int = 0,
+)
+
+@Serializable
+data class DexMessageNotifications(
+    val enabled: Boolean = true,
+    val showSender: Boolean = true,
+    val preview: Boolean = true,
+    val sound: Boolean = true,
+    val vibrate: Boolean = true,
+    val popup: Boolean = true,
+    val reactions: Boolean = true,
+)
+
+@Serializable
+data class DexCallNotifications(val ring: Boolean = true, val vibrate: Boolean = true, val missedNotification: Boolean = true)
+
+@Serializable
+data class DexInAppNotifications(val vibrate: Boolean = false)
+
+@Serializable
+data class DexNotifications(
+    val messages: DexMessageNotifications = DexMessageNotifications(),
+    val calls: DexCallNotifications = DexCallNotifications(),
+    val inApp: DexInAppNotifications = DexInAppNotifications(),
+    val quietHours: DexQuietHours = DexQuietHours(),
+)
+
+@Serializable
+data class DexPresencePrefs(val isShared: Boolean = true, val pauseMinutes: Int = 0, val pausedUntil: Long = 0)
+
+@Serializable
+data class DexUpdatePrefs(val isDailyCheckEnabled: Boolean = true, val lastCheckedAt: Long = 0, val latestVersion: String? = null)
+
+/** Everything the phone's settings screens edit. What only a phone can carry out is not here. */
+@Serializable
+data class DexSettings(
+    val themeMode: DexThemeMode = DexThemeMode.SYSTEM,
+    val colorTheme: String = "sky",
+    val customAccent: String = "#7FB7E6",
+    val chatTextSize: DexTextSize = DexTextSize.MEDIUM,
+    val messageDensity: DexDensity = DexDensity.COMFORTABLE,
+    val isEnterToSend: Boolean = false,
+    val isVideoSpeakerDefault: Boolean = true,
+    val isScreenshotBlocked: Boolean = false,
+    val isBackgroundConnectionEnabled: Boolean = true,
+    val isStartOnBootEnabled: Boolean = true,
+    val notifications: DexNotifications = DexNotifications(),
+    val sendReadReceipts: Boolean = true,
+    val sendTypingIndicators: Boolean = true,
+    val presence: DexPresencePrefs = DexPresencePrefs(),
+    val updates: DexUpdatePrefs = DexUpdatePrefs(),
+    val nebulaLogLevel: DexLogLevel = DexLogLevel.INFO,
+    val isDeveloperMode: Boolean = false,
+    val coverRevealGate: DexRevealGate = DexRevealGate.TAP,
+    val autoCleanOrphans: Boolean = false,
+    val quickReactions: List<String> = emptyList(),
+    val recentReactions: List<String> = emptyList(),
+    /** the phone's own lock, shown so the browser can say why it cannot set it */
+    val isAppLockEnabled: Boolean = false,
+    val appLockAfterSec: Int = 60,
+    /** Dex's own settings: shown, never edited from a browser that Dex is serving */
+    val dexUsername: String = "",
+    val dexMaxClients: Int = 2,
+    val dexPort: Int = 0,
+)
+
+/** A field left out stays as it is, so a browser sends only what it changed. */
+@Serializable
+data class DexSettingsPatch(
+    val themeMode: DexThemeMode? = null,
+    val colorTheme: String? = null,
+    val customAccent: String? = null,
+    val chatTextSize: DexTextSize? = null,
+    val messageDensity: DexDensity? = null,
+    val isEnterToSend: Boolean? = null,
+    val isVideoSpeakerDefault: Boolean? = null,
+    val isScreenshotBlocked: Boolean? = null,
+    val isBackgroundConnectionEnabled: Boolean? = null,
+    val isStartOnBootEnabled: Boolean? = null,
+    val notifications: DexNotifications? = null,
+    val sendReadReceipts: Boolean? = null,
+    val sendTypingIndicators: Boolean? = null,
+    val presence: DexPresencePrefs? = null,
+    val isDailyUpdateCheckEnabled: Boolean? = null,
+    val nebulaLogLevel: DexLogLevel? = null,
+    val isDeveloperMode: Boolean? = null,
+    val coverRevealGate: DexRevealGate? = null,
+    val autoCleanOrphans: Boolean? = null,
+    val appLockAfterSec: Int? = null,
+    val quickReactions: List<String>? = null,
+)
+
+// --- what the phone reports about itself -----------------------------------------------------
+
+@Serializable
+data class DexAccount(
+    val certName: String = "",
+    val overlayIp: String = "",
+    val certFingerprint: String = "",
+    val certNotAfter: String = "",
+    val certStatus: String = "",
+    val networks: List<String> = emptyList(),
+    val listenPort: Int = 0,
+    val msgPort: Int = 0,
+    val mtu: Int = 0,
+    val lighthouseIp: String = "",
+    val lighthouseUnderlay: String = "",
+    val appVersion: String = "",
+    val coreVersion: String = "",
+)
+
+@Serializable
+data class DexPeerRow(
+    val ip: String,
+    val label: String,
+    val isConnected: Boolean = false,
+    val endpoint: String = "",
+    val latencyMs: Long? = null,
+)
+
+@Serializable
+data class DexNetwork(
+    val isTunnelOn: Boolean = false,
+    val tunnelUptimeMs: Long = 0,
+    val engineUptimeMs: Long = 0,
+    val connectedCount: Int = 0,
+    val bytesSent: Long = 0,
+    val bytesReceived: Long = 0,
+    val pendingActions: Int = 0,
+    val failedActions: Int = 0,
+    val pendingHandshakes: Int = 0,
+    val lighthouseStatus: String = "",
+    val peers: List<DexPeerRow> = emptyList(),
+)
+
+@Serializable
+data class DexStorage(
+    val dbBytes: Long = 0,
+    val attachmentsBytes: Long = 0,
+    val attachmentsCount: Int = 0,
+    val orphanBytes: Long = 0,
+    val orphanCount: Int = 0,
+    val partialBytes: Long = 0,
+    val partialCount: Int = 0,
+    val messages: Int = 0,
+    val contacts: Int = 0,
+    val freeBytes: Long = 0,
+)
+
+@Serializable
+data class DexDiagnostics(
+    val logTail: String = "",
+    val callTrail: List<String> = emptyList(),
+    val queuedCount: Int = 0,
+    val queuedPeers: Int = 0,
+    val failedCount: Int = 0,
+    val lighthouseStatus: String = "",
+)
+
+@Serializable
+data class DexUpdates(
+    val appVersion: String = "",
+    val latestVersion: String? = null,
+    val isUpdateAvailable: Boolean = false,
+    val isDailyCheckEnabled: Boolean = true,
+    val lastCheckedAt: Long = 0,
+    val lastError: String? = null,
+)
+
+@Serializable
+data class DexPeerStats(
+    val messagesSent: Int = 0,
+    val messagesReceived: Int = 0,
+    val mediaSent: Int = 0,
+    val mediaReceived: Int = 0,
+    val bytesSent: Long = 0,
+    val bytesReceived: Long = 0,
+    val firstMessageAt: Long? = null,
+    val lastActivityAt: Long? = null,
+    val pendingActions: Int = 0,
+    val failedActions: Int = 0,
+    val isConnected: Boolean = false,
+)
+
+@Serializable
+enum class DexCallOutcome {
+    @SerialName("answered") ANSWERED,
+    @SerialName("missed") MISSED,
+    @SerialName("declined") DECLINED,
+    @SerialName("no-answer") NO_ANSWER,
+    @SerialName("unreachable") UNREACHABLE,
+    @SerialName("cancelled") CANCELLED,
+    @SerialName("failed") FAILED,
+}
+
+@Serializable
+data class DexCallLog(
+    val id: String,
+    val peer: String,
+    val label: String,
+    val dir: DexDirection,
+    val isVideo: Boolean,
+    val outcome: DexCallOutcome,
+    val startedAt: Long,
+    val connectedAt: Long? = null,
+    val endedAt: Long,
+)
+
+@Serializable
+data class DexChatLink(val messageId: String, val url: String, val ts: Long)
+
+@Serializable
+data class DexContactNotifications(
+    val useGlobal: Boolean = true,
+    val messages: Boolean = true,
+    val preview: Boolean = true,
+    val sound: Boolean = true,
+    val vibrate: Boolean = true,
+    val popup: Boolean = true,
+    val reactions: Boolean = true,
+    val calls: Boolean = true,
+)
+
+/** A null field follows the global setting. */
+@Serializable
+data class DexContactPrivacy(
+    val sendReadReceipts: Boolean? = null,
+    val sendTypingIndicators: Boolean? = null,
+    val blockScreenshots: Boolean? = null,
+    val revealGate: DexRevealGate? = null,
+)
+
+@Serializable
+data class DexContactFlags(
+    val isPinned: Boolean? = null,
+    val isArchived: Boolean? = null,
+    val isBlocked: Boolean? = null,
+    val muteUntil: Long? = null,
+    val isMarkedUnread: Boolean? = null,
+    val disappearSeconds: Int? = null,
+)
+
+@Serializable
+data class DexContactDetail(
+    val contact: DexContact,
+    val stats: DexPeerStats = DexPeerStats(),
+    val presence: DexPresence = DexPresence.OFFLINE,
+    val clientVersion: String = "",
+    val peerCertName: String = "",
+    val peerCertFingerprint: String = "",
+    val endpoint: String = "",
+    val connectionStatus: String = "",
+    val queued: Int = 0,
+    val failed: Int = 0,
+    val privacy: DexContactPrivacy = DexContactPrivacy(),
+    val notifications: DexContactNotifications? = null,
+    val calls: List<DexCallLog> = emptyList(),
+)
+
+@Serializable
+data class DexPingResult(val peer: String, val rttMs: Long, val error: String? = null)
+
 // --- frames from the browser -----------------------------------------------------------------
 
 @Serializable
@@ -243,6 +545,32 @@ sealed interface ClientFrame {
     @Serializable @SerialName("call_failed") data class CallFailed(val callId: String, val reason: String) : ClientFrame
     @Serializable @SerialName("call_cam") data class CallCam(val callId: String, val isOn: Boolean) : ClientFrame
     @Serializable @SerialName("call_move_to_phone") data class CallMoveToPhone(val callId: String) : ClientFrame
+
+    @Serializable @SerialName("watch") data class Watch(val sections: List<String>) : ClientFrame
+    @Serializable @SerialName("set_settings") data class SetSettings(val patch: DexSettingsPatch) : ClientFrame
+    @Serializable @SerialName("set_quick_reaction") data class SetQuickReaction(val slot: Int, val emoji: String) : ClientFrame
+    @Serializable @SerialName("request_contact_detail") data class RequestContactDetail(val peer: String) : ClientFrame
+    @Serializable @SerialName("contact_save") data class ContactSave(val peer: String, val name: String, val nickname: String, val notes: String) : ClientFrame
+    @Serializable @SerialName("contact_add") data class ContactAdd(val peer: String, val name: String, val nickname: String = "", val notes: String = "") : ClientFrame
+    @Serializable @SerialName("contact_delete") data class ContactDelete(val peer: String) : ClientFrame
+    @Serializable @SerialName("contact_flags") data class ContactFlagsSet(val peer: String, val flags: DexContactFlags) : ClientFrame
+    @Serializable @SerialName("contact_privacy") data class ContactPrivacySet(val peer: String, val privacy: DexContactPrivacy) : ClientFrame
+    @Serializable @SerialName("contact_notifications") data class ContactNotificationsSet(val peer: String, val prefs: DexContactNotifications? = null) : ClientFrame
+    @Serializable @SerialName("contact_change_ip") data class ContactChangeIp(val peer: String, val newIp: String) : ClientFrame
+    @Serializable @SerialName("clear_history") data class ClearHistory(val peer: String) : ClientFrame
+    @Serializable @SerialName("clear_all_history") data object ClearAllHistory : ClientFrame
+    @Serializable @SerialName("clear_orphans") data object ClearOrphans : ClientFrame
+    @Serializable @SerialName("request_call_logs") data class RequestCallLogs(val peer: String? = null, val limit: Int = 200) : ClientFrame
+    @Serializable @SerialName("delete_call_logs") data class DeleteCallLogs(val ids: List<String>) : ClientFrame
+    @Serializable @SerialName("request_chat_media") data class RequestChatMedia(val peer: String) : ClientFrame
+    @Serializable @SerialName("request_chat_links") data class RequestChatLinks(val peer: String) : ClientFrame
+    @Serializable @SerialName("ping_peer") data class PingPeer(val peer: String) : ClientFrame
+    @Serializable @SerialName("retry_failed") data class RetryFailed(val peer: String = "") : ClientFrame
+    @Serializable @SerialName("drain") data class Drain(val peer: String) : ClientFrame
+    @Serializable @SerialName("check_updates") data object CheckUpdates : ClientFrame
+    @Serializable @SerialName("set_tunnel") data class SetTunnel(val isOn: Boolean) : ClientFrame
+    @Serializable @SerialName("forward") data class Forward(val messageId: String, val peer: String) : ClientFrame
+    @Serializable @SerialName("search") data class Search(val peer: String, val text: String) : ClientFrame
 }
 
 // --- frames from the phone -------------------------------------------------------------------
@@ -290,6 +618,21 @@ sealed interface ServerFrame {
     @Serializable @SerialName("call_ice") data class CallIce(val callId: String, val candidate: DexIceCandidate? = null) : ServerFrame
     /** this browser's peer connection is no longer part of the call */
     @Serializable @SerialName("call_release") data class CallRelease(val callId: String, val reason: String) : ServerFrame
+
+    @Serializable @SerialName("settings") data class Settings(val settings: DexSettings) : ServerFrame
+    @Serializable @SerialName("account") data class Account(val account: DexAccount) : ServerFrame
+    @Serializable @SerialName("network") data class Network(val network: DexNetwork) : ServerFrame
+    @Serializable @SerialName("storage") data class Storage(val storage: DexStorage) : ServerFrame
+    @Serializable @SerialName("diagnostics") data class Diagnostics(val diagnostics: DexDiagnostics) : ServerFrame
+    @Serializable @SerialName("updates") data class Updates(val updates: DexUpdates) : ServerFrame
+    @Serializable @SerialName("call_logs") data class CallLogs(val items: List<DexCallLog>) : ServerFrame
+    @Serializable @SerialName("contact_detail") data class ContactDetail(val detail: DexContactDetail) : ServerFrame
+    @Serializable @SerialName("chat_media") data class ChatMedia(val peer: String, val items: List<DexMessage>) : ServerFrame
+    @Serializable @SerialName("chat_links") data class ChatLinks(val peer: String, val items: List<DexChatLink>) : ServerFrame
+    @Serializable @SerialName("ping_result") data class PingResult(val result: DexPingResult) : ServerFrame
+    @Serializable @SerialName("search_results") data class SearchResults(val peer: String, val items: List<DexMessage>) : ServerFrame
+    /** a command that finished and has nothing to send back but the fact */
+    @Serializable @SerialName("done") data class Done(val what: String, val message: String? = null) : ServerFrame
 
     companion object {
         const val ROLE_OFFERER = "offerer"

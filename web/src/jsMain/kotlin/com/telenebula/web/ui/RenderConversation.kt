@@ -55,6 +55,7 @@ class ConversationView(root: HTMLElement, private val actions: Actions) {
     private val subtitle = div("chat-subtitle")
     private val callBtn = button("icon-btn", "Voice call", { actions.startCall(false) }, Icon.CALL)
     private val videoBtn = button("icon-btn", "Video call", { actions.startCall(true) }, Icon.VIDEO)
+    private val infoBtn = button("icon-btn", "Chat details", { actions.toggleInfo() }, Icon.INFO)
     private val placeholder = div("chat-placeholder").add(svg(Icon.MONITOR, 40), div(null, "Pick a chat to start."))
 
     private val timelineHost = div("timeline").also { it.setAttribute("role", "log"); it.setAttribute("aria-live", "polite") }
@@ -86,7 +87,7 @@ class ConversationView(root: HTMLElement, private val actions: Actions) {
     private var expiryTimer: Int? = null
 
     init {
-        val header = div("chat-header").add(backBtn, div("chat-heading").add(title, subtitle), div("chat-actions").add(callBtn, videoBtn))
+        val header = div("chat-header").add(backBtn, div("chat-heading").add(title, subtitle), div("chat-actions").add(callBtn, videoBtn, infoBtn))
         timelineHost.add(loadMore, items)
         composer.add(
             emojiBar,
@@ -199,8 +200,10 @@ class ConversationView(root: HTMLElement, private val actions: Actions) {
     }
 
     fun render(prev: AppState, next: AppState) {
+        host.toggle("hidden", next.tab != com.telenebula.web.state.Tab.CHATS)
         val peer = next.openPeer
         host.toggle("empty", peer == null)
+        infoBtn.toggle("on", next.isInfoOpen)
         placeholder.toggle("hidden", peer != null)
         val view = next.view
         if (peer == null) {

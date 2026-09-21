@@ -1,15 +1,29 @@
 package com.telenebula.dex
 
 import com.telenebula.dex.wire.ClientFrame
+import com.telenebula.dex.wire.DexAccount
+import com.telenebula.dex.wire.DexCallLog
 import com.telenebula.dex.wire.DexCallState
 import com.telenebula.dex.wire.DexChat
+import com.telenebula.dex.wire.DexChatLink
 import com.telenebula.dex.wire.DexChatView
 import com.telenebula.dex.wire.DexContact
+import com.telenebula.dex.wire.DexContactDetail
+import com.telenebula.dex.wire.DexContactFlags
+import com.telenebula.dex.wire.DexContactNotifications
+import com.telenebula.dex.wire.DexContactPrivacy
+import com.telenebula.dex.wire.DexDiagnostics
 import com.telenebula.dex.wire.DexIceCandidate
 import com.telenebula.dex.wire.DexIdentity
 import com.telenebula.dex.wire.DexMessage
+import com.telenebula.dex.wire.DexNetwork
+import com.telenebula.dex.wire.DexPingResult
 import com.telenebula.dex.wire.DexPresence
 import com.telenebula.dex.wire.DexQueue
+import com.telenebula.dex.wire.DexSettings
+import com.telenebula.dex.wire.DexSettingsPatch
+import com.telenebula.dex.wire.DexStorage
+import com.telenebula.dex.wire.DexUpdates
 import java.io.File
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -107,6 +121,57 @@ interface DexBackend {
     val callState: StateFlow<DexCallState>
     val callEvents: Flow<DexCallEvent>
     fun onCallCommand(command: DexCallCommand)
+
+    // --- settings ------------------------------------------------------------------------------
+
+    fun settings(): Flow<DexSettings>
+
+    /** Applies the fields the patch carries; what only a phone can decide is refused here. */
+    suspend fun applySettings(patch: DexSettingsPatch)
+    suspend fun setQuickReaction(slot: Int, emoji: String)
+
+    // --- what the phone reports; each is collected only while a browser watches it --------------
+
+    fun account(): Flow<DexAccount>
+    fun network(): Flow<DexNetwork>
+    fun storage(): Flow<DexStorage>
+    fun diagnostics(): Flow<DexDiagnostics>
+    fun updates(): Flow<DexUpdates>
+
+    // --- contacts ------------------------------------------------------------------------------
+
+    /** null when no such contact is saved */
+    suspend fun contactDetail(peer: String): DexContactDetail?
+    suspend fun saveContact(peer: String, name: String, nickname: String, notes: String)
+    suspend fun addContact(peer: String, name: String, nickname: String, notes: String)
+    suspend fun deleteContact(peer: String)
+    suspend fun setContactFlags(peer: String, flags: DexContactFlags)
+    suspend fun setContactPrivacy(peer: String, privacy: DexContactPrivacy)
+    suspend fun setContactNotifications(peer: String, prefs: DexContactNotifications?)
+    suspend fun changeContactIp(peer: String, newIp: String)
+
+    // --- history and storage ---------------------------------------------------------------------
+
+    suspend fun clearHistory(peer: String)
+    suspend fun clearAllHistory()
+    suspend fun clearOrphans(): Long
+
+    suspend fun callLogs(peer: String?, limit: Int): List<DexCallLog>
+    suspend fun deleteCallLogs(ids: List<String>)
+    suspend fun chatMedia(peer: String): List<DexMessage>
+    suspend fun chatLinks(peer: String): List<DexChatLink>
+    suspend fun search(peer: String, text: String): List<DexMessage>
+    suspend fun forward(messageId: String, peer: String)
+
+    // --- network ---------------------------------------------------------------------------------
+
+    suspend fun pingPeer(peer: String): DexPingResult
+    suspend fun retryFailed(peer: String)
+    suspend fun drain(peer: String)
+    suspend fun checkUpdates()
+
+    /** Throws when the tunnel cannot be switched from here, which the first time it always is. */
+    suspend fun setTunnel(isOn: Boolean)
 
     /** Turns one frame the wire could not name into a message for the browser; the server reports it. */
     fun describe(error: Throwable): String = error.message ?: error.javaClass.simpleName

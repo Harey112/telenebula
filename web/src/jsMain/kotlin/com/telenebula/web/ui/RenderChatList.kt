@@ -28,6 +28,7 @@ class ChatListView(root: HTMLElement, private val actions: Actions) {
     }
 
     fun render(prev: AppState, next: AppState) {
+        host.toggle("hidden", next.tab != com.telenebula.web.state.Tab.CHATS)
         if (prev.chats === next.chats && prev.presence === next.presence && prev.typing === next.typing && prev.openPeer == next.openPeer && prev.search == next.search && prev.showArchived == next.showArchived) return
         archivedToggle.toggle("on", next.showArchived)
         archivedToggle.setAttribute("aria-pressed", next.showArchived.toString())
@@ -112,44 +113,22 @@ class ChatListView(root: HTMLElement, private val actions: Actions) {
     }
 }
 
-/** The shell: top bar, then the two panes. */
+/** Everything right of the rail: the call banner, then whichever tab's panes. */
 class ShellView(root: HTMLElement, private val actions: Actions) {
     val host = div("shell hidden").also { root.appendChild(it) }
-    private val meName = span("me-name")
-    private val meIp = span("me-ip")
-    private val dot = span("conn-dot").also { it.setAttribute("role", "img") }
-    private val connLabel = span("conn-label")
     private val panes = div("panes")
     val callBannerSlot = div("banner-slot")
+    private val menuBtn = button("icon-btn rail-toggle", "Menu", { actions.toggleRail() }, Icon.MENU)
 
     init {
-        val bar = div("topbar").add(
-            div("brand").add(svg(Icon.MONITOR, 18), span("brand-text", "Dex")),
-            div("me").add(meName, meIp),
-            div("conn").add(dot, connLabel),
-            button("icon-btn", "Log out", { actions.logout() }, Icon.LOGOUT),
-        )
-        host.add(bar, callBannerSlot, panes)
+        host.add(menuBtn, callBannerSlot, panes)
     }
 
     fun paneHost(): HTMLElement = panes
 
     fun render(prev: AppState, next: AppState) {
         host.toggle("hidden", next.screen !is com.telenebula.web.state.Screen.App)
-        if (prev.me !== next.me) {
-            meName.textContent = next.me?.name.orEmpty()
-            meIp.textContent = next.me?.ip.orEmpty()
-        }
-        if (prev.connection != next.connection) {
-            dot.className = "conn-dot " + next.connection.name.lowercase()
-            val label = when (next.connection) {
-                com.telenebula.web.state.Connection.CONNECTED -> "Connected"
-                com.telenebula.web.state.Connection.CONNECTING -> "Connecting…"
-                com.telenebula.web.state.Connection.RECONNECTING -> "Reconnecting…"
-            }
-            dot.setAttribute("aria-label", label)
-            connLabel.textContent = label
-        }
         if (prev.openPeer != next.openPeer) panes.toggle("chat-open", next.openPeer != null)
+        if (prev.isInfoOpen != next.isInfoOpen) panes.toggle("info-open", next.isInfoOpen)
     }
 }

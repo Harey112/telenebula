@@ -26,6 +26,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.SupervisorJob
@@ -57,6 +58,8 @@ class ClientSession(
     private val unansweredPings = AtomicInteger(0)
     private val chatLock = Any()
     private val openChats = LinkedHashMap<String, Job>(8, 0.75f, true)
+    private val watchLock = Any()
+    private val watching = HashMap<String, Job>()
 
     /** False once the browser is too slow to keep up; it is then closed and resyncs on reconnect. */
     fun send(frame: ServerFrame): Boolean {
@@ -160,6 +163,42 @@ class ClientSession(
         feed("queues", backend.queues()) { ServerFrame.Queues(it) }
         feed("call", backend.callState) { ServerFrame.CallState(it) }
         feed("call", backend.callEvents.filter { it.clientId == client.id }) { toFrame(it) }
+        feed("settings", backend.settings()) { ServerFrame.Settings(it) }
+    }
+
+    /**
+     * The sections a browser is looking at. Each is a query the phone would rather not run for a
+     * tab nobody is on, so one starts when it is asked for and is cancelled the moment it is not.
+     */
+    private fun CoroutineScope.watch(sections: List<String>) {
+        val wanted = sections.filter { it in WATCHABLE }.toSet()
+        val started = ArrayList<Pair<String, Job>>()
+        val stopped = ArrayList<Job>()
+        synchronized(watchLock) {
+            for (section in watching.keys.toList()) {
+                if (section !in wanted) watching.remove(section)?.let(stopped::add)
+            }
+            for (section in wanted) {
+                if (watching.containsKey(section)) continue
+                val job = launch(start = kotlinx.coroutines.CoroutineStart.LAZY) { collect(section) }
+                watching[section] = job
+                started.add(section to job)
+            }
+        }
+        for (job in stopped) job.cancel()
+        for ((_, job) in started) job.start()
+    }
+
+    private suspend fun collect(section: String) {
+        val flow: Flow<ServerFrame> = when (section) {
+            "account" -> backend.account().map { ServerFrame.Account(it) }
+            "network" -> backend.network().map { ServerFrame.Network(it) }
+            "storage" -> backend.storage().map { ServerFrame.Storage(it) }
+            "diagnostics" -> backend.diagnostics().map { ServerFrame.Diagnostics(it) }
+            "updates" -> backend.updates().map { ServerFrame.Updates(it) }
+            else -> return
+        }
+        flow.catch { e -> send(ServerFrame.Error(backend.describe(e), section)) }.collect { send(it) }
     }
 
     private fun <T> CoroutineScope.feed(ref: String, flow: Flow<T>, map: (T) -> ServerFrame): Job = launch {
@@ -254,6 +293,69 @@ class ClientSession(
             is ClientFrame.CallFailed -> call { DexCallCommand.Failed(client.id, id(frame.callId), frame.reason.take(MAX_REASON_CHARS)) }
             is ClientFrame.CallCam -> call { DexCallCommand.Cam(client.id, id(frame.callId), frame.isOn) }
             is ClientFrame.CallMoveToPhone -> call { DexCallCommand.MoveToPhone(client.id, id(frame.callId)) }
+
+            is ClientFrame.Watch -> done("watch") {
+                require(frame.sections.size <= WATCHABLE.size) { "Too many sections" }
+                workers?.watch(frame.sections)
+            }
+            is ClientFrame.SetSettings -> done("set_settings") { backend.applySettings(frame.patch) }
+            is ClientFrame.SetQuickReaction -> done("set_quick_reaction") { backend.setQuickReaction(frame.slot, emoji(frame.emoji)) }
+            is ClientFrame.RequestContactDetail -> command("request_contact_detail") {
+                val peer = peer(frame.peer)
+                val detail = backend.contactDetail(peer) ?: throw IllegalArgumentException("No contact at $peer")
+                send(ServerFrame.ContactDetail(detail))
+            }
+            is ClientFrame.ContactSave -> done("contact_save") {
+                backend.saveContact(peer(frame.peer), text(frame.name), text(frame.nickname), notes(frame.notes))
+            }
+            is ClientFrame.ContactAdd -> done("contact_add") {
+                backend.addContact(peer(frame.peer), text(frame.name), text(frame.nickname), notes(frame.notes))
+            }
+            is ClientFrame.ContactDelete -> done("contact_delete") { backend.deleteContact(peer(frame.peer)) }
+            is ClientFrame.ContactFlagsSet -> done("contact_flags") { backend.setContactFlags(peer(frame.peer), frame.flags) }
+            is ClientFrame.ContactPrivacySet -> done("contact_privacy") { backend.setContactPrivacy(peer(frame.peer), frame.privacy) }
+            is ClientFrame.ContactNotificationsSet -> done("contact_notifications") { backend.setContactNotifications(peer(frame.peer), frame.prefs) }
+            is ClientFrame.ContactChangeIp -> done("contact_change_ip") { backend.changeContactIp(peer(frame.peer), peer(frame.newIp)) }
+            is ClientFrame.ClearHistory -> done("clear_history") { backend.clearHistory(peer(frame.peer)) }
+            ClientFrame.ClearAllHistory -> done("clear_all_history") { backend.clearAllHistory() }
+            ClientFrame.ClearOrphans -> command("clear_orphans") {
+                val freed = backend.clearOrphans()
+                send(ServerFrame.Done("clear_orphans", "$freed"))
+            }
+            is ClientFrame.RequestCallLogs -> command("request_call_logs") {
+                val peer = frame.peer?.let(::peer)
+                send(ServerFrame.CallLogs(backend.callLogs(peer, frame.limit.coerceIn(1, MAX_CALL_LOGS))))
+            }
+            is ClientFrame.DeleteCallLogs -> done("delete_call_logs") {
+                require(frame.ids.size in 1..MAX_CALL_LOGS) { "Bad selection" }
+                backend.deleteCallLogs(frame.ids.map(::id))
+            }
+            is ClientFrame.RequestChatMedia -> command("request_chat_media") {
+                val peer = peer(frame.peer)
+                send(ServerFrame.ChatMedia(peer, backend.chatMedia(peer)))
+            }
+            is ClientFrame.RequestChatLinks -> command("request_chat_links") {
+                val peer = peer(frame.peer)
+                send(ServerFrame.ChatLinks(peer, backend.chatLinks(peer)))
+            }
+            is ClientFrame.PingPeer -> command("ping_peer") { send(ServerFrame.PingResult(backend.pingPeer(peer(frame.peer)))) }
+            is ClientFrame.RetryFailed -> done("retry_failed") { backend.retryFailed(if (frame.peer.isEmpty()) "" else peer(frame.peer)) }
+            is ClientFrame.Drain -> done("drain") { backend.drain(peer(frame.peer)) }
+            ClientFrame.CheckUpdates -> done("check_updates") { backend.checkUpdates() }
+            is ClientFrame.SetTunnel -> done("set_tunnel") { backend.setTunnel(frame.isOn) }
+            is ClientFrame.Forward -> done("forward") { backend.forward(id(frame.messageId), peer(frame.peer)) }
+            is ClientFrame.Search -> command("search") {
+                val peer = peer(frame.peer)
+                send(ServerFrame.SearchResults(peer, backend.search(peer, body(frame.text))))
+            }
+        }
+    }
+
+    /** A command with nothing to answer but the fact that it happened. */
+    private suspend fun done(what: String, block: suspend () -> Unit) {
+        command(what) {
+            block()
+            send(ServerFrame.Done(what, null))
         }
     }
 
@@ -335,7 +437,21 @@ class ClientSession(
         require(value.length <= MAX_CANDIDATE_CHARS) { "Bad candidate" }
     }
 
+    private fun text(value: String): String {
+        require(value.length <= MAX_NAME_CHARS && value.none { it < ' ' }) { "That name is too long" }
+        return value.trim()
+    }
+
+    private fun notes(value: String): String {
+        require(value.length <= MAX_NOTES_CHARS) { "Those notes are too long" }
+        return value.trim()
+    }
+
     private companion object {
+        val WATCHABLE = setOf("account", "network", "storage", "diagnostics", "updates")
+        const val MAX_CALL_LOGS = 500
+        const val MAX_NAME_CHARS = 200
+        const val MAX_NOTES_CHARS = 4 * 1024
         const val MAX_OPEN_CHATS = 4
         const val MAX_PEER_CHARS = 45
         const val MAX_ID_CHARS = 64

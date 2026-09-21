@@ -3,15 +3,30 @@ package com.telenebula.dex
 import com.telenebula.dex.auth.Passwords
 import com.telenebula.dex.http.WsCodec
 import com.telenebula.dex.http.WsOpcode
+import com.telenebula.dex.wire.DexAccount
+import com.telenebula.dex.wire.DexCallLog
 import com.telenebula.dex.wire.DexCallState
 import com.telenebula.dex.wire.DexChat
+import com.telenebula.dex.wire.DexChatLink
 import com.telenebula.dex.wire.DexChatView
 import com.telenebula.dex.wire.DexContact
+import com.telenebula.dex.wire.DexContactDetail
+import com.telenebula.dex.wire.DexContactFlags
+import com.telenebula.dex.wire.DexContactNotifications
+import com.telenebula.dex.wire.DexContactPrivacy
+import com.telenebula.dex.wire.DexDiagnostics
 import com.telenebula.dex.wire.DexIdentity
 import com.telenebula.dex.wire.DexJson
 import com.telenebula.dex.wire.DexMessage
+import com.telenebula.dex.wire.DexNetwork
+import com.telenebula.dex.wire.DexPingResult
 import com.telenebula.dex.wire.DexPresence
 import com.telenebula.dex.wire.DexQueue
+import com.telenebula.dex.wire.DexSettings
+import com.telenebula.dex.wire.DexSettingsPatch
+import com.telenebula.dex.wire.DexStorage
+import com.telenebula.dex.wire.DexThemeMode
+import com.telenebula.dex.wire.DexUpdates
 import com.telenebula.dex.wire.ServerFrame
 import java.io.ByteArrayInputStream
 import java.io.EOFException
@@ -23,12 +38,15 @@ import java.net.Socket
 import java.net.SocketException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import javax.net.ServerSocketFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -86,6 +104,68 @@ class DexServerTest {
         override fun onCallCommand(command: DexCallCommand) {
             if (command is DexCallCommand.Gone) gone.complete(command.clientId)
         }
+
+        val settingsFlow = MutableStateFlow(DexSettings())
+        val patches = CompletableFuture<DexSettingsPatch>()
+        val networkCollectors = AtomicInteger(0)
+        val storageCollectors = AtomicInteger(0)
+        val cleared = CompletableFuture<String>()
+
+        override fun settings(): Flow<DexSettings> = settingsFlow
+        override suspend fun applySettings(patch: DexSettingsPatch) {
+            patches.complete(patch)
+        }
+        override suspend fun setQuickReaction(slot: Int, emoji: String) = Unit
+
+        override fun account(): Flow<DexAccount> = flowOf(DexAccount(certName = "Me"))
+        override fun network(): Flow<DexNetwork> = flow {
+            networkCollectors.incrementAndGet()
+            try {
+                emit(DexNetwork(isTunnelOn = true))
+                awaitCancellation()
+            } finally {
+                networkCollectors.decrementAndGet()
+            }
+        }
+        override fun storage(): Flow<DexStorage> = flow {
+            storageCollectors.incrementAndGet()
+            try {
+                emit(DexStorage(messages = 7))
+                awaitCancellation()
+            } finally {
+                storageCollectors.decrementAndGet()
+            }
+        }
+        override fun diagnostics(): Flow<DexDiagnostics> = flowOf(DexDiagnostics(logTail = "log"))
+        override fun updates(): Flow<DexUpdates> = flowOf(DexUpdates(appVersion = "1.0.0"))
+
+        override suspend fun contactDetail(peer: String): DexContactDetail? =
+            if (peer == "10.42.0.2") DexContactDetail(DexContact(peer, "Bob", "Bob")) else null
+        override suspend fun saveContact(peer: String, name: String, nickname: String, notes: String) = Unit
+        override suspend fun addContact(peer: String, name: String, nickname: String, notes: String) = Unit
+        override suspend fun deleteContact(peer: String) = Unit
+        override suspend fun setContactFlags(peer: String, flags: DexContactFlags) = Unit
+        override suspend fun setContactPrivacy(peer: String, privacy: DexContactPrivacy) = Unit
+        override suspend fun setContactNotifications(peer: String, prefs: DexContactNotifications?) = Unit
+        override suspend fun changeContactIp(peer: String, newIp: String) = Unit
+
+        override suspend fun clearHistory(peer: String) {
+            cleared.complete(peer)
+        }
+        override suspend fun clearAllHistory() = Unit
+        override suspend fun clearOrphans(): Long = 512
+        override suspend fun callLogs(peer: String?, limit: Int): List<DexCallLog> = emptyList()
+        override suspend fun deleteCallLogs(ids: List<String>) = Unit
+        override suspend fun chatMedia(peer: String): List<DexMessage> = emptyList()
+        override suspend fun chatLinks(peer: String): List<DexChatLink> = listOf(DexChatLink("m1", "https://example.test", 1))
+        override suspend fun search(peer: String, text: String): List<DexMessage> = emptyList()
+        override suspend fun forward(messageId: String, peer: String) = Unit
+
+        override suspend fun pingPeer(peer: String): DexPingResult = DexPingResult(peer, 12)
+        override suspend fun retryFailed(peer: String) = Unit
+        override suspend fun drain(peer: String) = Unit
+        override suspend fun checkUpdates() = Unit
+        override suspend fun setTunnel(isOn: Boolean) = throw IllegalStateException("The tunnel must be switched on from the phone the first time")
     }
 
     private class Reply(val status: Int, val headers: Map<String, String>, val body: ByteArray)
@@ -250,10 +330,12 @@ class DexServerTest {
         val hello = readServerFrame(input) as ServerFrame.Hello
         assertEquals("10.42.0.1", hello.me.ip)
         assertEquals(4_096L, hello.freeBytes)
-        val frames = (1..6).map { readServerFrame(input) }
+        // chats, contacts, presence, typing, queues, call state and settings all arrive unasked
+        val frames = (1..7).map { readServerFrame(input) }
         val chats = frames.filterIsInstance<ServerFrame.Chats>().single()
         assertEquals("Bob", chats.items.single().label)
         assertTrue(frames.any { it is ServerFrame.CallState })
+        assertTrue(frames.any { it is ServerFrame.Settings })
         assertEquals(1, server.clients.value.size)
         assertEquals("test", server.clients.value.single().userAgent)
 
@@ -317,6 +399,105 @@ class DexServerTest {
         assertTrue(running.port > 0)
         port = running.port
         connect().use { socket -> assertEquals(200, request(socket, "GET / HTTP/1.1\r\nHost: x\r\n\r\n").status) }
+    }
+
+    /** Logs in, upgrades and drains the frames every client is sent unasked. */
+    private fun openSocket(): Pair<Socket, InputStream> {
+        val socket = connect()
+        val cookie = login(socket).headers["set-cookie"]?.substringBefore(';')
+        assertEquals(101, upgrade(socket, cookie).status)
+        val input = socket.getInputStream()
+        repeat(8) { readServerFrame(input) }
+        return socket to input
+    }
+
+    @Test
+    fun `a watched section is collected only while it is watched`() {
+        val (socket, input) = openSocket()
+        socket.use {
+            assertEquals(0, backend.networkCollectors.get())
+
+            sendClientFrame(socket.getOutputStream(), """{"t":"watch","sections":["network","storage"]}""")
+            val first = (1..3).map { readServerFrame(input) }
+            assertTrue(first.any { f -> f is ServerFrame.Network && f.network.isTunnelOn })
+            assertTrue(first.any { f -> f is ServerFrame.Storage && f.storage.messages == 7 })
+            assertTrue(first.any { it is ServerFrame.Done })
+            assertEquals(1, backend.networkCollectors.get())
+            assertEquals(1, backend.storageCollectors.get())
+
+            // narrowing the list stops what is no longer being looked at
+            sendClientFrame(socket.getOutputStream(), """{"t":"watch","sections":["storage"]}""")
+            readServerFrame(input)
+            waitFor { backend.networkCollectors.get() == 0 }
+            assertEquals(1, backend.storageCollectors.get())
+
+            sendClientFrame(socket.getOutputStream(), """{"t":"watch","sections":[]}""")
+            readServerFrame(input)
+            waitFor { backend.storageCollectors.get() == 0 }
+        }
+    }
+
+    @Test
+    fun `a settings patch reaches the phone carrying only what changed`() {
+        val (socket, input) = openSocket()
+        socket.use {
+            sendClientFrame(socket.getOutputStream(), """{"t":"set_settings","patch":{"themeMode":"dark"}}""")
+            val done = readServerFrame(input) as ServerFrame.Done
+            assertEquals("set_settings", done.what)
+            val patch = backend.patches.get(5, TimeUnit.SECONDS)
+            assertEquals(DexThemeMode.DARK, patch.themeMode)
+            assertEquals(null, patch.colorTheme)
+            assertEquals(null, patch.sendReadReceipts)
+        }
+    }
+
+    @Test
+    fun `a command answers done and a one-shot request answers its own frame`() {
+        val (socket, input) = openSocket()
+        socket.use {
+            sendClientFrame(socket.getOutputStream(), """{"t":"clear_history","peer":"10.42.0.2"}""")
+            assertEquals("clear_history", (readServerFrame(input) as ServerFrame.Done).what)
+            assertEquals("10.42.0.2", backend.cleared.get(5, TimeUnit.SECONDS))
+
+            sendClientFrame(socket.getOutputStream(), """{"t":"request_chat_links","peer":"10.42.0.2"}""")
+            val links = readServerFrame(input) as ServerFrame.ChatLinks
+            assertEquals("https://example.test", links.items.single().url)
+
+            sendClientFrame(socket.getOutputStream(), """{"t":"ping_peer","peer":"10.42.0.2"}""")
+            assertEquals(12L, (readServerFrame(input) as ServerFrame.PingResult).result.rttMs)
+        }
+    }
+
+    @Test
+    fun `an unknown peer and a refused command are answered, not crashed`() {
+        val (socket, input) = openSocket()
+        socket.use {
+            sendClientFrame(socket.getOutputStream(), """{"t":"request_contact_detail","peer":"10.42.9.9"}""")
+            val missing = readServerFrame(input) as ServerFrame.Error
+            assertEquals("request_contact_detail", missing.ref)
+
+            sendClientFrame(socket.getOutputStream(), """{"t":"request_contact_detail","peer":"nonsense!!"}""")
+            assertEquals("Bad peer address", (readServerFrame(input) as ServerFrame.Error).message)
+
+            // the tunnel needs the system's consent, which only the phone can give
+            sendClientFrame(socket.getOutputStream(), """{"t":"set_tunnel","isOn":true}""")
+            val refused = readServerFrame(input) as ServerFrame.Error
+            assertEquals("set_tunnel", refused.ref)
+            assertTrue(refused.message.contains("from the phone"))
+
+            // the socket still works after all of that
+            sendClientFrame(socket.getOutputStream(), """{"t":"ping"}""")
+            assertTrue(readServerFrame(input) is ServerFrame.Pong)
+        }
+    }
+
+    private fun waitFor(condition: () -> Boolean) {
+        val deadline = System.currentTimeMillis() + 5_000
+        while (System.currentTimeMillis() < deadline) {
+            if (condition()) return
+            Thread.sleep(20)
+        }
+        assertTrue("the condition never held", condition())
     }
 
     @Test
