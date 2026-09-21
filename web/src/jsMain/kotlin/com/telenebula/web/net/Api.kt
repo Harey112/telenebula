@@ -7,7 +7,6 @@ import kotlinx.coroutines.await
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.Serializable
 import org.w3c.dom.url.URL
-import org.w3c.fetch.RequestCredentials
 import org.w3c.fetch.RequestInit
 import org.w3c.fetch.Response
 import org.w3c.files.Blob
@@ -62,7 +61,7 @@ private data class ErrorBody(val error: String? = null)
 /** The phone's HTTP API; every failure is a value, nothing escapes as an exception. */
 object Api {
     suspend fun session(): SessionResult = try {
-        val response = window.fetch("/api/session", RequestInit(method = "GET", credentials = SAME_ORIGIN)).await()
+        val response = window.fetch("/api/session", requestInit("GET")).await()
         when (response.status.toInt()) {
             200 -> SessionResult.Active(DexJson.decodeFromString(DexIdentity.serializer(), response.text().await()))
             401 -> SessionResult.None
@@ -74,10 +73,7 @@ object Api {
 
     suspend fun login(username: String, password: String): LoginResult = try {
         val body = DexJson.encodeToString(LoginBody.serializer(), LoginBody(username, password))
-        val response = window.fetch(
-            "/api/login",
-            RequestInit(method = "POST", body = body, headers = json("Content-Type" to "application/json"), credentials = SAME_ORIGIN),
-        ).await()
+        val response = window.fetch("/api/login", requestInit("POST", body, "application/json")).await()
         when (response.status.toInt()) {
             204, 200 -> LoginResult.Ok
             401 -> LoginResult.Wrong
@@ -90,7 +86,7 @@ object Api {
     }
 
     suspend fun logout(): Boolean = try {
-        window.fetch("/api/logout", RequestInit(method = "POST", credentials = SAME_ORIGIN)).await().ok
+        window.fetch("/api/logout", requestInit("POST")).await().ok
     } catch (e: Throwable) {
         false
     }
@@ -162,4 +158,16 @@ object Api {
 
 external fun encodeURIComponent(value: String): String
 
-private val SAME_ORIGIN: RequestCredentials = "same-origin".unsafeCast<RequestCredentials>()
+/**
+ * The stdlib's RequestInit factory puts every option it was not given on the object too, and the
+ * browser refuses a `cache: null`; this carries only what is set.
+ */
+private fun requestInit(method: String, body: String? = null, contentType: String? = null): RequestInit {
+    val init = js("({})")
+    init.method = method
+    init.credentials = "same-origin"
+    init.cache = "no-store"
+    if (body != null) init.body = body
+    if (contentType != null) init.headers = json("Content-Type" to contentType)
+    return init.unsafeCast<RequestInit>()
+}
