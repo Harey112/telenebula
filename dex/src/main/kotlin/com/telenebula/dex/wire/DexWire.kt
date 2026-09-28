@@ -117,9 +117,15 @@ data class DexMessage(
 @Serializable
 data class DexContact(
     val ip: String,
-    /** what the phone shows: nickname, else name, else ip */
+    /** Chats and Calls: the nickname first */
     val label: String,
+    /** learned from the peer's identity; a browser never sets it */
     val name: String,
+    /** Contacts: the username the peer announced first */
+    val contactLabel: String = "",
+    /** this chat's own overrides, on the phone and in every browser; pushed with the contact so none is edited stale */
+    val privacy: DexContactPrivacy = DexContactPrivacy(),
+    val notifications: DexContactNotifications? = null,
     val nickname: String = "",
     val notes: String = "",
     val isBlocked: Boolean = false,
@@ -254,10 +260,7 @@ data class DexQuietHours(
 
 @Serializable
 data class DexMessageNotifications(
-    val enabled: Boolean = true,
     val showSender: Boolean = true,
-    val preview: Boolean = true,
-    val sound: Boolean = true,
     val vibrate: Boolean = true,
     val popup: Boolean = true,
     val reactions: Boolean = true,
@@ -283,46 +286,35 @@ data class DexPresencePrefs(val isShared: Boolean = true, val pauseMinutes: Int 
 @Serializable
 data class DexUpdatePrefs(val isDailyCheckEnabled: Boolean = true, val lastCheckedAt: Long = 0, val latestVersion: String? = null)
 
-/** What the Dex profile sets for itself; a null field follows the app profile. Core settings never appear here. */
+/** What the browser sets for itself; the phone's own profile never reaches it. Core settings never appear here. */
 @Serializable
 data class DexProfile(
-    /** privacy is the browser's own and never follows the app */
     val sendReadReceipts: Boolean = true,
     val sendTypingIndicators: Boolean = true,
     /** never DEVICE: a browser cannot answer the phone's lock */
     val coverRevealGate: DexRevealGate = DexRevealGate.TAP,
-    val themeMode: DexThemeMode? = null,
-    val colorTheme: String? = null,
-    val customAccent: String? = null,
-    val chatTextSize: DexTextSize? = null,
-    val messageDensity: DexDensity? = null,
-    val isEnterToSend: Boolean? = null,
-    val notificationsEnabled: Boolean? = null,
-    val notificationPreview: Boolean? = null,
-    val notificationSound: Boolean? = null,
-)
-
-/** Everything the phone's settings screens edit. What only a phone can carry out is not here. */
-@Serializable
-data class DexSettings(
     val themeMode: DexThemeMode = DexThemeMode.SYSTEM,
     val colorTheme: String = "sky",
     val customAccent: String = "#7FB7E6",
     val chatTextSize: DexTextSize = DexTextSize.MEDIUM,
     val messageDensity: DexDensity = DexDensity.COMFORTABLE,
     val isEnterToSend: Boolean = false,
-    val isVideoSpeakerDefault: Boolean = true,
+    val notificationsEnabled: Boolean = true,
+    val notificationPreview: Boolean = true,
+    val notificationSound: Boolean = true,
+)
+
+/** The shared settings and the browser's own profile; the phone's own profile, and what only a phone can carry out, are not here. */
+@Serializable
+data class DexSettings(
     val isScreenshotBlocked: Boolean = false,
     val isBackgroundConnectionEnabled: Boolean = true,
     val isStartOnBootEnabled: Boolean = true,
     val notifications: DexNotifications = DexNotifications(),
-    val sendReadReceipts: Boolean = true,
-    val sendTypingIndicators: Boolean = true,
     val presence: DexPresencePrefs = DexPresencePrefs(),
     val updates: DexUpdatePrefs = DexUpdatePrefs(),
     val nebulaLogLevel: DexLogLevel = DexLogLevel.INFO,
     val isDeveloperMode: Boolean = false,
-    val coverRevealGate: DexRevealGate = DexRevealGate.TAP,
     val autoCleanOrphans: Boolean = false,
     val quickReactions: List<String> = emptyList(),
     val recentReactions: List<String> = emptyList(),
@@ -333,35 +325,15 @@ data class DexSettings(
     val dexUsername: String = "",
     val dexMaxClients: Int = 2,
     val dexPort: Int = 0,
-    /** the same settings again, as the Dex profile has them set */
     val dexProfile: DexProfile = DexProfile(),
 )
 
-/** A field left out stays as it is, so a browser sends only what it changed. */
+/** Everything a browser may change in one frame; a field left out stays as it is, and the phone's own switches are not here to send. */
 @Serializable
 data class DexSettingsPatch(
-    val themeMode: DexThemeMode? = null,
-    val colorTheme: String? = null,
-    val customAccent: String? = null,
-    val chatTextSize: DexTextSize? = null,
-    val messageDensity: DexDensity? = null,
-    val isEnterToSend: Boolean? = null,
-    val isVideoSpeakerDefault: Boolean? = null,
-    val isScreenshotBlocked: Boolean? = null,
-    val isBackgroundConnectionEnabled: Boolean? = null,
-    val isStartOnBootEnabled: Boolean? = null,
-    val notifications: DexNotifications? = null,
-    val sendReadReceipts: Boolean? = null,
-    val sendTypingIndicators: Boolean? = null,
     val presence: DexPresencePrefs? = null,
-    val isDailyUpdateCheckEnabled: Boolean? = null,
     val nebulaLogLevel: DexLogLevel? = null,
-    val isDeveloperMode: Boolean? = null,
-    val coverRevealGate: DexRevealGate? = null,
-    val autoCleanOrphans: Boolean? = null,
-    val appLockAfterSec: Int? = null,
-    val quickReactions: List<String>? = null,
-    /** replaces the browser's own settings whole, so clearing one back to "follow the app" is expressible */
+    /** replaces the browser's own profile whole */
     val dexProfile: DexProfile? = null,
 )
 
@@ -544,7 +516,7 @@ sealed interface ClientFrame {
     @Serializable @SerialName("open_chat") data class OpenChat(val peer: String) : ClientFrame
     @Serializable @SerialName("close_chat") data class CloseChat(val peer: String) : ClientFrame
     @Serializable @SerialName("load_more") data class LoadMore(val peer: String, val beforeTs: Long, val beforeId: String) : ClientFrame
-    @Serializable @SerialName("send_text") data class SendText(val peer: String, val body: String, val replyTo: String? = null, val covered: Boolean = false) : ClientFrame
+    @Serializable @SerialName("send_text") data class SendText(val peer: String, val body: String, val replyTo: String? = null, val covered: Boolean = false, val requestId: String? = null) : ClientFrame
     @Serializable @SerialName("typing") data class Typing(val peer: String, val isTyping: Boolean) : ClientFrame
     @Serializable @SerialName("mark_read") data class MarkRead(val peer: String) : ClientFrame
     @Serializable @SerialName("react") data class React(val messageId: String, val emoji: String) : ClientFrame
@@ -573,8 +545,8 @@ sealed interface ClientFrame {
     @Serializable @SerialName("set_settings") data class SetSettings(val patch: DexSettingsPatch) : ClientFrame
     @Serializable @SerialName("set_quick_reaction") data class SetQuickReaction(val slot: Int, val emoji: String) : ClientFrame
     @Serializable @SerialName("request_contact_detail") data class RequestContactDetail(val peer: String) : ClientFrame
-    @Serializable @SerialName("contact_save") data class ContactSave(val peer: String, val name: String, val nickname: String, val notes: String) : ClientFrame
-    @Serializable @SerialName("contact_add") data class ContactAdd(val peer: String, val name: String, val nickname: String = "", val notes: String = "") : ClientFrame
+    @Serializable @SerialName("contact_save") data class ContactSave(val peer: String, val nickname: String, val notes: String) : ClientFrame
+    @Serializable @SerialName("contact_add") data class ContactAdd(val peer: String, val nickname: String = "", val notes: String = "") : ClientFrame
     @Serializable @SerialName("contact_delete") data class ContactDelete(val peer: String) : ClientFrame
     @Serializable @SerialName("contact_flags") data class ContactFlagsSet(val peer: String, val flags: DexContactFlags) : ClientFrame
     @Serializable @SerialName("contact_privacy") data class ContactPrivacySet(val peer: String, val privacy: DexContactPrivacy) : ClientFrame
@@ -618,9 +590,11 @@ sealed interface ServerFrame {
     @Serializable @SerialName("presence") data class Presence(val items: Map<String, DexPresence>) : ServerFrame
     @Serializable @SerialName("typing") data class Typing(val peers: List<String>) : ServerFrame
     @Serializable @SerialName("queues") data class Queues(val items: List<DexQueue>) : ServerFrame
+    /** whether the phone's Nebula tunnel is up; nothing reaches a peer while it is down */
+    @Serializable @SerialName("tunnel") data class Tunnel(val isOn: Boolean) : ServerFrame
     @Serializable @SerialName("notice") data class Notice(val level: DexNoticeLevel, val message: String) : ServerFrame
     /** a command that could not be carried out; [ref] names the frame or id it was about */
-    @Serializable @SerialName("error") data class Error(val message: String, val ref: String? = null) : ServerFrame
+    @Serializable @SerialName("error") data class Error(val message: String, val ref: String? = null, val requestId: String? = null) : ServerFrame
 
     @Serializable @SerialName("call_state") data class CallState(val state: DexCallState) : ServerFrame
     /**
@@ -655,7 +629,7 @@ sealed interface ServerFrame {
     @Serializable @SerialName("ping_result") data class PingResult(val result: DexPingResult) : ServerFrame
     @Serializable @SerialName("search_results") data class SearchResults(val peer: String, val items: List<DexMessage>) : ServerFrame
     /** a command that finished and has nothing to send back but the fact */
-    @Serializable @SerialName("done") data class Done(val what: String, val message: String? = null) : ServerFrame
+    @Serializable @SerialName("done") data class Done(val what: String, val message: String? = null, val requestId: String? = null) : ServerFrame
 
     companion object {
         const val ROLE_OFFERER = "offerer"

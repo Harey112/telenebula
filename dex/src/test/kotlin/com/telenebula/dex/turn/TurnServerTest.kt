@@ -31,7 +31,7 @@ class TurnServerTest {
 
     @Before
     fun start() {
-        server = TurnServer(scope, configuredPort = 0, relayAddress = { loopback }, isOverlayAddress = { false }, now = { clock })
+        server = TurnServer(scope, configuredPort = 0, relayAddress = { loopback }, isClient = { true }, now = { clock })
         server.start()
         assertTrue(server.state.value is TurnState.Running)
         serverAddress = InetSocketAddress(loopback, server.port)
@@ -101,6 +101,25 @@ class TurnServerTest {
 
     private fun peerAddress(): InetSocketAddress = InetSocketAddress(loopback, peer.localPort)
 
+    private fun issue(owner: String = "browser-1", callPeer: InetAddress = loopback): TurnCredential = server.issue(owner, callPeer)
+
+    /** Appends one attribute after the message's end and fixes the length, as an attacker on the path would. */
+    private fun append(bytes: ByteArray, type: Int, value: ByteArray): ByteArray {
+        val out = bytes + Stun.encodeAttribute(type, value)
+        val length = out.size - Stun.HEADER_BYTES
+        out[2] = (length shr 8).toByte()
+        out[3] = length.toByte()
+        return out
+    }
+
+    private fun signedOnly(method: Int, auth: Auth, fill: Stun.Builder.() -> Unit): ByteArray =
+        Stun.Builder(method, Stun.CLASS_REQUEST, txid())
+            .apply(fill)
+            .addString(Stun.ATTR_USERNAME, auth.username)
+            .addString(Stun.ATTR_REALM, TurnServer.REALM)
+            .addString(Stun.ATTR_NONCE, auth.nonce)
+            .build(auth.key, withFingerprint = false)
+
     @Test
     fun `binding is answered without credentials with the sender's own address`() {
         send(client, serverAddress, Stun.Builder(Stun.METHOD_BINDING, Stun.CLASS_REQUEST, txid()).build())
@@ -112,7 +131,7 @@ class TurnServerTest {
 
     @Test
     fun `allocate, permission, send and data both ways, then channel binding`() {
-        val auth = challenge(server.issue())
+        val auth = challenge(issue())
         val allocation = allocate(auth)
         assertEquals(Stun.CLASS_SUCCESS, allocation?.cls)
         assertEquals(Limits.DEFAULT_TURN_LIFETIME_S, allocation?.first(Stun.ATTR_LIFETIME)?.let(Stun::readInt))
@@ -172,7 +191,7 @@ class TurnServerTest {
 
     @Test
     fun `wrong password, stale nonce, wrong transport and a second allocate are each refused`() {
-        val credential = server.issue()
+        val credential = issue()
         val good = challenge(credential)
         val bad = Auth(good.username, Stun.longTermKey(good.username, TurnServer.REALM, "nope"), good.nonce)
         assertEquals(401, errorCodeOf(allocate(bad)))
@@ -182,7 +201,7 @@ class TurnServerTest {
         assertEquals(Stun.CLASS_SUCCESS, allocate(good)?.cls)
         // a retransmit is answered again; a different user on the same socket is a mismatch
         assertEquals(Stun.CLASS_SUCCESS, allocate(good)?.cls)
-        val second = challenge(server.issue())
+        val second = challenge(issue())
         assertEquals(437, errorCodeOf(allocate(second)))
         // refresh and permission with the wrong user: 441
         send(client, serverAddress, authed(Stun.METHOD_REFRESH, second) { addInt(Stun.ATTR_LIFETIME, 100) })
@@ -197,10 +216,10 @@ class TurnServerTest {
             for (i in 0 until Limits.MAX_TURN_ALLOCATIONS) {
                 val s = DatagramSocket(0, loopback).apply { soTimeout = 2_000 }
                 sockets += s
-                assertEquals(Stun.CLASS_SUCCESS, allocate(challenge(server.issue()), s)?.cls)
+                assertEquals(Stun.CLASS_SUCCESS, allocate(challenge(issue()), s)?.cls)
             }
             assertEquals(Limits.MAX_TURN_ALLOCATIONS, server.allocationCount)
-            assertEquals(486, errorCodeOf(allocate(challenge(server.issue()))))
+            assertEquals(486, errorCodeOf(allocate(challenge(issue()))))
             clock += (Limits.DEFAULT_TURN_LIFETIME_S + 1) * 1000L
             server.sweep(clock)
             assertEquals(0, server.allocationCount)
@@ -211,16 +230,114 @@ class TurnServerTest {
 
     @Test
     fun `an expired credential no longer authenticates`() {
-        val credential = server.issue()
+        val credential = issue()
         val auth = challenge(credential)
         clock += Limits.TURN_CREDENTIAL_MS + 1
         assertEquals(401, errorCodeOf(allocate(auth)))
     }
 
     @Test
-    fun `requests from the overlay are ignored and stop closes everything`() {
+    fun `binding answers carry nothing beyond the mapped address and are budgeted`() {
+        val reply = run {
+            send(client, serverAddress, Stun.Builder(Stun.METHOD_BINDING, Stun.CLASS_REQUEST, txid()).build())
+            receiveStun(client)
+        }
+        assertNull(reply?.first(Stun.ATTR_SOFTWARE))
+        repeat(Limits.TURN_UNAUTHENTICATED_BURST + 10) {
+            send(client, serverAddress, Stun.Builder(Stun.METHOD_BINDING, Stun.CLASS_REQUEST, txid()).build())
+        }
+        var answered = 0
+        client.soTimeout = 500
+        while (receive(client) != null) answered += 1
+        assertEquals(Limits.TURN_UNAUTHENTICATED_BURST - 1, answered)
+    }
+
+    @Test
+    fun `an attribute appended after a valid integrity changes nothing`() {
+        val auth = challenge(issue())
+        assertEquals(Stun.CLASS_SUCCESS, allocate(auth)?.cls)
+        val relayed = relayedAddress(allocate(auth))
+
+        // a lifetime of 0 after the HMAC would delete the allocation if it were read
+        send(client, serverAddress, append(signedOnly(Stun.METHOD_REFRESH, auth) { addInt(Stun.ATTR_LIFETIME, 600) }, Stun.ATTR_LIFETIME, byteArrayOf(0, 0, 0, 0)))
+        assertNull(receive(client))
+        assertEquals(1, server.allocationCount)
+
+        // a peer address after the HMAC would open a permission if it were read
+        send(client, serverAddress, append(signedOnly(Stun.METHOD_CREATE_PERMISSION, auth) {}, Stun.ATTR_XOR_PEER_ADDRESS, Stun.encodeXorAddress(peerAddress(), ByteArray(12))))
+        assertNull(receive(client))
+        send(peer, relayed, byteArrayOf(5))
+        assertNull(receive(client))
+
+        // a channel number after the HMAC would bind a channel if it were read
+        send(client, serverAddress, append(signedOnly(Stun.METHOD_CHANNEL_BIND, auth) { xorAddress(Stun.ATTR_XOR_PEER_ADDRESS, peerAddress()) }, Stun.ATTR_CHANNEL_NUMBER, byteArrayOf(0x40, 0x00, 0, 0)))
+        assertNull(receive(client))
+        send(client, serverAddress, Stun.channelData(0x4000, byteArrayOf(1), 0, 1))
+        assertNull(receive(peer))
+
+        // the same requests, signed whole and fingerprinted as a browser sends them, still work
+        send(client, serverAddress, authed(Stun.METHOD_CREATE_PERMISSION, auth) { xorAddress(Stun.ATTR_XOR_PEER_ADDRESS, peerAddress()) })
+        assertEquals(Stun.CLASS_SUCCESS, receiveStun(client)?.cls)
+        send(client, serverAddress, authed(Stun.METHOD_REFRESH, auth) { addInt(Stun.ATTR_LIFETIME, 600) })
+        assertEquals(600, receiveStun(client)?.first(Stun.ATTR_LIFETIME)?.let(Stun::readInt))
+    }
+
+    @Test
+    fun `a credential relays only to the peer its call is with`() {
+        val auth = challenge(issue(callPeer = InetAddress.getByName("10.42.0.9")))
+        assertEquals(Stun.CLASS_SUCCESS, allocate(auth)?.cls)
+        send(client, serverAddress, authed(Stun.METHOD_CREATE_PERMISSION, auth) { xorAddress(Stun.ATTR_XOR_PEER_ADDRESS, peerAddress()) })
+        assertEquals(403, errorCodeOf(receiveStun(client)))
+        send(client, serverAddress, authed(Stun.METHOD_CHANNEL_BIND, auth) { addInt(Stun.ATTR_CHANNEL_NUMBER, 0x4000 shl 16); xorAddress(Stun.ATTR_XOR_PEER_ADDRESS, peerAddress()) })
+        assertEquals(403, errorCodeOf(receiveStun(client)))
+        send(client, serverAddress, Stun.Builder(Stun.METHOD_SEND, Stun.CLASS_INDICATION, txid()).xorAddress(Stun.ATTR_XOR_PEER_ADDRESS, peerAddress()).add(Stun.ATTR_DATA, byteArrayOf(1)).build(withFingerprint = false))
+        assertNull(receive(peer))
+    }
+
+    @Test
+    fun `revoking a browser closes its relay and its credential stops authenticating`() {
+        val auth = challenge(issue(owner = "gone"))
+        val relayed = relayedAddress(allocate(auth))
+        send(client, serverAddress, authed(Stun.METHOD_CREATE_PERMISSION, auth) { xorAddress(Stun.ATTR_XOR_PEER_ADDRESS, peerAddress()) })
+        assertEquals(Stun.CLASS_SUCCESS, receiveStun(client)?.cls)
+        server.revoke("someone else")
+        assertEquals(1, server.allocationCount)
+        server.revoke("gone")
+        assertEquals(0, server.allocationCount)
+        send(peer, relayed, byteArrayOf(1))
+        assertNull(receive(client))
+        assertEquals(401, errorCodeOf(allocate(auth)))
+
+        val again = challenge(issue(owner = "next"))
+        assertEquals(Stun.CLASS_SUCCESS, allocate(again)?.cls)
+        server.revokeAll()
+        assertEquals(0, server.allocationCount)
+        assertEquals(401, errorCodeOf(allocate(again)))
+    }
+
+    @Test
+    fun `a restart forgets every credential it issued`() {
+        val credential = issue()
         server.stop()
-        val guarded = TurnServer(scope, configuredPort = 0, relayAddress = { loopback }, isOverlayAddress = { true }, now = { clock })
+        server.start()
+        serverAddress = InetSocketAddress(loopback, server.port)
+        val auth = challenge(credential)
+        assertEquals(401, errorCodeOf(allocate(auth)))
+    }
+
+    @Test
+    fun `a relay whose credential is no longer held is closed on the sweep`() {
+        val auth = challenge(issue())
+        assertEquals(Stun.CLASS_SUCCESS, allocate(auth)?.cls)
+        repeat(TurnServer.MAX_CREDENTIALS) { issue(owner = "other-$it") }
+        server.sweep(clock)
+        assertEquals(0, server.allocationCount)
+    }
+
+    @Test
+    fun `sources the admission refuses are ignored and stop closes everything`() {
+        server.stop()
+        val guarded = TurnServer(scope, configuredPort = 0, relayAddress = { loopback }, isClient = { false }, now = { clock })
         guarded.start()
         val address = InetSocketAddress(loopback, guarded.port)
         send(client, address, Stun.Builder(Stun.METHOD_BINDING, Stun.CLASS_REQUEST, txid()).build())

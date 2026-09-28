@@ -1,0 +1,12 @@
+.dex-incoming-call { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); text-align: center; }
+.dex-incoming-call strong { font-size: 20px; font-weight: 500; }
+.dex-incoming-call span, .dex-call-status { color: var(--text-muted); }
+.dex-call-avatar { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 32px; background: var(--accent-soft); color: var(--text); font-size: 28px; }
+.dex-dialog footer .dex-call-danger { background: var(--danger); color: var(--on-accent); }
+.dex-call-media { position: relative; display: grid; place-items: center; min-height: 240px; background: var(--background); }
+.dex-call-media > video:first-child { width: 100%; max-height: 360px; object-fit: contain; }
+.dex-call-media > video:nth-of-type(2) { position: absolute; right: var(--space-2); bottom: var(--space-2); width: 110px; max-height: 130px; object-fit: cover; border: 1px solid var(--hairline); }
+.dex-call-media > .dex-call-avatar { position: absolute; }
+.dex-call-media > button { position: absolute; bottom: var(--space-3); left: var(--space-3); min-height: 36px; border: 0; border-radius: 18px; background: var(--accent-soft); color: var(--text); }
+.dex-call-status { margin: var(--space-3) 0 0; text-align: center; }
+.dex-call-banner { position: fixed; right: var(--space-4); top: var(--space-4); z-index: 10; display: flex; align-items: center; gap: var(--space-2); max-width: calc(100vw - 32px); padding: var(--space-2) var(--space-3); border: 1px solid var(--hairline); border-radius: 20px; background: var(--surface-raised); color: var(--text); }

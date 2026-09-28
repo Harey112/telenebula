@@ -33,6 +33,12 @@ jobs:
           printf 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8\nkotlin.daemon.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m\norg.gradle.workers.max=4\n' > ~/.gradle/gradle.properties
       - name: Build
         run: ./gradlew --no-daemon --console=plain lint testDebugUnitTest
+      - name: Build parallel Dex frontend
+        run: ./gradlew --no-daemon --console=plain :web:webBuild
+      - name: Install browser test engines
+        run: ./gradlew --no-daemon --console=plain :web:webBrowserInstall
+      - name: Test parallel Dex frontend
+        run: ./gradlew --no-daemon --console=plain :web:webE2e
 
   testbuild:
     # A signed build to install over an existing one, without publishing anything. Run it from

@@ -16,6 +16,9 @@ import kotlinx.serialization.SerializationException
 object NotificationPrefsStore {
     private const val FILE = "tn_core_prefs"
     private const val KEY = "notifications"
+    private const val KEY_ENABLED = "messagesEnabled"
+    private const val KEY_PREVIEW = "messagesPreview"
+    private const val KEY_SOUND = "messagesSound"
 
     @Volatile private var cached: NotificationPrefs? = null
 
@@ -24,12 +27,17 @@ object NotificationPrefsStore {
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
             .edit()
             .putString(KEY, CoreJson.encodeToString(NotificationPrefs.serializer(), prefs))
+            // transient in the serializer, since the prefs file keeps them per profile
+            .putBoolean(KEY_ENABLED, prefs.messages.enabled)
+            .putBoolean(KEY_PREVIEW, prefs.messages.preview)
+            .putBoolean(KEY_SOUND, prefs.messages.sound)
             .apply()
     }
 
     fun get(context: Context): NotificationPrefs {
         cached?.let { return it }
-        val stored = context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY, null)
+        val store = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+        val stored = store.getString(KEY, null)
         val parsed = stored?.let {
             try {
                 CoreJson.decodeFromString(NotificationPrefs.serializer(), it)
@@ -39,8 +47,15 @@ object NotificationPrefsStore {
                 null
             }
         } ?: NotificationPrefs()
-        cached = parsed
-        return parsed
+        val withProfile = parsed.copy(
+            messages = parsed.messages.copy(
+                enabled = store.getBoolean(KEY_ENABLED, true),
+                preview = store.getBoolean(KEY_PREVIEW, true),
+                sound = store.getBoolean(KEY_SOUND, true),
+            ),
+        )
+        cached = withProfile
+        return withProfile
     }
 
     /** Effective message settings for one contact (overrides > global > defaults). */

@@ -1,16 +1,19 @@
 package com.telenebula.app.ui.screens.setup
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.telenebula.app.ui.fragments.EndpointFields
 import com.telenebula.app.ui.fragments.ErrorBanner
 import com.telenebula.app.ui.fragments.FileUploadRow
+import com.telenebula.app.ui.fragments.HelpButton
 import com.telenebula.app.ui.fragments.PrimaryButton
 import com.telenebula.app.ui.fragments.Screen
 import com.telenebula.app.ui.fragments.Section
@@ -36,9 +39,12 @@ fun SetupScreen(viewModel: SetupViewModel) {
 private fun SetupIntro() {
     val colors = TnTheme.colors
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = TnSpace.lg).padding(top = TnSpace.xl)) {
-        Text("TeleNebula", style = TnType.display, color = colors.text)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("TeleNebula", style = TnType.display, color = colors.text)
+            HelpButton("TeleNebula", "P2P messaging and calls over your Nebula overlay. Your IPv6 address is your number and the name in your host certificate is your username.")
+        }
         Text(
-            "P2P messaging and calls over your Nebula overlay. Your IPv6 address is your number and the name in your host certificate is your username. Upload the credentials issued for this device (ca.crt, host.crt, host.key).",
+            "Upload the credentials issued for this device (ca.crt, host.crt, host.key).",
             style = TnType.body,
             color = colors.textMuted,
             modifier = Modifier.padding(top = TnSpace.sm),

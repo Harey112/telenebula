@@ -1,0 +1,85 @@
+:root {
+  color-scheme: light;
+  --background: #F6F7F9;
+  --surface: #FFFFFF;
+  --surface-raised: #EDF0F4;
+  --hairline: #E2E6EB;
+  --text: #151A20;
+  --text-muted: #6B7684;
+  --accent-light: #5FA3DB;
+  --accent-dark: #7FB7E6;
+  --accent: var(--accent-light);
+  --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  --on-accent: #12171D;
+  --success: #3AA76D;
+  --warning: #D9982E;
+  --danger: #E2504F;
+  --info: #1FB6D1;
+  --bubble-in: #FFFFFF;
+  --bubble-out: #D9ECFA;
+  --on-bubble-out: #12171D;
+  --overlay: #10172066;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --radius-2: 8px;
+  --radius-3: 12px;
+  --radius-4: 16px;
+  --row: 56px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --background: #0F1216;
+    --surface: #171B21;
+    --surface-raised: #20262E;
+    --hairline: #262D36;
+    --text: #F2F5F8;
+    --text-muted: #8B96A2;
+    --accent: var(--accent-dark);
+    --accent-soft: color-mix(in srgb, var(--accent) 20%, var(--surface));
+    --on-accent: #12171D;
+    --bubble-in: #20262E;
+    --bubble-out: #2D4A60;
+    --on-bubble-out: #F2F5F8;
+    --overlay: #00000099;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0F1216;
+  --surface: #171B21;
+  --surface-raised: #20262E;
+  --hairline: #262D36;
+  --text: #F2F5F8;
+  --text-muted: #8B96A2;
+  --accent: var(--accent-dark);
+  --accent-soft: color-mix(in srgb, var(--accent) 20%, var(--surface));
+  --on-accent: #12171D;
+  --bubble-in: #20262E;
+  --bubble-out: #2D4A60;
+  --on-bubble-out: #F2F5F8;
+  --overlay: #00000099;
+}
+
+:root[data-text="small"] { --message-text-size: 14px; }
+:root[data-text="medium"] { --message-text-size: 15px; }
+:root[data-text="large"] { --message-text-size: 17px; }
+:root[data-density="compact"] { --message-padding: var(--space-1); }
+:root[data-density="comfortable"] { --message-padding: var(--space-2); }
+
+* { box-sizing: border-box; }
+html, body, #app { margin: 0; width: 100%; height: 100%; }
+body { background: var(--background); color: var(--text); font: 15px/1.4 var(--font); -webkit-font-smoothing: antialiased; }
+button, input, textarea { font: inherit; }
+button { color: inherit; cursor: pointer; }
+button:disabled { cursor: default; opacity: .55; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+svg { display: block; flex: none; }
+.dex-loading { height: 100%; display: grid; place-items: center; color: var(--text-muted); }

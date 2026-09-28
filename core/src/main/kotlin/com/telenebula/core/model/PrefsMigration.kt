@@ -58,18 +58,67 @@ private data class MessageNotificationPrefsV1(
     val reactions: Boolean = true,
 )
 
+/** Version 2 as it was written: Dex's presentation was null wherever it followed the app. */
+@Serializable
+private data class PrefsV2(
+    val core: CorePrefs = CorePrefs(),
+    val app: AppProfile = AppProfile(),
+    val dex: DexProfileV2 = DexProfileV2(),
+    val server: DexServer = DexServer(),
+)
+
+@Serializable
+private data class DexProfileV2(
+    val sendReadReceipts: Boolean = true,
+    val sendTypingIndicators: Boolean = true,
+    val coverRevealGate: CoverRevealGate = CoverRevealGate.TAP,
+    val themeMode: ThemeMode? = null,
+    val colorTheme: String? = null,
+    val customAccent: String? = null,
+    val chatTextSize: ChatTextSize? = null,
+    val messageDensity: MessageDensity? = null,
+    val isEnterToSend: Boolean? = null,
+    val notificationsEnabled: Boolean? = null,
+    val notificationPreview: Boolean? = null,
+    val notificationSound: Boolean? = null,
+)
+
 object PrefsMigration {
     /** Reads whichever version the text holds; a file with no version is the flat one. */
     fun decode(json: Json, text: String): Prefs {
         val version = runCatching {
             (json.parseToJsonElement(text) as? JsonObject)?.get("version")?.jsonPrimitive?.content?.toIntOrNull()
         }.getOrNull() ?: 1
-        if (version >= Prefs.CURRENT_VERSION) return json.decodeFromString(Prefs.serializer(), text)
-        return json.decodeFromString(PrefsV1.serializer(), text).toV2()
+        return when {
+            version >= Prefs.CURRENT_VERSION -> json.decodeFromString(Prefs.serializer(), text)
+            version == 2 -> json.decodeFromString(PrefsV2.serializer(), text).toV3()
+            else -> json.decodeFromString(PrefsV1.serializer(), text).toV2().toV3()
+        }
     }
 
-    private fun PrefsV1.toV2(): Prefs = Prefs(
+    /** Whatever Dex followed is pinned to what the phone had then, so the browser looks the same after the upgrade. */
+    private fun PrefsV2.toV3(): Prefs = Prefs(
         version = Prefs.CURRENT_VERSION,
+        core = core,
+        app = app,
+        dex = DexProfile(
+            sendReadReceipts = dex.sendReadReceipts,
+            sendTypingIndicators = dex.sendTypingIndicators,
+            coverRevealGate = if (dex.coverRevealGate == CoverRevealGate.DEVICE) CoverRevealGate.ASK else dex.coverRevealGate,
+            themeMode = dex.themeMode ?: app.themeMode,
+            colorTheme = dex.colorTheme ?: app.colorTheme,
+            customAccent = dex.customAccent ?: app.customAccent,
+            chatTextSize = dex.chatTextSize ?: app.chatTextSize,
+            messageDensity = dex.messageDensity ?: app.messageDensity,
+            isEnterToSend = dex.isEnterToSend ?: app.isEnterToSend,
+            notificationsEnabled = dex.notificationsEnabled ?: app.notificationsEnabled,
+            notificationPreview = dex.notificationPreview ?: app.notificationPreview,
+            notificationSound = dex.notificationSound ?: app.notificationSound,
+        ),
+        server = server,
+    )
+
+    private fun PrefsV1.toV2(): PrefsV2 = PrefsV2(
         core = CorePrefs(
             presence = presence,
             isScreenshotBlocked = isScreenshotBlocked,
@@ -112,7 +161,7 @@ object PrefsMigration {
         ),
         // version 1 had no second profile: what it shows follows the app, but its privacy is its
         // own from here on, so it starts at what the phone was set to rather than at the defaults
-        dex = DexProfile(
+        dex = DexProfileV2(
             sendReadReceipts = sendReadReceipts,
             sendTypingIndicators = sendTypingIndicators,
             coverRevealGate = if (coverRevealGate == CoverRevealGate.DEVICE) CoverRevealGate.ASK else coverRevealGate,

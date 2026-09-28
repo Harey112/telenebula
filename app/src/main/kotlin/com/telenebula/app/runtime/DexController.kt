@@ -16,6 +16,7 @@ import com.telenebula.dex.Limits
 import com.telenebula.dex.PasswordHash
 import com.telenebula.dex.auth.Passwords
 import com.telenebula.dex.http.Cidr
+import com.telenebula.dex.http.LanAdmission
 import com.telenebula.dex.tls.DexTls
 import com.telenebula.dex.turn.TurnServer
 import com.telenebula.dex.turn.TurnState
@@ -68,11 +69,13 @@ class DexController(
 
     private val overlayAddress: InetAddress? get() = backend.me.value?.ip?.let(::parseAddress)
 
+    private val admission = LanAdmission(LanAddresses::localAddresses)
+
     val turn = TurnServer(
         scope = scope,
         configuredPort = prefs.prefs.value.server.turnPort,
         relayAddress = { overlayAddress },
-        isOverlayAddress = ::isOverlay,
+        isClient = ::isDexBrowser,
         io = io,
         onFault = notices::addWarning,
     )
@@ -83,6 +86,7 @@ class DexController(
         socketFactory = { tls.serverSocketFactory() },
         turn = turn,
         scope = scope,
+        admission = admission,
         io = io,
     )
 
@@ -111,6 +115,7 @@ class DexController(
             combine(prefs.prefs.map { it.server }.distinctUntilChanged(), profile) { dex, p -> dex to p }.collect { (dex, p) -> apply(dex, p) }
         }
         scope.launch { server.clients.collect(bridge::setClients) }
+        scope.launch { server.faults.collect(notices::addWarning) }
     }
 
     /** Re-reads the phone's addresses; cheap, so the Dex page calls it whenever it is shown. */
@@ -129,6 +134,9 @@ class DexController(
     fun setMaxClients(count: Int) = prefs.update { it.copy(server = it.server.copy(maxClients = count.coerceIn(1, Limits.MAX_CLIENTS))) }
 
     fun setEnabled(isEnabled: Boolean) = prefs.update { it.copy(server = it.server.copy(isEnabled = isEnabled)) }
+
+    /** Signs the browser out: its login ends, so every socket that shares it closes too. */
+    fun disconnect(clientId: String): Boolean = server.disconnect(clientId)
 
     private fun apply(cfg: DexServerPrefs, profile: Profile?) {
         val config = configOf(cfg)
@@ -175,6 +183,10 @@ class DexController(
         val hash = PasswordHash(cfg.passwordAlgorithm, cfg.passwordIterations, cfg.passwordSalt, cfg.passwordHash)
         return DexConfig(port = cfg.port, username = cfg.username, password = hash, maxClients = cfg.maxClients.coerceIn(1, Limits.MAX_CLIENTS))
     }
+
+    /** A UDP source cannot say which interface it came in on, so only a browser already connected over HTTPS may use the relay. */
+    private fun isDexBrowser(address: InetAddress): Boolean =
+        !isOverlay(address) && server.clients.value.any { c -> Cidr.literal(c.remoteAddress)?.let { Cidr.sameAddress(it, address) } == true }
 
     private fun isOverlay(address: InetAddress): Boolean {
         val networks = backend.overlayNetworks.value.mapNotNull(Cidr::parse)

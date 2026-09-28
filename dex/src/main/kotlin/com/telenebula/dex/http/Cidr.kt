@@ -18,6 +18,32 @@ class Cidr private constructor(private val network: ByteArray, private val prefi
     }
 
     companion object {
+        /** The network [address] sits in with [prefixBits]; null for a prefix the family cannot have. */
+        fun of(address: InetAddress, prefixBits: Int): Cidr? {
+            val bytes = canonical(address) ?: return null
+            if (prefixBits !in 0..bytes.size * 8) return null
+            return Cidr(bytes, prefixBits)
+        }
+
+        /** An IP literal, never a name to resolve; null for anything else. */
+        fun literal(text: String): InetAddress? {
+            val host = text.trim()
+            val isV6 = ':' in host && host.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' || it == ':' || it == '.' }
+            val isV4 = host.split('.').let { parts -> parts.size == 4 && parts.all { p -> p.length in 1..3 && p.all { it in '0'..'9' } } }
+            if (!isV6 && !isV4) return null
+            return try {
+                InetAddress.getByName(host)
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+        fun sameAddress(a: InetAddress, b: InetAddress): Boolean {
+            val x = canonical(a) ?: return false
+            val y = canonical(b) ?: return false
+            return x.contentEquals(y)
+        }
+
         fun parse(text: String): Cidr? {
             val slash = text.indexOf('/')
             val host = (if (slash >= 0) text.substring(0, slash) else text).trim()

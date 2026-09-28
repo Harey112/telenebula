@@ -1,0 +1,8 @@
+.dex-emoji-picker { min-height: 240px; display: flex; flex-direction: column; gap: var(--space-3); }
+.dex-emoji-picker input { width: 100%; min-height: 44px; margin: 0; }
+.dex-emoji-picker [role="tablist"] { display: flex; gap: var(--space-1); overflow-x: auto; }
+.dex-emoji-picker [role="tab"] { min-height: 36px; padding: 0 var(--space-3); border: 0; border-radius: 18px; background: var(--surface-raised); white-space: nowrap; }
+.dex-emoji-picker [role="tab"][aria-selected="true"] { background: var(--accent-soft); }
+.dex-emoji-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--space-1); max-height: 260px; overflow-y: auto; }
+.dex-emoji-grid button { min-width: 0; min-height: 42px; border: 0; border-radius: 8px; background: transparent; font-size: 23px; }
+.dex-emoji-grid button:hover, .dex-emoji-grid button:focus-visible { background: var(--accent-soft); }

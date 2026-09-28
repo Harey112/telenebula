@@ -1,5 +1,6 @@
 package com.telenebula.app.runtime
 
+import com.telenebula.core.notify.NotificationPrefsStore
 import android.content.Context
 import android.widget.Toast
 import androidx.lifecycle.Lifecycle
@@ -27,6 +28,7 @@ import com.telenebula.core.model.Profile
 import com.telenebula.core.nebula.NebulaConfigRepository
 import com.telenebula.core.notify.MessageNotificationRouter
 import com.telenebula.vpn.NebulaVpnController
+import java.util.Calendar
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -212,7 +214,11 @@ class AppRuntime(
 
     /** The chat on screen gets no notification, so this stands in for it; every other chat's notification vibrates on its own. */
     private fun buzzInApp(ip: String, isMuted: Boolean) {
-        if (!isMuted && isChatOpen(ip) && prefs.prefs.value.core.notifications.inApp.vibrate) haptics.vibrateShort()
+        val n = prefs.prefs.value.core.notifications
+        if (isMuted || !isChatOpen(ip) || !n.inApp.vibrate) return
+        val now = Calendar.getInstance()
+        if (n.quietHours.enabled && NotificationPrefsStore.isQuietAt(n.quietHours, now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE))) return
+        haptics.vibrateShort()
     }
 
     /** Brings the tunnel up and reports a denial or a failure; a parked consent request stays silent. */

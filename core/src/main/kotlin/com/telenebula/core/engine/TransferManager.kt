@@ -100,8 +100,8 @@ internal class TransferManager(private val engine: Engine) {
      * offer lives in the database, not in the in-flight map.
      */
     suspend fun handleOffer(envelope: Envelope, fromIp: String, link: PeerLink) {
-        val name = envelope.name ?: return
-        val mime = envelope.mime ?: return
+        val name = envelope.name?.let(AttachmentMeta::name) ?: return
+        val mime = envelope.mime?.let(AttachmentMeta::mime) ?: return
         val size = envelope.size ?: return
         val totalChunks = envelope.totalChunks ?: return
         if (!isSane(size, totalChunks)) return
@@ -208,8 +208,8 @@ internal class TransferManager(private val engine: Engine) {
 
     suspend fun handleBegin(envelope: Envelope, fromIp: String, link: PeerLink) {
         purgeStale()
-        val name = envelope.name ?: return
-        val mime = envelope.mime ?: return
+        val name = envelope.name?.let(AttachmentMeta::name) ?: return
+        val mime = envelope.mime?.let(AttachmentMeta::mime) ?: return
         val size = envelope.size ?: return
         val totalChunks = envelope.totalChunks ?: return
         // The chunk count must match the announced size exactly. That is size-independent and

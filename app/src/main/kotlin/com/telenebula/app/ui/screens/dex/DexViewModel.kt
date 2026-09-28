@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.telenebula.app.nav.Navigator
 import com.telenebula.app.notices.NoticeCenter
+import com.telenebula.app.notices.Prompt
 import com.telenebula.app.platform.Format
 import com.telenebula.app.runtime.DexController
 import com.telenebula.app.runtime.DexStatus
@@ -59,6 +60,7 @@ interface DexActions {
     fun closeMenu()
     fun setMaxClients(key: String)
     fun copyUrl(url: String)
+    fun confirmDisconnect(clientId: String)
     fun goBack()
 }
 
@@ -163,6 +165,18 @@ class DexViewModel(
     override fun copyUrl(url: String) {
         copyToClipboard(url)
         notices.setSuccess("Address copied")
+    }
+
+    override fun confirmDisconnect(clientId: String) {
+        val client = uiState.value.clients.firstOrNull { it.id == clientId } ?: return
+        notices.setPrompt(
+            Prompt(
+                message = "Sign out ${client.label}\n\nThe browser is disconnected and must log in again. Every tab that shares its login is signed out too.",
+                rightLabel = "Sign out",
+                isDestructive = true,
+                onRight = { if (!dex.disconnect(clientId)) notices.addWarning("That browser had already disconnected.") },
+            ),
+        )
     }
 
     override fun goBack() {

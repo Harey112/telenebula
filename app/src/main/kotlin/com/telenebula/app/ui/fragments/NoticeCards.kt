@@ -117,6 +117,16 @@ fun SuccessCard(message: String, onDismiss: () -> Unit) {
     }
 }
 
+@Composable
+fun HelpCard(topic: String, text: String, onDismiss: () -> Unit) {
+    val colors = TnTheme.colors
+    NoticeCard {
+        NoticeHead(TnIcon.HELP, colors.accent, topic)
+        Text(text, style = TnType.body, color = colors.textMuted, modifier = Modifier.padding(bottom = TnSpace.lg))
+        NoticeButton("OK", colors.accent, colors.onAccent, onDismiss, Modifier.fillMaxWidth())
+    }
+}
+
 /** A question with two buttons and, when a placeholder is given, a text field. */
 @Composable
 fun PromptCard(prompt: Prompt, value: String, onValueChange: (String) -> Unit, onCancel: () -> Unit, onConfirm: () -> Unit, autoFocus: Boolean) {

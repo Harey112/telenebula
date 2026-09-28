@@ -1,0 +1,6 @@
+.dex-toasts { position: fixed; z-index: 100; right: var(--space-4); top: var(--space-4); width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: var(--space-2); pointer-events: none; }
+.dex-toast { min-height: 48px; padding: var(--space-2) var(--space-3); display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); border: 1px solid var(--hairline); border-radius: var(--radius-3); background: var(--surface); color: var(--text); }
+.dex-toast[data-level="error"] { border-color: var(--danger); }
+.dex-toast[data-level="warning"] { border-color: var(--warning); }
+.dex-toast button { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--text-muted); pointer-events: auto; }
+.dex-toast button:hover { background: var(--surface-raised); }

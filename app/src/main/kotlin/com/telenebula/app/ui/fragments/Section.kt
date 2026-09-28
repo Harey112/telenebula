@@ -2,6 +2,8 @@ package com.telenebula.app.ui.fragments
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.HorizontalDivider
@@ -28,11 +30,13 @@ class SectionScope internal constructor() {
 
 /** A titled group of rows on one flat surface, hairlines between rows. */
 @Composable
-fun Section(title: String? = null, footnote: String? = null, content: SectionScope.() -> Unit) {
+fun Section(title: String? = null, footnote: String? = null, help: String? = null, content: SectionScope.() -> Unit) {
     val colors = TnTheme.colors
     val scope = SectionScope().apply(content)
     Column(modifier = Modifier.fillMaxWidth().padding(start = TnSpace.lg, end = TnSpace.lg, top = TnSpace.xl)) {
-        if (title != null) {
+        if (help != null) {
+            HelpHeading(title ?: "These settings", help, Modifier.padding(bottom = TnSpace.xs))
+        } else if (title != null) {
             Text(
                 text = title.uppercase(),
                 style = TnType.small.copy(letterSpacing = 0.6.sp),

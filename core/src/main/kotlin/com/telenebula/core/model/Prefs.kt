@@ -113,17 +113,6 @@ data class UpdatePrefs(
     val notifiedVersion: String? = null,
 )
 
-/**
- * What one profile sets for itself, a profile being the app or Dex. A null field follows the app,
- * so a phone that never opens Dex behaves as before and an older prefs file needs no migration.
- *
- * Only a setting that describes a screen belongs here. Everything else is a core setting: it
- * governs the account, the protocol, the peers or the device, it is the same in every profile,
- * and it must never gain a per-profile value. Core settings are, deliberately and exhaustively:
- * read receipts, typing indicators, presence, the cover reveal gate, screenshot blocking, the app
- * lock and its delay, the background connection, start on boot, the nebula log level, developer
- * mode, orphan cleaning, the daily update check, the quick reactions, and everything under `dex`.
- */
 /** The same in every profile: what a peer, the tunnel, the outbox or the device itself can observe. */
 @Serializable
 data class CorePrefs(
@@ -166,31 +155,23 @@ data class AppProfile(
     val notificationSound: Boolean = true,
 )
 
-/**
- * The same settings as the app profile, as Dex has them for itself; a null field follows the app.
- *
- * Only a setting that describes a screen belongs here. Everything a peer, the tunnel or the device
- * can observe is a core setting, lives in [CorePrefs], and is the same in every profile.
- */
+/** The browser's own profile: nothing here follows the app, and nothing the app sets reaches it. */
 @Serializable
 data class DexProfile(
-    // privacy is the browser's own and never follows the app: what it tells a peer, and what it
-    // takes to open a covered message here, are not decided by a setting changed on the phone
     val sendReadReceipts: Boolean = true,
     val sendTypingIndicators: Boolean = true,
     /** never DEVICE: a browser cannot answer the phone's lock */
     val coverRevealGate: CoverRevealGate = CoverRevealGate.TAP,
-    val themeMode: ThemeMode? = null,
-    val colorTheme: String? = null,
-    val customAccent: String? = null,
-    val chatTextSize: ChatTextSize? = null,
-    val messageDensity: MessageDensity? = null,
-    val isEnterToSend: Boolean? = null,
-    val notificationsEnabled: Boolean? = null,
-    val notificationPreview: Boolean? = null,
-    val notificationSound: Boolean? = null,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val colorTheme: String = "sky",
+    val customAccent: String = "#7FB7E6",
+    val chatTextSize: ChatTextSize = ChatTextSize.MEDIUM,
+    val messageDensity: MessageDensity = MessageDensity.COMFORTABLE,
+    val isEnterToSend: Boolean = false,
+    val notificationsEnabled: Boolean = true,
+    val notificationPreview: Boolean = true,
+    val notificationSound: Boolean = true,
 )
-
 
 /** Dex the service, not Dex the profile; the password is stored as a salted PBKDF2 hash, never in clear. */
 @Serializable
@@ -214,7 +195,7 @@ data class DexServer(
 @Serializable
 data class Prefs(
     /**
-     * 1 was one flat object; 2 groups it, so the next move is a case in a when rather than a risk.
+     * 1 was one flat object; 2 groups it; 3 gives Dex a value of its own for every profile setting.
      * Always written: the encoder omits defaults, and a file with no version is read as version 1.
      */
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
@@ -224,8 +205,17 @@ data class Prefs(
     val dex: DexProfile = DexProfile(),
     val server: DexServer = DexServer(),
 ) {
+    /** What the phone's own notifications obey: the shared settings with the app's three filled in. */
+    fun appNotifications(): NotificationPrefs = core.notifications.copy(
+        messages = core.notifications.messages.copy(
+            enabled = app.notificationsEnabled,
+            preview = app.notificationPreview,
+            sound = app.notificationSound,
+        ),
+    )
+
     companion object {
-        const val CURRENT_VERSION = 2
+        const val CURRENT_VERSION = 3
         val DEFAULT_QUICK_REACTIONS: List<String> = listOf("👍", "❤️", "😂", "😮", "😢", "🔥")
         const val MAX_RECENT_REACTIONS = 21
         /** muteUntil sentinel shared with the core */

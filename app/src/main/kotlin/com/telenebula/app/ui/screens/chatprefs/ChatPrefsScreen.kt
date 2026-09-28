@@ -43,9 +43,9 @@ fun ChatPrefsScreen(viewModel: ChatPrefsViewModel) {
             row { SelectMenuRow("Message density", viewModel.densityOptions, prefs.densityKey) { viewModel.openMenu(DENSITY) } }
         }
         Section(title = "Sending") {
-            row { SwitchRow(TnIcon.SEND, "Enter to send", prefs.isEnterToSend, viewModel::toggleEnterToSend, subtitle = "Off keeps Enter as a new line") }
+            row { SwitchRow(TnIcon.SEND, "Enter to send", prefs.isEnterToSend, viewModel::toggleEnterToSend) }
         }
-        Section(title = "Your reactions", footnote = "Shown first in the message menu and the reaction picker. Tap one to replace it.") {
+        Section(title = "Your reactions", help = "The six offered first in the message menu and the reaction picker, on the phone and in Dex. Tap one to replace it.") {
             row {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = TnSpace.md, vertical = TnSpace.sm),

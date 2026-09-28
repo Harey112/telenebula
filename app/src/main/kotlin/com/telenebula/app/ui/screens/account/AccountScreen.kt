@@ -26,16 +26,15 @@ fun AccountScreen(viewModel: AccountViewModel) {
             row { InfoField("Mobile (Nebula IPv6)", state.overlayIp, isMono = true) }
             row { InfoField("Username (from host certificate)", "@${state.certName}", isMono = true) }
         }
-        Section(title = "Certificate") {
+        Section(title = "Certificate", help = "Renew certificate takes a re-issued host.crt and host.key for this device; contacts and chats are kept.") {
             row { InfoField("Validity", state.certStatusText, valueColor = statusColor) }
-            row { SettingRow(TnIcon.RETRY, "Renew certificate", subtitle = "Upload a re-issued host.crt and host.key, keep your chats", onClick = viewModel::openRenewCertificate) }
+            row { SettingRow(TnIcon.RETRY, "Renew certificate", onClick = viewModel::openRenewCertificate) }
         }
-        Section(title = "Backup") {
+        Section(title = "Backup", help = "Export writes contacts, chats, media and settings to one file, never your private key. Restore adds the file's contacts, chats and media and removes nothing; its settings are used only on a phone that has none yet.") {
             row {
                 SettingRow(
                     TnIcon.FOLDER,
                     if (state.isBackupBusy) "Working…" else "Export backup",
-                    subtitle = "Contacts, chats, media and settings as one file; never your private key",
                     onClick = if (state.isBackupBusy) null else viewModel::exportBackup,
                 )
             }
@@ -43,14 +42,13 @@ fun AccountScreen(viewModel: AccountViewModel) {
                 SettingRow(
                     TnIcon.UNARCHIVE,
                     "Restore from backup",
-                    subtitle = "Adds what the file has; nothing on this device is removed",
                     onClick = if (state.isBackupBusy) null else viewModel::restoreBackup,
                 )
             }
         }
-        Section(title = "Danger zone") {
-            row { SettingRow(TnIcon.CLEAR, "Delete all chats", subtitle = "Removes every message and media file; keeps contacts and identity", onClick = viewModel::confirmDeleteAllChats) }
-            row { SettingRow(TnIcon.TRASH, "Reset identity", subtitle = "Delete certs & key from this device", onClick = viewModel::confirmReset, tone = RowTone.DANGER) }
+        Section(title = "Danger zone", help = "Delete all chats removes every message and media file but keeps contacts and your identity. Reset identity deletes the certificates and key from this phone.") {
+            row { SettingRow(TnIcon.CLEAR, "Delete all chats", onClick = viewModel::confirmDeleteAllChats) }
+            row { SettingRow(TnIcon.TRASH, "Reset identity", onClick = viewModel::confirmReset, tone = RowTone.DANGER) }
         }
     }
 }

@@ -1,0 +1,48 @@
+.dex-contacts-pane { flex: 1; min-width: 0; min-height: 0; display: flex; background: var(--surface); }
+.dex-contacts-side { width: min(380px, 42%); min-width: 280px; min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--hairline); }
+.dex-contacts-side > header { min-height: 64px; padding: 0 var(--space-5); display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); border-bottom: 1px solid var(--hairline); }
+.dex-contacts-pane h1 { margin: 0; font-size: 20px; font-weight: 500; }
+.dex-contacts-side > header button { height: 40px; padding: 0 var(--space-4); border: 0; border-radius: 20px; background: var(--accent-soft); display: flex; align-items: center; gap: var(--space-2); font-weight: 500; }
+.dex-contacts-side .dex-chat-search { margin-top: var(--space-3); }
+.dex-contacts-list { flex: 1; min-height: 0; overflow-y: auto; }
+.dex-contact-row { width: 100%; min-height: 64px; padding: var(--space-2) var(--space-5); display: flex; align-items: center; gap: var(--space-3); text-align: left; border: 0; border-bottom: 1px solid var(--hairline); background: none; }
+.dex-contact-row:hover { background: var(--surface-raised); }
+.dex-contact-row[aria-current="true"] { background: var(--accent-soft); }
+.dex-contact-row > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.dex-contact-row strong { font-weight: 500; }
+.dex-contact-row small { color: var(--text-muted); }
+.dex-contact-row > svg { color: var(--text-muted); }
+.dex-contact-detail { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; background: var(--background); }
+.dex-contact-detail-empty { color: var(--text-muted); margin: 0; padding: var(--space-6); }
+.dex-contact-detail-top { min-height: 56px; display: flex; align-items: center; padding: 0 var(--space-4); }
+.dex-contact-detail .dex-contact-back { display: none; }
+.dex-contact-edit { margin-left: auto; }
+.dex-contact-identity { display: flex; flex-direction: column; align-items: center; padding: 0 var(--space-5) var(--space-6); text-align: center; }
+.dex-contact-avatar { width: 80px; height: 80px; display: grid; place-items: center; border-radius: 50%; background: var(--accent-soft); color: var(--text); font-size: 32px; font-weight: 500; }
+.dex-contact-identity h2 { margin: var(--space-4) 0 0; font-size: 22px; font-weight: 500; }
+.dex-contact-identity p { margin: var(--space-1) 0 0; color: var(--text-muted); }
+.dex-contact-actions { display: flex; gap: var(--space-2); margin-top: var(--space-5); }
+.dex-contact-actions button { min-height: 44px; display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-4); border: 1px solid var(--hairline); border-radius: 22px; background: var(--surface); }
+.dex-contact-actions button:hover { background: var(--surface-raised); }
+.dex-contact-sections { display: grid; gap: var(--space-4); max-width: 760px; margin: 0 auto; padding: 0 var(--space-5) var(--space-6); }
+.dex-contact-section { overflow: hidden; border: 1px solid var(--hairline); border-radius: var(--radius-3); background: var(--surface); }
+.dex-contact-section h3 { margin: 0; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--hairline); font-size: 13px; font-weight: 500; color: var(--text-muted); }
+.dex-contact-info-row { min-height: 48px; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--hairline); }
+.dex-contact-info-row:last-child { border-bottom: 0; }
+.dex-contact-info-row > span { flex: none; color: var(--text-muted); }
+.dex-contact-info-row strong { min-width: 0; text-align: right; overflow-wrap: anywhere; font-weight: 400; }
+.dex-contact-mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13px; }
+.dex-contact-manage-row { min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--hairline); }
+.dex-contact-manage-row button { flex: none; min-height: 44px; min-width: 88px; padding: 0 var(--space-3); border: 1px solid var(--hairline); border-radius: 22px; background: var(--surface-raised); font-weight: 500; }
+.dex-contact-manage-row button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.dex-contact-danger-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4); }
+.dex-contact-danger-row strong { font-weight: 500; }
+.dex-contact-danger-row p { margin: var(--space-1) 0 0; color: var(--text-muted); font-size: 13px; }
+.dex-contact-danger-row button { flex: none; min-height: 40px; padding: 0 var(--space-4); border: 1px solid var(--danger); border-radius: 20px; background: var(--surface); color: var(--danger); font-weight: 500; }
+@media (max-width: 900px) {
+  .dex-contacts-side { width: 100%; min-width: 0; border-right: 0; }
+  .dex-contact-detail { display: none; }
+  .dex-contacts-pane[data-contact-open="true"] .dex-contacts-side { display: none; }
+  .dex-contacts-pane[data-contact-open="true"] .dex-contact-detail { display: block; }
+  .dex-contact-detail .dex-contact-back { display: grid; }
+}

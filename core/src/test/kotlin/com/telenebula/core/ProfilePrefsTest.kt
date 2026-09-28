@@ -1,8 +1,12 @@
 package com.telenebula.core
 
+import com.telenebula.core.model.AppProfile
 import com.telenebula.core.model.CorePrefs
-import com.telenebula.core.model.Prefs
 import com.telenebula.core.model.DexProfile
+import com.telenebula.core.model.MessageNotificationPrefs
+import com.telenebula.core.model.NotificationPrefs
+import com.telenebula.core.model.Prefs
+import com.telenebula.core.model.QuietHours
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.SerialDescriptor
 import org.junit.Assert.assertEquals
@@ -53,28 +57,34 @@ class ProfilePrefsTest {
         "dex",
     )
 
-    /** Changing the phone must not change what the browser tells a peer, or how it opens a cover. */
+    /** A nullable Dex setting would follow the app, so a change made on the phone would reach the browser. */
     @Test
-    fun `privacy in the Dex profile does not follow the app`() {
+    fun `no setting in the Dex profile follows the app`() {
         val descriptor = DexProfile.serializer().descriptor
-        for (setting in setOf("sendReadReceipts", "sendTypingIndicators", "coverRevealGate")) {
-            val i = descriptor.getElementIndex(setting)
-            assertTrue("$setting is missing from the Dex profile", i >= 0)
-            assertFalse(
-                "$setting is nullable, so an unset Dex value would follow the app and change with it",
-                descriptor.getElementDescriptor(i).isNullable,
-            )
+        for (i in 0 until descriptor.elementsCount) {
+            assertFalse(descriptor.getElementName(i), descriptor.getElementDescriptor(i).isNullable)
         }
     }
 
-    /** What a screen looks like is worth inheriting; set nothing and the browser follows the app. */
     @Test
-    fun `presentation in the Dex profile still follows the app`() {
-        val descriptor = DexProfile.serializer().descriptor
-        for (setting in setOf("themeMode", "chatTextSize", "messageDensity", "isEnterToSend")) {
-            val i = descriptor.getElementIndex(setting)
-            assertTrue(setting, i >= 0 && descriptor.getElementDescriptor(i).isNullable)
-        }
+    fun `the Dex profile has every setting the app profile has, bar the phone's loudspeaker`() {
+        assertEquals(names(AppProfile.serializer().descriptor) - "isVideoSpeakerDefault", names(DexProfile.serializer().descriptor))
+    }
+
+    @Test
+    fun `the phone's notifications take the app's three and the shared rest, never Dex's`() {
+        val p = Prefs(
+            core = CorePrefs(notifications = NotificationPrefs(messages = MessageNotificationPrefs(showSender = false, vibrate = false), quietHours = QuietHours(enabled = true))),
+            app = AppProfile(notificationsEnabled = false, notificationPreview = false, notificationSound = true),
+            dex = DexProfile(notificationsEnabled = true, notificationPreview = true, notificationSound = false),
+        )
+        val n = p.appNotifications()
+        assertFalse(n.messages.enabled)
+        assertFalse(n.messages.preview)
+        assertTrue(n.messages.sound)
+        assertFalse(n.messages.showSender)
+        assertFalse(n.messages.vibrate)
+        assertTrue(n.quietHours.enabled)
     }
 
     @Test

@@ -28,7 +28,7 @@ class PrefsRepository(
     context: Context,
     private val json: Json,
     scope: CoroutineScope,
-    /** mirrors the notification section to the native cache used while the UI is not running */
+    /** mirrors what the phone's own notifications obey to the native cache used while the UI is not running */
     private val mirrorNotifications: (NotificationPrefs) -> Unit,
     /** tells the messaging core, which is what actually stops the receipts going out */
     private val mirrorReadReceipts: (Boolean, Boolean) -> Unit = { _, _ -> },
@@ -60,7 +60,7 @@ class PrefsRepository(
                 .getOrElse { Prefs().also { _ -> loadFailure = it.userMessage() } }
         }
         mutable.value = loaded
-        mirrorNotifications(loaded.core.notifications)
+        mirrorNotifications(loaded.appNotifications())
         mirrorReadReceipts(loaded.app.sendReadReceipts, loaded.app.sendReadReceipts || loaded.dex.sendReadReceipts)
         loaded
     }
@@ -72,7 +72,8 @@ class PrefsRepository(
             transform(current)
         }
         if (next === previous) return
-        if (next.core.notifications != previous.core.notifications) mirrorNotifications(next.core.notifications)
+        val notifications = next.appNotifications()
+        if (notifications != previous.appNotifications()) mirrorNotifications(notifications)
         if (next.app.sendReadReceipts != previous.app.sendReadReceipts || next.dex.sendReadReceipts != previous.dex.sendReadReceipts) {
             mirrorReadReceipts(next.app.sendReadReceipts, next.app.sendReadReceipts || next.dex.sendReadReceipts)
         }

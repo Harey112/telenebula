@@ -111,4 +111,72 @@ class StunTest {
         assertFalse(Stun.isChannelNumber(0x3FFF))
         assertFalse(Stun.isChannelNumber(0x8000))
     }
+
+    /** Appends one attribute after whatever [bytes] ends with and fixes the header length, as an attacker on the path would. */
+    private fun append(bytes: ByteArray, type: Int, value: ByteArray): ByteArray {
+        val out = bytes + Stun.encodeAttribute(type, value)
+        val length = out.size - Stun.HEADER_BYTES
+        out[2] = (length shr 8).toByte()
+        out[3] = length.toByte()
+        return out
+    }
+
+    private fun signedRefresh(key: ByteArray, withFingerprint: Boolean): ByteArray =
+        Stun.Builder(Stun.METHOD_REFRESH, Stun.CLASS_REQUEST, txid)
+            .addInt(Stun.ATTR_LIFETIME, 600)
+            .addString(Stun.ATTR_USERNAME, "u")
+            .build(key, withFingerprint)
+
+    @Test
+    fun `nothing a handler acts on may follow message integrity`() {
+        val key = Stun.longTermKey("u", "r", "p")
+        val signed = signedRefresh(key, withFingerprint = false)
+        assertNotNull(Stun.parse(signed, signed.size))
+        val peer = Stun.encodeXorAddress(InetSocketAddress(InetAddress.getByName("10.42.0.9"), 5000), txid)
+        for ((type, value) in listOf(
+            Stun.ATTR_XOR_PEER_ADDRESS to peer,
+            Stun.ATTR_LIFETIME to byteArrayOf(0, 0, 0, 0),
+            Stun.ATTR_CHANNEL_NUMBER to byteArrayOf(0x40, 0x01, 0, 0),
+            Stun.ATTR_USERNAME to "other".toByteArray(),
+            Stun.ATTR_REQUESTED_TRANSPORT to byteArrayOf(6, 0, 0, 0),
+            Stun.ATTR_SOFTWARE to "x".toByteArray(),
+        )) {
+            val tampered = append(signed, type, value)
+            assertNull("attribute 0x${type.toString(16)} after integrity was accepted", Stun.parse(tampered, tampered.size))
+            // and the HMAC still only covers what came before it, so a lenient parser would have been fooled
+            assertTrue(Stun.verifyIntegrity(tampered, tampered.size, key))
+        }
+    }
+
+    @Test
+    fun `a second or malformed integrity attribute is refused`() {
+        val key = Stun.longTermKey("u", "r", "p")
+        val signed = signedRefresh(key, withFingerprint = false)
+        val twice = append(signed, Stun.ATTR_MESSAGE_INTEGRITY, ByteArray(20))
+        assertNull(Stun.parse(twice, twice.size))
+        val short = Stun.Builder(Stun.METHOD_REFRESH, Stun.CLASS_REQUEST, txid).add(Stun.ATTR_MESSAGE_INTEGRITY, ByteArray(16)).build(withFingerprint = false)
+        assertNull(Stun.parse(short, short.size))
+        assertFalse(Stun.verifyIntegrity(short, short.size, key))
+    }
+
+    @Test
+    fun `a trailing fingerprint is checked and must be last`() {
+        val key = Stun.longTermKey("u", "r", "p")
+        val good = signedRefresh(key, withFingerprint = true)
+        val parsed = Stun.parse(good, good.size)
+        assertNotNull(parsed)
+        assertEquals(600, parsed?.first(Stun.ATTR_LIFETIME)?.let(Stun::readInt))
+        assertTrue(Stun.verifyIntegrity(good, good.size, key))
+
+        val wrongCrc = good.copyOf().also { it[it.size - 1] = (it[it.size - 1] + 1).toByte() }
+        assertNull(Stun.parse(wrongCrc, wrongCrc.size))
+
+        val afterFingerprint = append(good, Stun.ATTR_LIFETIME, byteArrayOf(0, 0, 0, 0))
+        assertNull(Stun.parse(afterFingerprint, afterFingerprint.size))
+
+        val unsigned = Stun.Builder(Stun.METHOD_BINDING, Stun.CLASS_REQUEST, txid).build(withFingerprint = true)
+        assertNotNull(Stun.parse(unsigned, unsigned.size))
+        val badLength = Stun.Builder(Stun.METHOD_BINDING, Stun.CLASS_REQUEST, txid).add(Stun.ATTR_FINGERPRINT, ByteArray(8)).build(withFingerprint = false)
+        assertNull(Stun.parse(badLength, badLength.size))
+    }
 }

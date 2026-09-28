@@ -99,9 +99,12 @@ interface DexBackend {
     fun presence(): Flow<Map<String, DexPresence>>
     fun typing(): Flow<Set<String>>
     fun queues(): Flow<List<DexQueue>>
+    fun tunnel(): Flow<Boolean>
     suspend fun freeBytes(): Long
 
     suspend fun sendText(peer: String, body: String, replyTo: String?, isCovered: Boolean)
+    /** Throws [DexException] with [DexFailure.REFUSED] when [peer] may not be sent a file, before a byte is staged. */
+    suspend fun checkUpload(peer: String)
     /** where an upload lands while it streams in; the backend owns the directory */
     fun newUploadFile(name: String): File
     suspend fun sendUpload(upload: DexUpload)
@@ -142,8 +145,8 @@ interface DexBackend {
 
     /** null when no such contact is saved */
     suspend fun contactDetail(peer: String): DexContactDetail?
-    suspend fun saveContact(peer: String, name: String, nickname: String, notes: String)
-    suspend fun addContact(peer: String, name: String, nickname: String, notes: String)
+    suspend fun saveContact(peer: String, nickname: String, notes: String)
+    suspend fun addContact(peer: String, nickname: String, notes: String)
     suspend fun deleteContact(peer: String)
     suspend fun setContactFlags(peer: String, flags: DexContactFlags)
     suspend fun setContactPrivacy(peer: String, privacy: DexContactPrivacy)

@@ -10,12 +10,15 @@ const val MUTE_FOREVER = -1L
 object ContactLabels {
     fun isMuted(muteUntil: Long, now: Long = System.currentTimeMillis()): Boolean = muteUntil == MUTE_FOREVER || muteUntil > now
 
-    /** Loose overlay-address check: hex groups and colons, at least one colon. */
     fun isOverlayIp(value: String): Boolean {
-        val v = value.trim()
-        if (':' !in v) return false
-        for (ch in v) if (!(ch == ':' || ch in '0'..'9' || ch in 'a'..'f' || ch in 'A'..'F')) return false
-        return true
+        val text = value.trim()
+        if (text.isEmpty() || text.contains(":::")) return false
+        val halves = text.split("::")
+        if (halves.size > 2) return false
+        val groups = halves.flatMap { half -> if (half.isEmpty()) emptyList() else half.split(':') }
+        if (groups.any { group -> group.length !in 1..4 || group.any { it !in '0'..'9' && it !in 'a'..'f' && it !in 'A'..'F' } }) return false
+        if (halves.size == 1 && groups.size != 8 || halves.size == 2 && groups.size > 7) return false
+        return groups.any { it.toInt(16) != 0 }
     }
 
     /** Chats and calls: the user's own word for the peer comes first. */

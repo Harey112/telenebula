@@ -5,33 +5,21 @@ import com.telenebula.app.platform.ActionQueue
 import com.telenebula.app.platform.CertInspector
 import com.telenebula.app.platform.ContactLabels
 import com.telenebula.app.platform.PrefsRepository
-import com.telenebula.app.ui.shared.CoverGates
 import com.telenebula.core.CoreClient
 import com.telenebula.core.PeerQueueStore
 import com.telenebula.core.PresenceStore
 import com.telenebula.core.TransferProgressStore
 import com.telenebula.core.TypingStore
 import com.telenebula.core.model.CallLog
-import com.telenebula.core.model.CallNotificationPrefs
 import com.telenebula.core.model.ChatMessage
 import com.telenebula.core.model.ChatSummary
-import com.telenebula.core.model.ChatTextSize
 import com.telenebula.core.model.ChatView
 import com.telenebula.core.model.Contact
 import com.telenebula.core.model.ContactFlagsPatch
 import com.telenebula.core.model.ContactNotificationPrefs
 import com.telenebula.core.model.ContactPrivacyPrefs
 import com.telenebula.core.model.CoverRevealGate
-import com.telenebula.core.model.InAppNotificationPrefs
 import com.telenebula.core.model.MessageAction
-import com.telenebula.core.model.MessageDensity
-import com.telenebula.core.model.MessageNotificationPrefs
-import com.telenebula.core.model.NebulaLogLevel
-import com.telenebula.core.model.NotificationPrefs
-import com.telenebula.core.model.Prefs
-import com.telenebula.core.model.PresencePrefs
-import com.telenebula.core.model.QuietHours
-import com.telenebula.core.model.ThemeMode
 import com.telenebula.core.model.CallOutcome as CoreCallOutcome
 import com.telenebula.core.model.MessageActionStatus
 import com.telenebula.core.model.MessageActionType
@@ -42,18 +30,17 @@ import com.telenebula.core.model.MessageStatus
 import com.telenebula.core.model.PeerPresence
 import com.telenebula.core.model.PeerQueueState
 import com.telenebula.core.model.Profile
-import com.telenebula.core.model.AppProfile
-import com.telenebula.core.model.DexProfile as DexProfilePrefs
 import com.telenebula.dex.DexBackend
 import com.telenebula.dex.DexCallCommand
 import com.telenebula.dex.DexCallEvent
+import com.telenebula.dex.DexException
+import com.telenebula.dex.DexFailure
 import com.telenebula.dex.DexFile
 import com.telenebula.dex.DexUpload
 import com.telenebula.dex.Limits
 import com.telenebula.dex.wire.DexAccount
 import com.telenebula.dex.wire.DexAttachment
 import com.telenebula.dex.wire.DexCallLog
-import com.telenebula.dex.wire.DexCallNotifications
 import com.telenebula.dex.wire.DexCallOutcome
 import com.telenebula.dex.wire.DexCallState
 import com.telenebula.dex.wire.DexChat
@@ -64,39 +51,29 @@ import com.telenebula.dex.wire.DexContactDetail
 import com.telenebula.dex.wire.DexContactFlags
 import com.telenebula.dex.wire.DexContactNotifications
 import com.telenebula.dex.wire.DexContactPrivacy
-import com.telenebula.dex.wire.DexDensity
 import com.telenebula.dex.wire.DexDiagnostics
 import com.telenebula.dex.wire.DexDirection
 import com.telenebula.dex.wire.DexIdentity
-import com.telenebula.dex.wire.DexInAppNotifications
-import com.telenebula.dex.wire.DexLogLevel
 import com.telenebula.dex.wire.DexMessage
 import com.telenebula.dex.wire.DexMessageKind
-import com.telenebula.dex.wire.DexMessageNotifications
 import com.telenebula.dex.wire.DexMessageStatus
 import com.telenebula.dex.wire.DexNetwork
-import com.telenebula.dex.wire.DexNotifications
 import com.telenebula.dex.wire.DexPeerRow
 import com.telenebula.dex.wire.DexPeerStats
 import com.telenebula.dex.wire.DexPingResult
 import com.telenebula.dex.wire.DexPresence
-import com.telenebula.dex.wire.DexPresencePrefs
 import com.telenebula.dex.wire.DexQueue
-import com.telenebula.dex.wire.DexQuietHours
 import com.telenebula.dex.wire.DexReplyPreview
 import com.telenebula.dex.wire.DexRevealGate
 import com.telenebula.dex.wire.DexSendState
 import com.telenebula.dex.wire.DexSettings
 import com.telenebula.dex.wire.DexSettingsPatch
-import com.telenebula.dex.wire.DexProfile
 import com.telenebula.dex.wire.DexStorage
-import com.telenebula.dex.wire.DexTextSize
-import com.telenebula.dex.wire.DexThemeMode
-import com.telenebula.dex.wire.DexUpdatePrefs
 import com.telenebula.dex.wire.DexUpdates
 import com.telenebula.vpn.NebulaVpnController
 import com.telenebula.vpn.model.HostmapEntry
 import java.io.File
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -148,16 +125,20 @@ class DexBackendAdapter(
         summaries.filter { it.lastTs != null || byIp.containsKey(it.ip) }.map { s -> s.toChat(byIp[s.ip]) }
     }.distinctUntilChanged()
 
-    override fun contacts(): Flow<List<DexContact>> = core.contactsFlow().map { list -> list.map { it.toContact() } }.distinctUntilChanged()
+    private val dexGate: Flow<CoverRevealGate> = DexProfiles.dexGate(prefs.prefs)
+
+    override fun contacts(): Flow<List<DexContact>> =
+        combine(core.contactsFlow(), dexGate) { list, gate -> list.map { it.toContact(gate) } }.distinctUntilChanged()
 
     override fun chat(peer: String): Flow<DexChatView> =
-        combine(core.chatViewFlow(peer), transfers.progress, peerQueues.queues, prefs.prefs.map { it.app.coverRevealGate }.distinctUntilChanged()) { view, progress, queues, gate ->
+        combine(core.chatViewFlow(peer), transfers.progress, peerQueues.queues, dexGate) { view, progress, queues, gate ->
             view.toView(peer, progress, queues[peer], gate)
         }
 
     override suspend fun messagesBefore(peer: String, beforeTs: Long, beforeId: String, limit: Int): List<DexMessage> {
         val page = core.messagesBefore(peer, com.telenebula.core.model.MessageCursor(beforeTs, beforeId), limit.coerceIn(1, Limits.CHAT_PAGE))
-        return page.map { it.toMessage(emptyList(), null, emptyMap(), emptySet(), null, null) }
+        val gate = gateFor(peer)
+        return page.map { DexCoverRules.shown(it.toMessage(emptyList(), null, emptyMap(), emptySet(), null, null), gate) }
     }
 
     override fun presence(): Flow<Map<String, DexPresence>> = presenceStore.presence.map { entries ->
@@ -174,13 +155,17 @@ class DexBackendAdapter(
     override suspend fun sendText(peer: String, body: String, replyTo: String?, isCovered: Boolean) {
         val text = body.trim()
         require(text.isNotEmpty()) { "Nothing to send" }
+        refuse(DexChatRules.sendRefusal(core.cachedContact(peer)))
         core.sendText(peer, text, replyTo?.takeIf { it.isNotBlank() }, isCovered)
     }
+
+    override suspend fun checkUpload(peer: String) = refuse(DexChatRules.sendRefusal(core.cachedContact(peer)))
 
     override fun newUploadFile(name: String): File = files.uploadFile(name)
 
     override suspend fun sendUpload(upload: DexUpload) {
         require(upload.size > 0 && upload.file.isFile) { "The upload is empty" }
+        checkUpload(upload.peer)
         val meta = MessageAttachment(
             name = upload.name.ifBlank { upload.file.name },
             mime = upload.mime.ifBlank { DEFAULT_MIME },
@@ -190,12 +175,11 @@ class DexBackendAdapter(
         core.sendAttachment(upload.peer, upload.file.absolutePath, meta, upload.replyTo?.takeIf { it.isNotBlank() }, upload.isCovered)
     }
 
-    /** A covered message behind a code or the device lock is revealed on the phone only. */
     override suspend fun attachment(messageId: String): DexFile? {
         val message = core.message(messageId) ?: return null
         val att = message.attachment ?: return null
         if (message.isDeleted || message.status.hasNoFile || message.status == MessageStatus.OFFERED || message.status == MessageStatus.RECEIVING) return null
-        if (message.isCovered && !gateFor(message.peerIp).canRevealRemotely) return null
+        if (isWithheld(message)) return null
         val path = att.uri?.removePrefix("file://") ?: return null
         val file = File(path)
         if (!file.isFile) return null
@@ -215,7 +199,12 @@ class DexBackendAdapter(
         core.reactToMessage(messageId, emoji)
         prefs.recordRecentReaction(emoji)
     }
-    override suspend fun edit(messageId: String, body: String) = core.editMessage(messageId, body.trim().also { require(it.isNotEmpty()) { "Nothing to save" } })
+    override suspend fun edit(messageId: String, body: String) {
+        val text = body.trim()
+        require(text.isNotEmpty()) { "Nothing to save" }
+        refuse(DexChatRules.editRefusal(core.message(messageId)?.let { core.cachedContact(it.peerIp) }))
+        core.editMessage(messageId, text)
+    }
     override suspend fun delete(messageId: String, forEveryone: Boolean) = if (forEveryone) core.deleteForEveryone(messageId) else core.deleteForMe(messageId)
     override suspend fun retryAction(actionId: String) = core.retryActionNow(actionId)
     override suspend fun cancelAction(actionId: String) = core.cancelAction(actionId)
@@ -225,53 +214,36 @@ class DexBackendAdapter(
 
     override val callState: StateFlow<DexCallState> get() = calls.callState
     override val callEvents: Flow<DexCallEvent> get() = calls.callEvents
-    override fun onCallCommand(command: DexCallCommand) = calls.onCommand(command)
+    override fun onCallCommand(command: DexCallCommand) {
+        if (command is DexCallCommand.Start) refuse(DexChatRules.callRefusal(core.cachedContact(command.peer), runtime.tunnelRunning.value))
+        calls.onCommand(command)
+    }
+
+    override fun tunnel(): Flow<Boolean> = runtime.tunnelRunning
 
     // --- settings --------------------------------------------------------------------------------
 
-    override fun settings(): Flow<DexSettings> = prefs.prefs.map { it.toSettings() }.distinctUntilChanged()
+    override fun settings(): Flow<DexSettings> = prefs.prefs.map(DexSettingsMapping::settings).distinctUntilChanged()
 
     override suspend fun applySettings(patch: DexSettingsPatch) {
-        val nextLogLevel = patch.nebulaLogLevel?.toCore()
-        val isLogLevelChanged = nextLogLevel != null && nextLogLevel != prefs.prefs.value.core.nebulaLogLevel
-        prefs.update { p ->
-            p.copy(
-                core = p.core.copy(
-                    isScreenshotBlocked = patch.isScreenshotBlocked ?: p.core.isScreenshotBlocked,
-                    isBackgroundConnectionEnabled = patch.isBackgroundConnectionEnabled ?: p.core.isBackgroundConnectionEnabled,
-                    isStartOnBootEnabled = patch.isStartOnBootEnabled ?: p.core.isStartOnBootEnabled,
-                    notifications = patch.notifications?.toCore() ?: p.core.notifications,
-                    presence = patch.presence?.let { PresencePrefs(it.isShared, it.pauseMinutes, it.pausedUntil) } ?: p.core.presence,
-                    updates = patch.isDailyUpdateCheckEnabled?.let { p.core.updates.copy(isDailyCheckEnabled = it) } ?: p.core.updates,
-                    nebulaLogLevel = nextLogLevel ?: p.core.nebulaLogLevel,
-                    isDeveloperMode = patch.isDeveloperMode ?: p.core.isDeveloperMode,
-                    autoCleanOrphans = patch.autoCleanOrphans ?: p.core.autoCleanOrphans,
-                    appLockAfterSec = patch.appLockAfterSec?.coerceIn(0, MAX_LOCK_DELAY_SEC) ?: p.core.appLockAfterSec,
-                    quickReactions = patch.quickReactions?.takeIf { it.size == p.core.quickReactions.size && it.all(::isEmoji) } ?: p.core.quickReactions,
-                ),
-                app = p.app.copy(
-                    sendReadReceipts = patch.sendReadReceipts ?: p.app.sendReadReceipts,
-                    sendTypingIndicators = patch.sendTypingIndicators ?: p.app.sendTypingIndicators,
-                    coverRevealGate = patch.coverRevealGate?.toCore() ?: p.app.coverRevealGate,
-                    themeMode = patch.themeMode?.toCore() ?: p.app.themeMode,
-                    colorTheme = patch.colorTheme?.trim()?.takeIf { it.isNotEmpty() && it.length <= MAX_THEME_CHARS } ?: p.app.colorTheme,
-                    customAccent = patch.customAccent?.takeIf { ACCENT.matches(it) } ?: p.app.customAccent,
-                    chatTextSize = patch.chatTextSize?.toCore() ?: p.app.chatTextSize,
-                    messageDensity = patch.messageDensity?.toCore() ?: p.app.messageDensity,
-                    isEnterToSend = patch.isEnterToSend ?: p.app.isEnterToSend,
-                    isVideoSpeakerDefault = patch.isVideoSpeakerDefault ?: p.app.isVideoSpeakerDefault,
-                ),
-                // the browser's own profile is replaced whole, so clearing one back to "follow the app" is expressible
-                dex = patch.dexProfile?.toCore() ?: p.dex,
-            )
-        }
+        val previous = prefs.prefs.value.core.nebulaLogLevel
+        prefs.update { DexSettingsMapping.apply(it, patch) }
+        val isLogLevelChanged = prefs.prefs.value.core.nebulaLogLevel != previous
         // nebula reads its log level from the site config, which only a reload hands it
-        if (isLogLevelChanged) profile.value?.let { runtime.reloadTunnelConfig(it) }
+        if (!isLogLevelChanged) return
+        val p = profile.value ?: return
+        try {
+            runtime.reloadTunnelConfig(p)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw IllegalStateException("The log level was saved, but the tunnel did not reload (${e.message ?: e.javaClass.simpleName}). It applies the next time the tunnel starts.", e)
+        }
     }
 
     override suspend fun setQuickReaction(slot: Int, emoji: String) {
         require(slot in prefs.prefs.value.core.quickReactions.indices) { "No such reaction slot" }
-        require(isEmoji(emoji)) { "Bad reaction" }
+        require(DexSettingsMapping.isEmoji(emoji)) { "Bad reaction" }
         prefs.setQuickReaction(slot, emoji)
     }
 
@@ -378,7 +350,7 @@ class DexBackendAdapter(
         val queue = peerQueues.of(peer)
         val stamp = now()
         return DexContactDetail(
-            contact = contact.toContact(),
+            contact = contact.toContact(prefs.prefs.value.dex.coverRevealGate),
             stats = DexPeerStats(
                 messagesSent = stats.messagesSent,
                 messagesReceived = stats.messagesReceived,
@@ -405,31 +377,23 @@ class DexBackendAdapter(
             },
             queued = queue?.queued ?: 0,
             failed = stats.failedActions,
-            privacy = DexContactPrivacy(
-                sendReadReceipts = contact.privacy.sendReadReceipts,
-                sendTypingIndicators = contact.privacy.sendTypingIndicators,
-                blockScreenshots = contact.privacy.blockScreenshots,
-                revealGate = contact.privacy.revealGate?.toWire(),
-            ),
-            notifications = contact.notifications?.let {
-                DexContactNotifications(it.useGlobal, it.messages, it.preview, it.sound, it.vibrate, it.popup, it.reactions, it.calls)
-            },
+            privacy = contact.privacy.toWire(),
+            notifications = contact.notifications?.toWire(),
             calls = core.callLogs(peer, CONTACT_CALL_LOGS).map { it.toCallLog(contact.let(ContactLabels::chatLabel)) },
         )
     }
 
-    override suspend fun saveContact(peer: String, name: String, nickname: String, notes: String) {
-        require(core.contact(peer) != null) { "No contact at $peer" }
-        core.updateContactDetails(peer, name, nickname, notes)
+    /** The username is the peer's own, announced with their identity; a browser edits only what the user owns. */
+    override suspend fun saveContact(peer: String, nickname: String, notes: String) {
+        val contact = core.contact(peer) ?: throw IllegalArgumentException("No contact at $peer")
+        core.updateContactDetails(peer, contact.name, nickname, notes)
     }
 
-    override suspend fun addContact(peer: String, name: String, nickname: String, notes: String) {
-        val ip = CoreClient.normalizeIp(peer)
-        require(ContactLabels.isOverlayIp(ip)) { "That is not a nebula address" }
-        require(ip != profile.value?.overlayIp) { "That is this phone's own address" }
-        require(core.contact(ip) == null) { "That contact is already saved" }
-        core.upsertContact(ip, name.ifEmpty { ip })
-        if (nickname.isNotEmpty() || notes.isNotEmpty()) core.updateContactDetails(ip, name.ifEmpty { ip }, nickname, notes)
+    override suspend fun addContact(peer: String, nickname: String, notes: String) {
+        val normalized = CoreClient.normalizeIp(peer)
+        val ip = DexChatRules.newContactAddress(normalized, profile.value?.overlayIp, isSaved = core.contact(normalized) != null).getOrThrow()
+        core.upsertContact(ip, "")
+        if (nickname.isNotEmpty() || notes.isNotEmpty()) core.updateContactDetails(ip, "", nickname, notes)
     }
 
     override suspend fun deleteContact(peer: String) = core.deleteContact(peer)
@@ -446,15 +410,21 @@ class DexBackendAdapter(
         ),
     )
 
-    override suspend fun setContactPrivacy(peer: String, privacy: DexContactPrivacy) = core.setContactPrivacy(
-        peer,
-        ContactPrivacyPrefs(
-            sendReadReceipts = privacy.sendReadReceipts,
-            sendTypingIndicators = privacy.sendTypingIndicators,
-            blockScreenshots = privacy.blockScreenshots,
-            revealGate = privacy.revealGate?.toCore(),
-        ),
-    )
+    override suspend fun setContactPrivacy(peer: String, privacy: DexContactPrivacy) {
+        val next = privacy.revealGate?.toCore()
+        if (!DexProfiles.isOverrideChangeAllowed(core.contact(peer)?.privacy?.revealGate, next)) {
+            refuse("This chat's covered messages are opened with a code or the phone's lock. Change that on the phone.")
+        }
+        core.setContactPrivacy(
+            peer,
+            ContactPrivacyPrefs(
+                sendReadReceipts = privacy.sendReadReceipts,
+                sendTypingIndicators = privacy.sendTypingIndicators,
+                blockScreenshots = privacy.blockScreenshots,
+                revealGate = next,
+            ),
+        )
+    }
 
     override suspend fun setContactNotifications(peer: String, prefs: DexContactNotifications?) = core.setContactNotifications(
         peer,
@@ -491,17 +461,20 @@ class DexBackendAdapter(
     override suspend fun deleteCallLogs(ids: List<String>) = core.deleteCallLogs(ids)
 
     override suspend fun chatMedia(peer: String): List<DexMessage> =
-        core.chatMedia(peer).map { it.toMessage(emptyList(), null, emptyMap(), emptySet(), null, null) }
+        DexCoverRules.listed(core.chatMedia(peer)).map { it.toMessage(emptyList(), null, emptyMap(), emptySet(), null, null) }
 
     override suspend fun chatLinks(peer: String): List<DexChatLink> = core.chatLinks(peer).map { DexChatLink(it.messageId, it.url, it.ts) }
 
     override suspend fun search(peer: String, text: String): List<DexMessage> {
         val query = text.trim()
         require(query.isNotEmpty()) { "Nothing to search for" }
-        return core.searchMessages(peer, query).map { it.toMessage(emptyList(), null, emptyMap(), emptySet(), null, null) }
+        return DexCoverRules.listed(core.searchMessages(peer, query)).map { it.toMessage(emptyList(), null, emptyMap(), emptySet(), null, null) }
     }
 
+    /** A forwarded copy is not covered, so a message the browser may not open cannot be forwarded from it. */
     override suspend fun forward(messageId: String, peer: String) {
+        val message = core.message(messageId) ?: throw IllegalArgumentException("No such message")
+        if (isWithheld(message)) refuse("This covered message can be opened only on the phone, so it is forwarded from there.")
         core.forwardMessage(messageId, peer)
     }
 
@@ -536,27 +509,26 @@ class DexBackendAdapter(
 
     // --- mapping ---------------------------------------------------------------------------------
 
-    private val DexRevealGate.canRevealRemotely: Boolean get() = this == DexRevealGate.TAP || this == DexRevealGate.ASK
-
-    /** What Dex obeys: its own profile where it has an opinion, the app profile otherwise. */
-
-    private fun gateFor(peer: String): DexRevealGate =
-        gateOf(core.cachedContact(peer), prefs.prefs.value.dex.coverRevealGate)
-
-    private fun gateOf(contact: Contact?, fallback: CoverRevealGate): DexRevealGate {
-        // a browser can never answer the phone's lock, so DEVICE resolves to ASK for Dex
-        return when (CoverGates.effective(contact?.privacy?.revealGate, fallback, canUseDeviceAuth = false)) {
-            CoverRevealGate.TAP -> DexRevealGate.TAP
-            CoverRevealGate.ASK -> DexRevealGate.ASK
-            CoverRevealGate.CODE -> DexRevealGate.CODE
-            CoverRevealGate.DEVICE -> DexRevealGate.DEVICE
-        }
+    private fun refuse(reason: String?) {
+        if (reason != null) throw DexException(DexFailure.REFUSED, reason)
     }
 
-    private fun Contact.toContact(): DexContact = DexContact(
+    private fun isWithheld(message: ChatMessage): Boolean = DexCoverRules.isWithheld(message.isCovered, gateFor(message.peerIp))
+
+    private fun ContactPrivacyPrefs.toWire() = DexContactPrivacy(sendReadReceipts, sendTypingIndicators, blockScreenshots, revealGate?.toWire())
+
+    private fun ContactNotificationPrefs.toWire() = DexContactNotifications(useGlobal, messages, preview, sound, vibrate, popup, reactions, calls)
+
+    private fun gateFor(peer: String): DexRevealGate =
+        DexProfiles.gate(core.cachedContact(peer)?.privacy?.revealGate, prefs.prefs.value.dex.coverRevealGate)
+
+    private fun Contact.toContact(dexGate: CoverRevealGate): DexContact = DexContact(
         ip = ip,
         label = ContactLabels.chatLabel(this),
         name = name,
+        contactLabel = ContactLabels.contactLabel(this),
+        privacy = privacy.toWire(),
+        notifications = notifications?.toWire(),
         nickname = nickname,
         notes = notes,
         isBlocked = isBlocked,
@@ -565,7 +537,7 @@ class DexBackendAdapter(
         muteUntil = muteUntil,
         addedAt = addedAt,
         lastSeenAt = lastSeenAt,
-        revealGate = gateOf(this, prefs.prefs.value.app.coverRevealGate),
+        revealGate = DexProfiles.gate(privacy.revealGate, dexGate),
         disappearSeconds = disappearSeconds,
     )
 
@@ -588,10 +560,11 @@ class DexBackendAdapter(
     private fun ChatView.toView(peer: String, progress: Map<String, Double>, queue: PeerQueueState?, gate: CoverRevealGate): DexChatView {
         val contact = this.contact ?: core.cachedContact(peer) ?: Contact(ip = peer, name = peer, addedAt = 0)
         val label = ContactLabels.chatLabel(contact)
+        val wire = contact.toContact(gate)
         return DexChatView(
             peer = peer,
-            contact = contact.toContact(),
-            messages = messages.map { it.toMessage(actions[it.id].orEmpty(), replySources[it.replyToId], progress, cancelledByMe, queue, label) },
+            contact = wire,
+            messages = messages.map { DexCoverRules.shown(it.toMessage(actions[it.id].orEmpty(), replySources[it.replyToId], progress, cancelledByMe, queue, label), wire.revealGate) },
             hasMore = messages.size >= CoreClient.CHAT_HEAD_LIMIT,
             freeBytes = files.freeBytes(),
         )
@@ -711,139 +684,11 @@ class DexBackendAdapter(
 
     // --- settings mapping --------------------------------------------------------------------------
 
-    private fun ThemeMode.toWire(): DexThemeMode = when (this) {
-        ThemeMode.SYSTEM -> DexThemeMode.SYSTEM
-        ThemeMode.LIGHT -> DexThemeMode.LIGHT
-        ThemeMode.DARK -> DexThemeMode.DARK
-    }
-
-    private fun ChatTextSize.toWire(): DexTextSize = when (this) {
-        ChatTextSize.SMALL -> DexTextSize.SMALL
-        ChatTextSize.MEDIUM -> DexTextSize.MEDIUM
-        ChatTextSize.LARGE -> DexTextSize.LARGE
-    }
-
-    private fun MessageDensity.toWire(): DexDensity = when (this) {
-        MessageDensity.COMFORTABLE -> DexDensity.COMFORTABLE
-        MessageDensity.COMPACT -> DexDensity.COMPACT
-    }
-
-    private fun Prefs.toSettings(): DexSettings = DexSettings(
-        themeMode = app.themeMode.toWire(),
-        colorTheme = app.colorTheme,
-        customAccent = app.customAccent,
-        chatTextSize = app.chatTextSize.toWire(),
-        messageDensity = app.messageDensity.toWire(),
-        isEnterToSend = app.isEnterToSend,
-        isVideoSpeakerDefault = app.isVideoSpeakerDefault,
-        isScreenshotBlocked = core.isScreenshotBlocked,
-        isBackgroundConnectionEnabled = core.isBackgroundConnectionEnabled,
-        isStartOnBootEnabled = core.isStartOnBootEnabled,
-        notifications = DexNotifications(
-            messages = core.notifications.messages.let {
-                DexMessageNotifications(app.notificationsEnabled, it.showSender, app.notificationPreview, app.notificationSound, it.vibrate, it.popup, it.reactions)
-            },
-            calls = core.notifications.calls.let { DexCallNotifications(it.ring, it.vibrate, it.missedNotification) },
-            inApp = DexInAppNotifications(core.notifications.inApp.vibrate),
-            quietHours = core.notifications.quietHours.let {
-                DexQuietHours(it.enabled, it.fromHour, it.fromMinute, it.toHour, it.toMinute)
-            },
-        ),
-        sendReadReceipts = app.sendReadReceipts,
-        sendTypingIndicators = app.sendTypingIndicators,
-        presence = DexPresencePrefs(core.presence.isShared, core.presence.pauseMinutes, core.presence.pausedUntil),
-        updates = DexUpdatePrefs(core.updates.isDailyCheckEnabled, core.updates.lastCheckedAt, core.updates.latestVersion),
-        nebulaLogLevel = if (core.nebulaLogLevel == NebulaLogLevel.DEBUG) DexLogLevel.DEBUG else DexLogLevel.INFO,
-        isDeveloperMode = core.isDeveloperMode,
-        coverRevealGate = app.coverRevealGate.toWire(),
-        autoCleanOrphans = core.autoCleanOrphans,
-        quickReactions = core.quickReactions,
-        recentReactions = core.recentReactions,
-        isAppLockEnabled = core.isAppLockEnabled,
-        appLockAfterSec = core.appLockAfterSec,
-        dexUsername = server.username,
-        dexMaxClients = server.maxClients,
-        dexPort = server.port,
-        dexProfile = dex.toWire(),
-    )
-
-    private fun DexProfilePrefs.toWire(): DexProfile = DexProfile(
-        themeMode = themeMode?.toWire(),
-        colorTheme = colorTheme,
-        customAccent = customAccent,
-        chatTextSize = chatTextSize?.toWire(),
-        messageDensity = messageDensity?.toWire(),
-        isEnterToSend = isEnterToSend,
-        notificationsEnabled = notificationsEnabled,
-        notificationPreview = notificationPreview,
-        notificationSound = notificationSound,
-    )
-
-    private fun DexProfile.toCore(): DexProfilePrefs = DexProfilePrefs(
-        themeMode = themeMode?.toCore(),
-        colorTheme = colorTheme?.trim()?.takeIf { it.isNotEmpty() && it.length <= MAX_THEME_CHARS },
-        customAccent = customAccent?.takeIf { ACCENT.matches(it) },
-        chatTextSize = chatTextSize?.toCore(),
-        messageDensity = messageDensity?.toCore(),
-        isEnterToSend = isEnterToSend,
-        notificationsEnabled = notificationsEnabled,
-        notificationPreview = notificationPreview,
-        notificationSound = notificationSound,
-    )
-
-    private fun DexNotifications.toCore(): NotificationPrefs = NotificationPrefs(
-        messages = MessageNotificationPrefs(messages.enabled, messages.showSender, messages.preview, messages.sound, messages.vibrate, messages.popup, messages.reactions),
-        calls = CallNotificationPrefs(calls.ring, calls.vibrate, calls.missedNotification),
-        inApp = InAppNotificationPrefs(inApp.vibrate),
-        quietHours = QuietHours(
-            enabled = quietHours.enabled,
-            fromHour = quietHours.fromHour.coerceIn(0, 23),
-            fromMinute = quietHours.fromMinute.coerceIn(0, 59),
-            toHour = quietHours.toHour.coerceIn(0, 23),
-            toMinute = quietHours.toMinute.coerceIn(0, 59),
-        ),
-    )
-
-    private fun DexThemeMode.toCore(): ThemeMode = when (this) {
-        DexThemeMode.SYSTEM -> ThemeMode.SYSTEM
-        DexThemeMode.LIGHT -> ThemeMode.LIGHT
-        DexThemeMode.DARK -> ThemeMode.DARK
-    }
-
-    private fun DexTextSize.toCore(): ChatTextSize = when (this) {
-        DexTextSize.SMALL -> ChatTextSize.SMALL
-        DexTextSize.MEDIUM -> ChatTextSize.MEDIUM
-        DexTextSize.LARGE -> ChatTextSize.LARGE
-    }
-
-    private fun DexDensity.toCore(): MessageDensity = when (this) {
-        DexDensity.COMFORTABLE -> MessageDensity.COMFORTABLE
-        DexDensity.COMPACT -> MessageDensity.COMPACT
-    }
-
-    private fun DexLogLevel.toCore(): NebulaLogLevel = if (this == DexLogLevel.DEBUG) NebulaLogLevel.DEBUG else NebulaLogLevel.INFO
-
-    private fun DexRevealGate.toCore(): CoverRevealGate = when (this) {
-        DexRevealGate.TAP -> CoverRevealGate.TAP
-        DexRevealGate.ASK -> CoverRevealGate.ASK
-        DexRevealGate.CODE -> CoverRevealGate.CODE
-        DexRevealGate.DEVICE -> CoverRevealGate.DEVICE
-    }
-
-    private fun CoverRevealGate.toWire(): DexRevealGate = when (this) {
-        CoverRevealGate.TAP -> DexRevealGate.TAP
-        CoverRevealGate.ASK -> DexRevealGate.ASK
-        CoverRevealGate.CODE -> DexRevealGate.CODE
-        CoverRevealGate.DEVICE -> DexRevealGate.DEVICE
-    }
-
     private fun lighthouseStatus(isRunning: Boolean, hostmap: List<HostmapEntry>): String = when {
         !isRunning -> "Tunnel off"
         hostmap.any { it.isLighthouse } -> "Reachable (tunnel established)"
         else -> "Not reached"
     }
-
-    private fun isEmoji(value: String): Boolean = value.isNotEmpty() && value.length <= MAX_EMOJI_CHARS
 
     /** Emits at once and then on a cadence, only while something collects it. */
     private fun ticks(everyMs: Long): Flow<Unit> = flow {
@@ -855,9 +700,6 @@ class DexBackendAdapter(
 
     private companion object {
         const val DEFAULT_MIME = "application/octet-stream"
-        const val MAX_EMOJI_CHARS = 16
-        const val MAX_THEME_CHARS = 32
-        const val MAX_LOCK_DELAY_SEC = 60 * 60
         const val CONTACT_CALL_LOGS = 30
         const val LOG_TAIL_BYTES = 24 * 1024
         /** the certificate and the ports change only at setup, so this is a long safety net */
@@ -865,6 +707,5 @@ class DexBackendAdapter(
         const val NETWORK_POLL_MS = 5_000L
         const val STORAGE_POLL_MS = 30_000L
         const val DIAGNOSTICS_POLL_MS = 10_000L
-        val ACCENT = Regex("#[0-9a-fA-F]{6}")
     }
 }

@@ -106,6 +106,12 @@ internal object Limits {
     /** Headroom kept free when deciding whether a file fits, so accepting one cannot fill the device. */
     const val ATT_SPACE_RESERVE = 64L * 1024 * 1024
 
+    /** A peer's attachment name as stored: a file name, not a paragraph, and short enough for any header or row. */
+    const val MAX_ATTACHMENT_NAME_CHARS = 255
+
+    /** A peer's declared media type as stored; RFC 6838 caps each half at 127. */
+    const val MAX_ATTACHMENT_MIME_CHARS = 127
+
     /** Reassemblies in flight at once: each costs a file handle and a little metadata. */
     const val MAX_INCOMING_TRANSFERS = 8
 

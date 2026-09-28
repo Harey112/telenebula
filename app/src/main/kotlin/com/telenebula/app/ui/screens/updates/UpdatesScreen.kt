@@ -36,11 +36,11 @@ fun UpdatesScreen(viewModel: UpdatesViewModel) {
             state.latestVersion?.let { v -> row { InfoField("Latest release", v, valueColor = if (state.isUpdateAvailable) colors.accent else colors.success) } }
         }
         if (state.isUpdateAvailable) {
-            Section(title = "Update available", footnote = "The APK is fetched from the GitHub release for this device and handed to Android's installer. Your data stays.") {
+            Section(title = "Update available", help = "The APK is fetched from the GitHub release for this device and handed to Android's installer. Your data stays.") {
                 row { UpdateAction(state, viewModel::downloadAndInstall) }
             }
         }
-        Section(title = "Checking", footnote = "Releases are published on GitHub. A daily check runs while the app is alive and notifies you once per new release.") {
+        Section(title = "Checking", help = "Releases are published on GitHub. A daily check runs while the app is alive and notifies you once per new release.") {
             row { SwitchRow(TnIcon.CLOCK, "Check daily", state.isDailyCheckEnabled, viewModel::toggleDailyCheck, subtitle = "Last checked: ${state.lastCheckedText}") }
             row { SettingRow(TnIcon.RETRY, "Check now", subtitle = state.lastError?.let { "Last check failed: $it" } ?: "Compares this build with the newest release", onClick = viewModel::checkForUpdates) }
             row { SettingRow(TnIcon.LINK, "Open the releases page", onClick = viewModel::openReleases) }

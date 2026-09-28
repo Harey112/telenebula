@@ -33,6 +33,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.telenebula.app.ui.fragments.HelpButton
 import com.telenebula.app.ui.fragments.PrimaryButton
 import com.telenebula.app.ui.fragments.ScannerView
 import com.telenebula.app.ui.fragments.Screen
@@ -52,7 +53,7 @@ fun NewContactScreen(viewModel: NewContactViewModel) {
             Field(label = "Nickname (optional)") {
                 PlainInput(state.nickname, viewModel::setNickname, placeholder = "What you call them", label = "Nickname")
             }
-            Field(label = "IPv6 number (required)") {
+            Field(label = "IPv6 number (required)", help = "The contact's nebula IPv6 is their number. Their username appears automatically once they send you something.") {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TnSpace.sm)) {
                     PlainInput(state.ip, viewModel::setIp, placeholder = "fd00:1234:5678::3", label = "IPv6 number", isMono = true, modifier = Modifier.weight(1f))
                     Box(
@@ -70,7 +71,6 @@ fun NewContactScreen(viewModel: NewContactViewModel) {
         if (state.isScannerOpen) ScannerPanel(state, viewModel)
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = TnSpace.lg).padding(top = TnSpace.md), verticalArrangement = Arrangement.spacedBy(TnSpace.md)) {
             if (state.scannedName.isNotEmpty()) Text("Username from QR: @${state.scannedName}", style = TnType.small.copy(fontFamily = FontFamily.Monospace), color = colors.success)
-            Text("The contact's nebula IPv6 is their number. Their username appears automatically once they send you something.", style = TnType.caption, color = colors.textMuted, modifier = Modifier.padding(horizontal = TnSpace.xs))
             Field(label = null) {
                 PlainInput(state.notes, viewModel::setNotes, placeholder = "Notes (optional)", label = "Notes", isMultiline = true)
             }
@@ -80,7 +80,7 @@ fun NewContactScreen(viewModel: NewContactViewModel) {
 }
 
 @Composable
-private fun Field(label: String?, content: @Composable () -> Unit) {
+private fun Field(label: String?, help: String? = null, content: @Composable () -> Unit) {
     val colors = TnTheme.colors
     Column(
         modifier = Modifier
@@ -89,7 +89,12 @@ private fun Field(label: String?, content: @Composable () -> Unit) {
             .background(colors.surface)
             .padding(horizontal = TnSpace.lg, vertical = TnSpace.sm),
     ) {
-        if (label != null) Text(label, style = TnType.caption.copy(fontWeight = FontWeight.Medium), color = colors.accent)
+        if (label != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(label, style = TnType.caption.copy(fontWeight = FontWeight.Medium), color = colors.accent)
+                if (help != null) HelpButton(label, help)
+            }
+        }
         content()
     }
 }

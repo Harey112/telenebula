@@ -13,8 +13,8 @@ import com.telenebula.app.ui.icons.TnIcon
 fun CallPrefsScreen(viewModel: CallPrefsViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     Screen(title = "Calls", onBack = viewModel::goBack) {
-        Section(footnote = "Ringing, vibration and missed-call alerts live under Notifications and sounds.") {
-            row { SwitchRow(TnIcon.SPEAKER, "Loudspeaker on video calls", state.isVideoSpeakerDefault, viewModel::toggleVideoSpeakerDefault, subtitle = "Start video calls with the speaker on") }
+        Section(help = "Ringing, vibration and missed-call alerts are under Notifications and sounds.") {
+            row { SwitchRow(TnIcon.SPEAKER, "Loudspeaker on video calls", state.isVideoSpeakerDefault, viewModel::toggleVideoSpeakerDefault) }
             row {
                 SettingRow(
                     TnIcon.VIDEO,

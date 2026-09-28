@@ -216,15 +216,17 @@ internal class InboundDispatcher(private val engine: Engine) {
         var kind = MessageKind.TEXT
         val inline = envelope.attachment
         if (inline != null) {
+            val name = AttachmentMeta.name(inline.name)
+            val mime = AttachmentMeta.mime(inline.mime)
             val path = runCatching {
-                engine.attachments.writeInlineAttachment(envelope.id, inline.name, inline.dataB64)
+                engine.attachments.writeInlineAttachment(envelope.id, name, inline.dataB64)
             }.getOrNull()
             // out of space or a bad payload — keep the message as text only
             if (path != null) {
-                kind = Wire.kindForMime(inline.mime)
+                kind = Wire.kindForMime(mime)
                 attachment = MessageAttachment(
-                    name = inline.name,
-                    mime = inline.mime,
+                    name = name,
+                    mime = mime,
                     size = inline.size,
                     uri = path,
                 )

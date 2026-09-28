@@ -41,7 +41,7 @@ fun NetworkScreen(viewModel: NetworkViewModel) {
             row { InfoField("Tunnel uptime", s.tunnelUptime) }
             row { InfoField("Messaging engine uptime", s.engineUptime) }
             row { InfoField("Peers with a live message link", s.connectedCount.toString()) }
-            row { SwitchRow(TnIcon.RETRY, "Start when the phone starts", s.isStartOnBoot, viewModel::toggleStartOnBoot, subtitle = "Also after an update; the tunnel connects on its own") }
+            row { SwitchRow(TnIcon.RETRY, "Start when the phone starts", s.isStartOnBoot, viewModel::toggleStartOnBoot, help = "Also after an app update, so the tunnel connects by itself.") }
         }
         Section(title = "My node") {
             row { InfoField("Node ID (certificate name)", "@${s.username}", isMono = true) }
@@ -54,7 +54,7 @@ fun NetworkScreen(viewModel: NetworkViewModel) {
                 SettingRow(
                     TnIcon.SHIELD,
                     s.lighthouseIp.ifEmpty { "Not configured" },
-                    subtitle = "${s.lighthouseUnderlay} · ${s.lighthouseStatus}",
+                    subtitle = s.lighthouseDetail,
                     onClick = viewModel::openLighthouse,
                 )
             }
@@ -83,11 +83,11 @@ fun NetworkScreen(viewModel: NetworkViewModel) {
             row { InfoField("Outbox", "${s.pendingActions} pending · ${s.failedActions} failed") }
         }
         Section(title = "Advanced") {
-            row { SwitchRow(TnIcon.SETTINGS, "Developer mode", s.isDeveloperMode, viewModel::toggleDeveloperMode, subtitle = "Show firewall, handshakes and tunnel controls") }
+            row { SwitchRow(TnIcon.SETTINGS, "Developer mode", s.isDeveloperMode, viewModel::toggleDeveloperMode, help = "Shows verbose logging, a reconnect button, a link to the nebula log and the firewall rules in effect. Verbose logging writes debug detail to the nebula log; a running tunnel reloads to apply it.") }
             if (s.isDeveloperMode) {
-                row { SwitchRow(TnIcon.LIST, "Verbose nebula logging", s.isVerboseLogging, viewModel::toggleVerboseLogging, subtitle = "debug level, applied live") }
-                row { SettingRow(TnIcon.RETRY, "Reconnect tunnel", subtitle = "Stop and start nebula", onClick = viewModel::reconnectTunnel) }
-                row { SettingRow(TnIcon.FILE, "Nebula log", subtitle = "In Diagnostics", onClick = viewModel::openDiagnostics) }
+                row { SwitchRow(TnIcon.LIST, "Verbose nebula logging", s.isVerboseLogging, viewModel::toggleVerboseLogging) }
+                row { SettingRow(TnIcon.RETRY, "Reconnect tunnel", onClick = viewModel::reconnectTunnel) }
+                row { SettingRow(TnIcon.FILE, "Nebula log", onClick = viewModel::openDiagnostics) }
             }
         }
         if (s.isDeveloperMode) {

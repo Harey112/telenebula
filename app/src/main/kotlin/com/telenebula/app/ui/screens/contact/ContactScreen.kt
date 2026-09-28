@@ -53,17 +53,16 @@ fun ContactScreen(viewModel: ContactViewModel) {
         }
         CallsSection(state, viewModel)
         AdvancedSection(state, viewModel)
-        Section(title = "Danger zone") {
+        Section(title = "Danger zone", help = "Block drops their messages and calls. Delete contact removes the contact, every message with them and their call history from this phone.") {
             row {
                 SettingRow(
                     TnIcon.BLOCK,
                     if (state.isBlocked) "Unblock" else "Block",
-                    subtitle = if (state.isBlocked) "Messages and calls are dropped" else "Drop their messages and calls",
                     onClick = viewModel::toggleBlock,
                     tone = if (state.isBlocked) RowTone.DEFAULT else RowTone.DANGER,
                 )
             }
-            row { SettingRow(TnIcon.TRASH, "Delete contact", subtitle = "Removes the contact and the chat", onClick = viewModel::confirmDelete, tone = RowTone.DANGER) }
+            row { SettingRow(TnIcon.TRASH, "Delete contact", onClick = viewModel::confirmDelete, tone = RowTone.DANGER) }
         }
     }
     val edit = state.edit
@@ -118,7 +117,7 @@ private fun CallsSection(state: ContactUiState, actions: ContactActions) {
     Section(title = "Calls") {
         if (state.callLogs.isEmpty()) row { Text("No calls yet.", style = TnType.body, color = TnTheme.colors.textMuted, modifier = Modifier.padding(TnSpace.lg)) }
         for (log in state.callLogs) row { CallLogRow(log) }
-        if (state.hasMoreCalls) row { SettingRow(TnIcon.CHEVRON_RIGHT, "Show more", subtitle = "Every call with this contact", onClick = actions::openAllCalls) }
+        if (state.hasMoreCalls) row { SettingRow(TnIcon.CHEVRON_RIGHT, "Show more", onClick = actions::openAllCalls) }
     }
 }
 
@@ -165,7 +164,7 @@ private fun AdvancedSection(state: ContactUiState, actions: ContactActions) {
                 },
             )
         }
-        row { SettingRow(TnIcon.SHIELD, "Reset tunnel", subtitle = "Drop the nebula tunnel to this peer and re-handshake", onClick = actions::resetTunnel) }
+        row { SettingRow(TnIcon.SHIELD, "Reset tunnel", help = "Closes the nebula tunnel to this peer; it handshakes again with the next message or call.", onClick = actions::resetTunnel) }
     }
     Section(title = "Security") {
         row { InfoField("Identity", "Authenticated by your nebula CA (Noise IK, mutual certificates)") }

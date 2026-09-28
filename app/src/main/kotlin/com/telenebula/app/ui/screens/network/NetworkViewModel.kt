@@ -1,5 +1,10 @@
 package com.telenebula.app.ui.screens.network
 
+import com.telenebula.core.model.FirewallRule
+import com.telenebula.core.model.FirewallProto
+import com.telenebula.core.model.NebulaFirewall
+import com.telenebula.core.model.RequiredRules
+import com.telenebula.core.nebula.NebulaConfigRepository
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.ViewModel
@@ -63,6 +68,7 @@ data class NetworkUiState(
     val isVerboseLogging: Boolean = false,
     val isStartOnBoot: Boolean = true,
     val firewallRules: List<String> = emptyList(),
+    val lighthouseDetail: String = "",
 )
 
 /** hostmap + core stats are snapshots: taken on open, on Refresh, on return to the foreground and on every db change */
@@ -81,6 +87,7 @@ class NetworkViewModel(
     private val prefs: PrefsRepository,
     private val notices: NoticeCenter,
     private val navigator: Navigator,
+    private val nebulaConfig: NebulaConfigRepository,
 ) : ViewModel() {
     private val manual = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val foreground = ProcessLifecycleOwner.get().lifecycle.currentStateFlow
@@ -125,9 +132,10 @@ class NetworkViewModel(
             }
             .toList()
         val lighthouse = profile?.lighthouses?.firstOrNull()
+        // the status is read from the same lighthouse the row names, not from whichever one answered first
         val lighthouseStatus = when {
             !isRunning -> "Tunnel off"
-            else -> snap.hostmap.firstOrNull { it.isLighthouse }
+            else -> snap.hostmap.firstOrNull { it.isLighthouse && it.vpnIp == lighthouse?.nebulaIp }
                 ?.let { "Connected via ${it.currentRemote ?: it.remoteAddrs.firstOrNull() ?: "unknown endpoint"}" }
                 ?: "Not reached yet"
         }
@@ -152,6 +160,7 @@ class NetworkViewModel(
             lighthouseIp = lighthouse?.nebulaIp ?: "",
             lighthouseUnderlay = lighthouse?.underlay ?: "",
             lighthouseStatus = lighthouseStatus,
+            lighthouseDetail = listOfNotNull(lighthouse?.underlay?.takeIf { it.isNotBlank() }, lighthouseStatus).joinToString(" · "),
             relayStatus = relayStatus,
             peers = peers,
             pendingHandshakes = snap.pending,
@@ -162,12 +171,7 @@ class NetworkViewModel(
             isDeveloperMode = p.core.isDeveloperMode,
             isVerboseLogging = p.core.nebulaLogLevel == NebulaLogLevel.DEBUG,
             isStartOnBoot = p.core.isStartOnBootEnabled,
-            firewallRules = listOf(
-                "inbound  icmp any        ← any",
-                "inbound  tcp  $msgPort       ← any (messaging)",
-                "inbound  udp  any        ← any (WebRTC media)",
-                "outbound any  any        → any",
-            ),
+            firewallRules = firewallLines(nebulaConfig.requiredRules(msgPort), nebula.firewall),
         )
     }
 
@@ -215,4 +219,14 @@ class NetworkViewModel(
         /** nebula needs a moment to release the UDP socket before a fresh start binds it */
         const val RESTART_GAP_MS = 800L
     }
+}
+
+/** The rules the tunnel runs with, as the renderer applies them: the app's own first, then the user's. */
+internal fun firewallLines(required: RequiredRules, firewall: NebulaFirewall): List<String> {
+    fun proto(p: FirewallProto) = p.name.lowercase()
+    fun user(direction: String, peer: String, r: FirewallRule) = "$direction ${proto(r.proto)} ${r.port}  $peer ${r.match.name.lowercase()} ${r.value}"
+    return required.inbound.map { "inbound ${proto(it.proto)} ${it.port}  from any  (${it.reason})" } +
+        required.outbound.map { "outbound ${proto(it.proto)} ${it.port}  to any  (${it.reason})" } +
+        firewall.inbound.map { user("inbound", "from", it) } +
+        firewall.outbound.map { user("outbound", "to", it) }
 }

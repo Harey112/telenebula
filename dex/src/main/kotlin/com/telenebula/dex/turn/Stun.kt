@@ -15,6 +15,8 @@ object Stun {
     const val HEADER_BYTES = 20
     const val MAGIC_COOKIE = 0x2112A442
     const val TRANSACTION_BYTES = 12
+    const val INTEGRITY_BYTES = 20
+    private const val FINGERPRINT_XOR = 0x5354554E
 
     const val METHOD_BINDING = 0x001
     const val METHOD_ALLOCATE = 0x003
@@ -65,7 +67,7 @@ object Stun {
         val isIndication: Boolean get() = cls == CLASS_INDICATION
     }
 
-    /** null when the bytes are not a well-formed STUN message; nothing is thrown for garbage. */
+    /** null for anything malformed; after MESSAGE-INTEGRITY only a matching FINGERPRINT may follow (RFC 5389 §15.4-15.5). */
     fun parse(bytes: ByteArray, length: Int): Message? {
         if (length < HEADER_BYTES || length > bytes.size) return null
         val buf = ByteBuffer.wrap(bytes, 0, length)
@@ -76,7 +78,10 @@ object Stun {
         if (buf.int != MAGIC_COOKIE) return null
         val transactionId = ByteArray(TRANSACTION_BYTES).also { buf.get(it) }
         val attributes = ArrayList<Attribute>()
+        var hasIntegrity = false
+        var fingerprintAt = -1
         while (buf.remaining() >= 4) {
+            val start = buf.position()
             val type = buf.short.toInt() and 0xFFFF
             val valueLength = buf.short.toInt() and 0xFFFF
             if (valueLength > buf.remaining()) return null
@@ -84,10 +89,32 @@ object Stun {
             val padding = (4 - valueLength % 4) % 4
             if (padding > buf.remaining()) return null
             buf.position(buf.position() + padding)
+            if (fingerprintAt >= 0) return null
+            when {
+                type == ATTR_FINGERPRINT -> {
+                    if (valueLength != 4) return null
+                    fingerprintAt = start
+                }
+                hasIntegrity -> return null
+                type == ATTR_MESSAGE_INTEGRITY -> {
+                    if (valueLength != INTEGRITY_BYTES) return null
+                    hasIntegrity = true
+                }
+            }
             attributes.add(Attribute(type, value))
         }
         if (buf.hasRemaining()) return null
+        if (fingerprintAt >= 0 && !isFingerprintValid(bytes, fingerprintAt)) return null
         return Message(methodOf(typeField), classOf(typeField), transactionId, attributes)
+    }
+
+    private fun isFingerprintValid(bytes: ByteArray, at: Int): Boolean {
+        val input = bytes.copyOfRange(0, at)
+        val adjustedLength = at + 8 - HEADER_BYTES
+        input[2] = (adjustedLength shr 8).toByte()
+        input[3] = adjustedLength.toByte()
+        val expected = CRC32().apply { update(input) }.value.toInt() xor FINGERPRINT_XOR
+        return ByteBuffer.wrap(bytes, at + 4, 4).int == expected
     }
 
     /** Method and class are interleaved in the 14-bit type (RFC 5389 §6). */
@@ -135,7 +162,7 @@ object Stun {
             }
             if (withFingerprint) {
                 val crcInput = header(body.size + 8) + body
-                val crc = CRC32().apply { update(crcInput) }.value.toInt() xor 0x5354554E
+                val crc = CRC32().apply { update(crcInput) }.value.toInt() xor FINGERPRINT_XOR
                 body += encodeAttribute(ATTR_FINGERPRINT, ByteBuffer.allocate(4).putInt(crc).array())
             }
             return header(body.size) + body
@@ -223,7 +250,7 @@ object Stun {
             val valueLength = ((bytes[pos + 2].toInt() and 0xFF) shl 8) or (bytes[pos + 3].toInt() and 0xFF)
             val next = pos + 4 + (valueLength + 3) / 4 * 4
             if (next > length) return null
-            if (type == ATTR_MESSAGE_INTEGRITY) return if (valueLength == 20) next else null
+            if (type == ATTR_MESSAGE_INTEGRITY) return if (valueLength == INTEGRITY_BYTES) next else null
             pos = next
         }
         return null

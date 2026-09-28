@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.io.File
 
 plugins {
     alias(libs.plugins.android.application)
@@ -181,11 +182,8 @@ run {
 
 /** The Dex web frontend, built by :web, rides along as assets under `dex/`. */
 abstract class BundleDexWeb : DefaultTask() {
-    @get:InputFiles
-    abstract val bundle: ConfigurableFileCollection
-
-    @get:InputFiles
-    abstract val resources: ConfigurableFileCollection
+    @get:InputDirectory
+    abstract val sourceDir: DirectoryProperty
 
     /** the phone's own emoji catalogue, so the browser offers exactly what the phone does */
     @get:InputFiles
@@ -199,27 +197,53 @@ abstract class BundleDexWeb : DefaultTask() {
         val target = outputDir.get().asFile.resolve("dex")
         target.deleteRecursively()
         target.mkdirs()
-        val wanted = setOf("index.html", "app.css", "favicon.svg")
-        for (file in resources.asFileTree.files) if (file.name in wanted) file.copyTo(target.resolve(file.name), overwrite = true)
+        val source = sourceDir.get().asFile
+        val names = source.walkTopDown().filter { it.isFile && !it.relativeTo(source).path.replace(File.separatorChar, '/').startsWith(".vite/") }
+            .map { file ->
+                val name = file.relativeTo(source).path.replace(File.separatorChar, '/')
+                val destination = target.resolve(name)
+                destination.parentFile.mkdirs()
+                file.copyTo(destination, overwrite = true)
+                name
+            }.toMutableSet()
         for (file in shared.asFileTree.files) file.copyTo(target.resolve(file.name), overwrite = true)
-        // the webpack task reports its output directory; the bundle is one file inside it
-        val js = bundle.asFileTree.files.firstOrNull { it.name == "web.js" } ?: throw GradleException("The :web bundle (web.js) was not produced")
-        js.copyTo(target.resolve("web.js"), overwrite = true)
-        for (name in wanted + "web.js" + "emoji_catalog.json") if (!target.resolve(name).isFile) throw GradleException("Dex web asset missing: $name")
+        names += "emoji_catalog.json"
+        for (name in setOf("index.html", "favicon.svg", "emoji_catalog.json")) {
+            if (name !in names) throw GradleException("Dex web asset missing: $name")
+        }
+        val index = target.resolve("index.html").readText()
+        val references = Regex("""(?:src|href)="/([^"?#]+)""").findAll(index).map { it.groupValues[1] }.toSet()
+        for (name in references) if (name !in names) throw GradleException("Dex HTML refers to missing asset: $name")
+        if (names.none { it.matches(Regex("""assets/index-[\w-]+\.js""")) } ||
+            names.none { it.matches(Regex("""assets/index-[\w-]+\.css""")) }) {
+            throw GradleException("Dex Vite script or stylesheet missing")
+        }
+        target.resolve("dex-assets.txt").writeText(names.sorted().joinToString("\n", postfix = "\n"))
     }
 }
 
 val bundleDexWeb = tasks.register<BundleDexWeb>("bundleDexWeb") {
-    val webpack = project(":web").tasks.named("jsBrowserProductionWebpack")
-    dependsOn(webpack)
-    bundle.from(webpack.map { it.outputs.files })
-    resources.from(project(":web").layout.projectDirectory.dir("src/jsMain/resources"))
+    dependsOn(project(":web").tasks.named("webBuild"))
+    sourceDir.set(project(":web").layout.buildDirectory.dir("dist"))
     shared.from(layout.projectDirectory.file("src/main/assets/emoji_catalog.json"))
     outputDir.set(layout.buildDirectory.dir("generated/dexWeb"))
 }
 
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
+    dependsOn(project(":web").tasks.named("webCheck"))
+}
+
+/** Read when the build runs, not when it is configured: a reused configuration cache would otherwise stamp an old minute. */
+abstract class MinutesSince2024 : ValueSource<Int, ValueSourceParameters.None> {
+    override fun obtain(): Int = ((System.currentTimeMillis() - 1_704_067_200_000L) / 60_000L).toInt()
+}
+
+val buildVersionCode: Provider<Int> = providers.environmentVariable("TN_VERSION_CODE").map(String::toInt)
+    .orElse(providers.of(MinutesSince2024::class) {})
+
 androidComponents {
     onVariants { variant ->
         variant.sources.assets?.addGeneratedSourceDirectory(bundleDexWeb, BundleDexWeb::outputDir)
+        variant.outputs.forEach { it.versionCode.set(buildVersionCode) }
     }
 }

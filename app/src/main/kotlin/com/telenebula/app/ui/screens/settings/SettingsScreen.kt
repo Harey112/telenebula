@@ -35,33 +35,33 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
 private fun IdentitySection(state: SettingsUiState, actions: SettingsActions) {
     Section(title = "Identity") {
         row { SettingRow(TnIcon.ACCOUNT, "Account", subtitle = state.accountSubtitle, onClick = { actions.open(Account) }) }
-        row { SettingRow(TnIcon.LOCK, "Security & privacy", subtitle = "Read receipts, screenshots, blocked contacts", onClick = { actions.open(Privacy) }) }
+        row { SettingRow(TnIcon.LOCK, "Security & privacy", onClick = { actions.open(Privacy) }) }
     }
 }
 
 @Composable
 private fun ConnectionSection(actions: SettingsActions) {
     Section(title = "Connection") {
-        row { SettingRow(TnIcon.SHIELD, "Network", subtitle = "Node, peers, lighthouse, data usage, advanced", onClick = { actions.open(Network) }) }
-        row { SettingRow(TnIcon.RETRY, "Diagnostics", subtitle = "Connectivity tests, logs, export", onClick = { actions.open(Diagnostics) }) }
+        row { SettingRow(TnIcon.SHIELD, "Network", onClick = { actions.open(Network) }) }
+        row { SettingRow(TnIcon.RETRY, "Diagnostics", onClick = { actions.open(Diagnostics) }) }
     }
 }
 
 @Composable
 private fun PreferencesSection(actions: SettingsActions) {
     Section(title = "Preferences") {
-        row { SettingRow(TnIcon.EYE, "Appearance", subtitle = "Light or dark, colour theme", onClick = { actions.open(Appearance) }) }
-        row { SettingRow(TnIcon.CHATS, "Chats", subtitle = "Text size, density, sending", onClick = { actions.open(ChatPrefs) }) }
-        row { SettingRow(TnIcon.CALL, "Calls", subtitle = "Loudspeaker, floating window", onClick = { actions.open(CallPrefs) }) }
-        row { SettingRow(TnIcon.BELL, "Notifications and sounds", subtitle = "Messages, calls, quiet hours", onClick = { actions.open(NotificationPrefs) }) }
-        row { SettingRow(TnIcon.FOLDER, "Storage", subtitle = "Database, media, cleanup", onClick = { actions.open(Storage) }) }
+        row { SettingRow(TnIcon.EYE, "Appearance", onClick = { actions.open(Appearance) }) }
+        row { SettingRow(TnIcon.CHATS, "Chats", onClick = { actions.open(ChatPrefs) }) }
+        row { SettingRow(TnIcon.CALL, "Calls", onClick = { actions.open(CallPrefs) }) }
+        row { SettingRow(TnIcon.BELL, "Notifications and sounds", onClick = { actions.open(NotificationPrefs) }) }
+        row { SettingRow(TnIcon.FOLDER, "Storage", onClick = { actions.open(Storage) }) }
     }
 }
 
 @Composable
 private fun AppSection(state: SettingsUiState, actions: SettingsActions) {
     Section(title = "App") {
-        row { SettingRow(TnIcon.INFO, "About", subtitle = "Versions, documentation, licenses", onClick = { actions.open(About) }) }
+        row { SettingRow(TnIcon.INFO, "About", onClick = { actions.open(About) }) }
         row {
             SettingRow(
                 TnIcon.RETRY,

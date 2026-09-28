@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Generates app/src/main/kotlin/com/telenebula/app/ui/icons/TnIcons.kt from lucide SVGs.
+"""Generates the phone's TnIcons.kt and the Dex browser's Icons.kt from lucide SVGs.
 
-The vocabulary below is the RN app's fragments/Icon.tsx mapping (app name -> lucide icon).
+The vocabulary below is the RN app's fragments/Icon.tsx mapping (app name -> lucide icon); the
+browser gets the same names and paths, plus WEB_ONLY for what only a desktop window shows.
 Run: python3 scripts/gen-icons.py   (needs network; pins the lucide-static version below)
 """
-import re, sys, urllib.request, xml.etree.ElementTree as ET
+import json, re, sys, urllib.request, xml.etree.ElementTree as ET
 from pathlib import Path
 
 LUCIDE_VERSION = "0.545.0"
@@ -23,6 +24,11 @@ ICONS = {
     "pin": "pin", "pin_off": "pin-off", "archive": "archive", "unarchive": "archive-restore", "bell": "bell",
     "bell_off": "bell-off", "block": "ban", "mark_unread": "mail-open", "vibrate": "vibrate",
     "ping": "satellite-dish", "desktop": "monitor", "square_plus": "square-plus", "pause": "pause", "stop": "square",
+    "help": "circle-help",
+}
+# what only a browser window shows: the menu that opens the rail, sign-out, moving a call to the phone, a download, the delivered tick
+WEB_ONLY = {
+    "nav_menu": "menu", "logout": "log-out", "smartphone": "smartphone", "download": "download", "check_check": "check-check",
 }
 NS = "{http://www.w3.org/2000/svg}"
 
@@ -102,6 +108,43 @@ def main():
         joined = ", ".join('"' + p.replace('"', '\\"') + '"' for p in paths)
         lines.append(f"        arrayOf({joined}), // {n}")
     lines += ["    )", "}", ""]
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text("\n".join(lines))
+    print(f"wrote {dest}", file=sys.stderr)
+    web_entries = entries + [(n, l, to_paths(fetch(l))) for n, l in WEB_ONLY.items()]
+    write_solid(web_entries)
+
+def write_solid(entries):
+    dest = Path(__file__).resolve().parent.parent / "web/src/ui/icons.gen.tsx"
+    lines = [
+        "import { Index, type JSX } from \"solid-js\";",
+        "",
+        "const paths = {",
+    ]
+    for name, _, segments in entries:
+        lines.append(f"  {json.dumps(name)}: {json.dumps(segments)},")
+    lines += [
+        "} as const;",
+        "",
+        "export type IconName = keyof typeof paths;",
+        "",
+        "export interface IconProps {",
+        "  name: IconName;",
+        "  size?: number;",
+        "  class?: string;",
+        "}",
+        "",
+        "export function Icon(props: IconProps): JSX.Element {",
+        "  return (",
+        "    <svg xmlns=\"http://www.w3.org/2000/svg\" width={props.size ?? 24} height={props.size ?? 24}",
+        "      viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"",
+        "      stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" class={props.class}>",
+        "      <Index each={paths[props.name]}>{(path) => <path d={path()} />}</Index>",
+        "    </svg>",
+        "  );",
+        "}",
+        "",
+    ]
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text("\n".join(lines))
     print(f"wrote {dest}", file=sys.stderr)

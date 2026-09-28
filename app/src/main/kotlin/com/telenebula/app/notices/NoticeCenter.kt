@@ -20,6 +20,9 @@ class Prompt(
 
 class Success(val message: String, val onDismiss: (() -> Unit)? = null)
 
+/** An explanation opened from a "?" beside the label it explains. */
+data class Help(val topic: String, val text: String)
+
 /** Every notice in the app lives in one of these slots; the root host renders them stacked. */
 data class Notices(
     val errors: List<String> = emptyList(),
@@ -27,8 +30,9 @@ data class Notices(
     val success: Success? = null,
     val prompt: Prompt? = null,
     val loading: String? = null,
+    val help: Help? = null,
 ) {
-    val isEmpty: Boolean get() = errors.isEmpty() && warnings.isEmpty() && success == null && prompt == null && loading == null
+    val isEmpty: Boolean get() = errors.isEmpty() && warnings.isEmpty() && success == null && prompt == null && loading == null && help == null
 }
 
 /**
@@ -64,6 +68,10 @@ class NoticeCenter {
     fun setPrompt(prompt: Prompt?) = mutable.update { it.copy(prompt = prompt) }
 
     fun clearPrompt() = mutable.update { it.copy(prompt = null) }
+
+    fun showHelp(topic: String, text: String) = mutable.update { it.copy(help = Help(topic, text)) }
+
+    fun clearHelp() = mutable.update { it.copy(help = null) }
 
     fun setLoading(message: String?) = mutable.update { it.copy(loading = message) }
 

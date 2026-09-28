@@ -100,7 +100,7 @@ class HttpResponse(
         }
 
         /** `filename*=UTF-8''…` per RFC 6266/5987, so any name survives the header. */
-        fun contentDisposition(name: String, isInline: Boolean = true): String {
+        fun contentDisposition(name: String, isInline: Boolean): String {
             val encoded = URLEncoder.encode(name, "UTF-8").replace("+", "%20")
             return "${if (isInline) "inline" else "attachment"}; filename*=UTF-8''$encoded"
         }
@@ -109,9 +109,25 @@ class HttpResponse(
 
 /** Writes responses; every response carries the security headers and an exact `Content-Length`. */
 object HttpWriter {
-    private const val CSP = "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self' wss:; script-src 'self'; style-src 'self' 'unsafe-inline'"
+    /** Nothing but the page is a document, so everything else may do nothing at all if a browser opens it as one. */
+    const val INERT_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; sandbox"
+
+    private val TOKEN = Regex("[!#$%&'*+.^_`|~0-9A-Za-z-]+")
+
+    /** The page's own policy; [authority] was validated as the request's Host, so it may be named here. */
+    fun pageCsp(authority: Authority): String =
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; " +
+            "connect-src 'self' wss://${authority.text}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+
+    /** A header that could split the response is a bug upstream; it is refused here before a byte is written. */
+    fun requireSafeHeader(name: String, value: String) {
+        require(TOKEN.matches(name)) { "bad response header name" }
+        require(value.none { (it < ' ' && it != '\t') || it.code == 0x7F || it.code > 0xFF }) { "bad response header value for $name" }
+    }
 
     fun write(out: OutputStream, response: HttpResponse, isHead: Boolean, isKeepAlive: Boolean) {
+        response.contentType?.let { requireSafeHeader("Content-Type", it) }
+        for ((name, value) in response.headers) requireSafeHeader(name, value)
         val length = when (val b = response.body) {
             HttpBody.Empty -> 0L
             is HttpBody.Bytes -> b.bytes.size.toLong()
@@ -125,7 +141,9 @@ object HttpWriter {
         head.append("X-Content-Type-Options: nosniff\r\n")
         head.append("Referrer-Policy: no-referrer\r\n")
         head.append("X-Frame-Options: DENY\r\n")
-        head.append("Content-Security-Policy: ").append(CSP).append("\r\n")
+        head.append("Cross-Origin-Opener-Policy: same-origin\r\n")
+        head.append("Cross-Origin-Resource-Policy: same-origin\r\n")
+        if (response.headers.none { it.first.equals("Content-Security-Policy", ignoreCase = true) }) head.append("Content-Security-Policy: ").append(INERT_CSP).append("\r\n")
         if (response.headers.none { it.first.equals("Cache-Control", ignoreCase = true) }) head.append("Cache-Control: no-store\r\n")
         for ((name, value) in response.headers) head.append(name).append(": ").append(value).append("\r\n")
         head.append("\r\n")

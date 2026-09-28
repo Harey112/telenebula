@@ -56,10 +56,17 @@ private fun IconTile(icon: TnIcon, color: Color) {
 }
 
 @Composable
-private fun RowTexts(title: String, subtitle: String?, titleColor: Color, modifier: Modifier) {
+private fun RowTexts(title: String, subtitle: String?, titleColor: Color, modifier: Modifier, help: String? = null) {
     val colors = TnTheme.colors
     Column(modifier = modifier, verticalArrangement = Arrangement.Center) {
-        Text(title, style = TnType.body, color = titleColor)
+        if (help == null) {
+            Text(title, style = TnType.body, color = titleColor)
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = TnType.body, color = titleColor, modifier = Modifier.weight(1f, fill = false))
+                HelpButton(title, help)
+            }
+        }
         if (subtitle != null) Text(subtitle, style = TnType.small, color = colors.textMuted)
     }
 }
@@ -72,6 +79,7 @@ fun SettingRow(
     onClick: (() -> Unit)? = null,
     tone: RowTone = RowTone.DEFAULT,
     trailing: (@Composable () -> Unit)? = null,
+    help: String? = null,
 ) {
     val colors = TnTheme.colors
     val color = colors.toneColor(tone)
@@ -85,7 +93,7 @@ fun SettingRow(
         horizontalArrangement = Arrangement.spacedBy(TnSpace.md),
     ) {
         IconTile(icon, color)
-        RowTexts(title, subtitle, if (tone == RowTone.DANGER) colors.danger else colors.text, Modifier.weight(1f))
+        RowTexts(title, subtitle, if (tone == RowTone.DANGER) colors.danger else colors.text, Modifier.weight(1f), help)
         trailing?.invoke()
     }
 }
@@ -99,6 +107,7 @@ fun SwitchRow(
     subtitle: String? = null,
     tone: RowTone = RowTone.DEFAULT,
     isEnabled: Boolean = true,
+    help: String? = null,
 ) {
     val colors = TnTheme.colors
     val color = colors.toneColor(tone)
@@ -111,7 +120,7 @@ fun SwitchRow(
         horizontalArrangement = Arrangement.spacedBy(TnSpace.md),
     ) {
         IconTile(icon, color)
-        RowTexts(title, subtitle, colors.text, Modifier.weight(1f))
+        RowTexts(title, subtitle, colors.text, Modifier.weight(1f), help)
         Switch(
             checked = checked,
             onCheckedChange = { onToggle() },

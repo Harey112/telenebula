@@ -295,7 +295,7 @@ fun UnsafeRouteEditor(
                     TnTextField(route.mtu, { onUpdate(route.copy(mtu = it)) }, label = "MTU (empty = tunnel MTU)", isNumeric = true)
                     TnTextField(route.metric, { onUpdate(route.copy(metric = it)) }, label = "Metric (empty = 0)", error = errors[route.id], isNumeric = true)
                     Column(modifier = Modifier.bleed(TnSpace.md)) {
-                        SwitchRow(TnIcon.SETTINGS, "Install in the routing table", route.isInstalled, { onUpdate(route.copy(isInstalled = !route.isInstalled)) }, subtitle = "Off keeps the route in nebula only")
+                        SwitchRow(TnIcon.SETTINGS, "Install in the routing table", route.isInstalled, { onUpdate(route.copy(isInstalled = !route.isInstalled)) }, help = "Off keeps the route inside nebula instead of adding it to the phone's routing table.")
                     }
                 }
             }

@@ -35,17 +35,11 @@ fun NebulaAdvancedSettings() {
     val state by store.state.collectAsStateWithLifecycle()
     Collapsible(
         title = "Advanced nebula settings",
-        subtitle = "Every option of nebula's config.yml, with safe defaults",
+        help = "The nebula options the app does not manage itself, with safe defaults. Change them only when your network needs it; an invalid value is marked in red and not saved.",
         isOpen = state.isOpen,
         onToggle = store::toggleOpen,
         hasError = state.errors.isNotEmpty(),
     ) {
-        Text(
-            "Defaults follow the official nebula example. Change these only when your network needs it; a wrong value keeps the tunnel from starting and shows as an error.",
-            style = TnType.small,
-            color = TnTheme.colors.textMuted,
-            modifier = Modifier.padding(bottom = TnSpace.md),
-        )
         for (section in state.sections) {
             key(section.key) { NebulaSection(section, state, store) }
         }

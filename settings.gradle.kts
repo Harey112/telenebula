@@ -16,7 +16,7 @@ dependencyResolutionManagement {
             forRepository { maven { url = uri("vpn/local-maven") } }
             filter { includeGroup("net.defined") }
         }
-        // the Kotlin/JS toolchain for :web; declared here because project repositories are refused
+        // pinned Node for the Dex web build
         exclusiveContent {
             forRepository {
                 ivy("https://nodejs.org/dist") {
@@ -26,16 +26,6 @@ dependencyResolutionManagement {
                 }
             }
             filter { includeModule("org.nodejs", "node") }
-        }
-        exclusiveContent {
-            forRepository {
-                ivy("https://github.com/yarnpkg/yarn/releases/download") {
-                    name = "Yarn Distributions"
-                    patternLayout { artifact("v[revision]/[artifact](-v[revision]).[ext]") }
-                    metadataSources { artifact() }
-                }
-            }
-            filter { includeModule("com.yarnpkg", "yarn") }
         }
     }
 }

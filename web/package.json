@@ -1,0 +1,31 @@
+{
+  "name": "telenebula-dex-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . && node scripts/check-css.mjs",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run lint && npm run test",
+    "test:e2e": "npm run build && playwright test"
+  },
+  "dependencies": {
+    "solid-js": "1.9.15"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@solidjs/testing-library": "0.8.10",
+    "eslint": "10.11.0",
+    "eslint-plugin-solid": "0.18.0",
+    "jsdom": "30.1.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.1",
+    "vite": "8.3.0",
+    "vite-plugin-solid": "2.11.14",
+    "vitest": "5.0.1"
+  }
+}

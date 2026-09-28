@@ -153,7 +153,7 @@ class ModelJsonTest {
         assertEquals(22, prefs.core.notifications.quietHours.fromHour)
         assertTrue(prefs.app.notificationSound)
         assertEquals(Prefs.DEFAULT_QUICK_REACTIONS, prefs.core.quickReactions)
-        assertEquals(Prefs(), CoreJson.decodeFromString(Prefs.serializer(), """{"version":2}"""))
+        assertEquals(Prefs(), CoreJson.decodeFromString(Prefs.serializer(), """{"version":${Prefs.CURRENT_VERSION}}"""))
     }
 
     @Test

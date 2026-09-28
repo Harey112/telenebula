@@ -200,7 +200,7 @@ class WsAssembler(private val maxMessageBytes: Int = Limits.MAX_WS_MESSAGE_BYTES
     }
 }
 
-/** The RFC 6455 §4.2 opening handshake; the accept key on success, an [HttpError] otherwise. */
+/** The RFC 6455 §4.2 opening handshake; the accept key on success, an [HttpError] otherwise. Origin is [OriginPolicy]'s. */
 object WsHandshake {
     fun accept(request: HttpRequest): String {
         if (request.method != "GET") throw HttpError(405, "websocket needs GET")
@@ -215,14 +215,6 @@ object WsHandshake {
             throw HttpError(400, "bad websocket key")
         }
         if (decoded.size != 16) throw HttpError(400, "bad websocket key")
-        val origin = request.header("origin")
-        val host = request.header("host")
-        if (origin != null && host != null && !isSameHost(origin, host)) throw HttpError(403, "origin mismatch")
         return WsCodec.acceptKey(key)
-    }
-
-    private fun isSameHost(origin: String, host: String): Boolean {
-        val authority = origin.trim().substringAfter("://", "").substringBefore('/')
-        return authority.isNotEmpty() && authority.equals(host.trim(), ignoreCase = true)
     }
 }

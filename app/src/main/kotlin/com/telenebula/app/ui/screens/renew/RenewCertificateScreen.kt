@@ -36,7 +36,7 @@ fun RenewCertificateScreen(viewModel: RenewCertificateViewModel) {
     Screen(title = "Renew certificate", onBack = viewModel::goBack) {
         Section(
             title = "Current certificate",
-            footnote = "Upload the re-issued credentials for this device. Your contacts, chats and settings are kept; the tunnel restarts with the new certificate.",
+            help = "Upload the re-issued credentials for this device. Your contacts, chats and settings are kept; the tunnel restarts with the new certificate.",
         ) {
             row { InfoField("Username", "@${state.currentName}", isMono = true) }
             row { InfoField("Nebula IPv6", state.currentIp, isMono = true) }

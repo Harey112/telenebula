@@ -1,5 +1,7 @@
 package com.telenebula.dex
 
+import java.net.InetAddress
+
 /** A stored password: the algorithm named so a later build can verify what an earlier one wrote. */
 class PasswordHash(
     val algorithm: String = ALGORITHM,
@@ -19,7 +21,8 @@ class DexConfig(
     val maxClients: Int,
 )
 
-enum class DexFailure { CERTIFICATE, BIND, IO, PROTOCOL, AUTH, LIMIT }
+/** [REFUSED] is the phone's own answer to what a browser asked for; its message is written for the person. */
+enum class DexFailure { CERTIFICATE, BIND, IO, PROTOCOL, AUTH, LIMIT, REFUSED }
 
 class DexException(val kind: DexFailure, message: String, cause: Throwable? = null) : Exception(message, cause)
 
@@ -38,5 +41,9 @@ class TurnCredential(val username: String, val password: String)
 /** The relay a browser's call media rides over; the server only hands its address and a credential to the browser. */
 interface TurnAccess {
     val port: Int
-    fun issue(): TurnCredential
+
+    /** Good only for relaying to [peer], and only until [owner]'s credentials are revoked. */
+    fun issue(owner: String, peer: InetAddress): TurnCredential
+    fun revoke(owner: String)
+    fun revokeAll()
 }

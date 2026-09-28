@@ -1,6 +1,7 @@
 package com.telenebula.app.platform
 
 import java.net.Inet4Address
+import java.net.InetAddress
 import java.net.NetworkInterface
 import java.net.SocketException
 
@@ -31,6 +32,30 @@ object LanAddresses {
             }
         }
         return out.sortedBy { rank(it.interfaceName) }
+    }
+
+    /** Every address a browser may reach the phone at: the interfaces [list] offers, both families. */
+    fun localAddresses(): List<InetAddress> {
+        val interfaces = try {
+            NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
+        } catch (e: SocketException) {
+            return emptyList()
+        }
+        val out = ArrayList<InetAddress>()
+        for (nic in interfaces) {
+            val name = nic.name ?: continue
+            if (isExcluded(name)) continue
+            val isUp = try {
+                nic.isUp && !nic.isLoopback
+            } catch (e: SocketException) {
+                false
+            }
+            if (!isUp) continue
+            for (address in nic.inetAddresses.toList()) {
+                if (!address.isLoopbackAddress && !address.isAnyLocalAddress) out.add(address)
+            }
+        }
+        return out
     }
 
     /** The nebula tun, the cellular link and the VPN-ish interfaces are never a browser's way in. */

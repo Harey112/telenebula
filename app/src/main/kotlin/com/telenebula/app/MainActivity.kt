@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
+import com.telenebula.app.ui.fragments.LocalHelp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
@@ -36,7 +37,7 @@ class MainActivity : FragmentActivity() {
         }
         launchRequests.offer(intent)
         setContent {
-            CompositionLocalProvider(LocalAppGraph provides graph) {
+            CompositionLocalProvider(LocalAppGraph provides graph, LocalHelp provides graph.notices::showHelp) {
                 RootShell(activity = this)
             }
         }

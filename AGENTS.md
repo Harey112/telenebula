@@ -1,10 +1,13 @@
-# Agent Rules — TeleNebula (Kotlin + Jetpack Compose)
+# Agent Rules — TeleNebula (Kotlin + Jetpack Compose; SolidJS in web/)
 
 These rules are **mandatory**. Do not deviate without explicit user approval.
 
 The app is a pure Kotlin 2.4 / Jetpack Compose Android app, messaging core included. There is no
-Rust, no JavaScript, no React Native, no Expo anywhere in the tree, and no generated bindings.
-Versions live in `gradle/libs.versions.toml`; check them before assuming an API exists.
+Rust, no React Native, no Expo anywhere in the tree, and no generated bindings. JavaScript tooling
+exists in exactly one place: `web/`, the Dex browser frontend, written in TypeScript with SolidJS
+(§10). No other module may contain TypeScript, JavaScript, npm packages or a `package.json`.
+Versions live in `gradle/libs.versions.toml` (Android) and `web/package.json` (browser); check them
+before assuming an API exists.
 
 ---
 
@@ -67,7 +70,8 @@ calls/    com.telenebula.calls    WebRTC call engine (org.webrtc via stream-webr
 dex/      com.telenebula.dex      Dex: the HTTPS + WebSocket server the phone runs for the web frontend
                                   (http/, tls/ over the Android Keystore, auth/), the TURN relay (turn/)
                                   that carries browser media onto the overlay, the wire/ frames, Limits
-web/      com.telenebula.web      the Dex frontend: Kotlin/JS, plain DOM, bundled into app assets/dex/
+web/      (npm package)           the Dex frontend: TypeScript + SolidJS, built by Vite, bundled into
+                                  app assets/dex/ (§10)
 scripts/  build-nebula-aar.sh, gen-icons.py, gen-emoji-catalog.py
 ```
 
@@ -84,15 +88,19 @@ Rules:
   the restrictions put on it are only refused when a handshake is attempted: `:dex` therefore has
   `src/androidTest` (`./gradlew :dex:connectedDebugAndroidTest`, adding androidx.test as `:core`
   does), and a change to `DexTls` has to run there.
-- `:web` is Kotlin/JS with no npm dependencies: `web.js` plus `index.html`, `app.css` and `favicon.svg`
-  are copied into `assets/dex/` by `:app`'s `bundleDexWeb` task at build time and are never committed.
-  The browser is a frontend only; everything it shows or does happens on the phone through the wire.
-- Generated files are committed and never hand-edited: `app/…/ui/icons/TnIcons.kt`
-  (`scripts/gen-icons.py`), `app/src/main/assets/emoji_catalog.json` (`scripts/gen-emoji-catalog.py`).
+- `:web` is the one npm package in the tree (§10). Gradle downloads a pinned Node and runs its build,
+  so `./gradlew assembleDebug` needs no Node installed; its output (`index.html`, the hashed script
+  and stylesheet, `favicon.svg`) is copied into `assets/dex/` by `:app`'s `bundleDexWeb` task at
+  build time and is never committed. The browser is a frontend only; everything it shows or does
+  happens on the phone through the wire.
+- Generated files are committed and never hand-edited: `app/…/ui/icons/TnIcons.kt` and the browser's
+  `web/src/ui/icons.gen.tsx` (both `scripts/gen-icons.py`), `app/src/main/assets/emoji_catalog.json`
+  (`scripts/gen-emoji-catalog.py`).
 - Models that cross a real boundary (the wire, disk, a database column, the nebula config) are
   `@Serializable` data classes in `core/…/model`, encoded with the single `CoreJson` instance —
   or with the wire's own `FrameCodec.WireJson`, whose field rules the protocol fixes. The Dex wire
-  (`dex/…/wire/DexWire.kt`, `DexJson`) is the one other boundary; `web/…/wire` mirrors it field for field.
+  (`dex/…/wire/DexWire.kt`, `DexJson`) is the one other boundary; `web/src/wire/` mirrors it field for
+  field in TypeScript, and `WireContractTest` fails the build when the two differ.
 - **Inside the process there is no JSON.** Modules exchange Kotlin types; a screen, a view model
   or a store that encodes or parses JSON has invented a boundary that does not exist.
   `ArchitectureTest` enforces it.
@@ -224,6 +232,8 @@ easier to read.
 - [ ] A new case fits one of the §9 patterns, or the pattern is extended rather than bypassed.
 - [ ] After any change under `core/`: `./gradlew :core:testDebugUnitTest`, and the §8 rules hold.
 - [ ] After any change to the store's SQL or its driver: `./gradlew :core:connectedDebugAndroidTest`.
+- [ ] After any change under `web/`: `npm run check` there (types, lint, unit and component tests),
+      and `npm run test:e2e` for anything a person sees or touches (§10).
 
 ---
 
@@ -359,3 +369,104 @@ in one place; a view model never spells out `stateIn(..., WhileSubscribed(5_000)
 **Boundary helpers for text that leaves the process** (`QrPayloads`, `Endpoints`, `LogRedaction`).
 Parsing and formatting of a wire, QR or stored string is one pure object with a test, never
 inline in a view model.
+
+---
+
+## 10. Web Frontend Rules (`web/`) — TypeScript + SolidJS
+
+`web/` is the only place JavaScript tooling is allowed, and SolidJS is the only UI library. The
+browser is a thin frontend over the Dex wire: it renders what the phone sends and sends back what
+the person did. It owns no messaging logic, no storage beyond per-browser conveniences, and no rule
+the phone already enforces (the phone checks everything again; the browser only avoids offering
+what would be refused).
+
+### Toolchain and dependencies
+
+- TypeScript in `strict` mode with `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`; no
+  `any` (use `unknown` and narrow), no `@ts-ignore`, no non-null `!` outside tests.
+- Vite with `vite-plugin-solid`; `jsx: preserve`, `jsxImportSource: solid-js`. The output is plain
+  static files the phone serves under its CSP: no inline scripts, no `eval`, no `new Function`,
+  no runtime fetch of anything from another origin.
+- **Runtime dependencies: `solid-js` only.** No router (the app has one page and its own screen
+  state), no UI kit, no CSS-in-JS runtime, no state library. Dev dependencies are limited to the
+  build (vite, vite-plugin-solid, typescript), lint (eslint, typescript-eslint,
+  eslint-plugin-solid), tests (vitest, @solidjs/testing-library, jsdom, @playwright/test). Adding
+  any other package requires a written justification added to this section first.
+- Exact versions in `package.json`, the lockfile committed, installs with `npm ci`. Node is pinned
+  in `web/build.gradle.kts` and downloaded by Gradle from the repository `settings.gradle.kts` declares.
+
+### Layout
+
+```
+web/src/main.tsx        mounts <App/>; nothing else
+web/src/wire/           the Dex wire types and codec, mirroring DexWire.kt field for field
+web/src/net/            the socket (reconnect, ping) and the HTTP API (login, session, upload)
+web/src/store/          the one app store: createStore state, the frame reducer, the actions
+web/src/logic/          pure functions over wire and state types (rules, lists, formatting); no Solid
+web/src/ui/             components: ui/kit (buttons, rows, sections, popover, dialog), ui/<area>
+web/src/call/           WebRTC media for a call seat; web/src/media/ for recording
+web/test/               the mock phone and the Playwright specs
+```
+
+### Solid: how components are written
+
+- **A component runs once.** Its body sets things up; only JSX expressions, `createMemo` and
+  effects re-run. Never read a signal or store field at the top of a component body expecting it
+  to stay current, and never branch with an early `return` on reactive data: use `<Show>`,
+  `<Switch>`/`<Match>` in the JSX.
+- **Never destructure props** (it freezes them). Read `props.x` where it is used; use `splitProps`
+  to forward the rest and `mergeProps` for defaults.
+- **Derive, do not sync.** A value computable from state is a function (`() => a() + b()`) or a
+  `createMemo` when it is expensive or read in many places. `createEffect` that writes a signal
+  from other signals is a bug; effects exist only to reach outside Solid (the DOM API, the socket,
+  media devices, timers, storage), and each one that acquires something releases it in `onCleanup`.
+- **Lists use `<For>`** for objects (keyed by reference) and `<Index>` for primitives, never
+  `array.map` in JSX. Server snapshots are applied with `reconcile(…, { key: "id" })`, so a row
+  that did not change keeps its DOM node, its focus and its media element.
+- **State shape.** One `createStore` for what the phone sends and the screen state around it,
+  updated only through the store's actions (`setState` is not exported); `createSignal` for state
+  local to one component (an open menu, a draft). Sealed alternatives are discriminated unions
+  (`{ kind: "reply", … } | { kind: "edit", … }`), never several booleans that must agree.
+- **Context, not globals.** The store and the socket reach components through one context provided
+  by `<App/>`; no module-level mutable state outside `store/`.
+- **Components are small and typed.** One component per file when it is exported, props declared
+  as an interface, event props named `on…`, children typed `JSX.Element`. A component that grows
+  domain logic moves that logic to `logic/` and keeps only the rendering.
+- **Events.** Use Solid's `onClick`/`onInput` props; a handler that inspects `event.target` narrows
+  with `instanceof Element` (an SVG icon is an `Element`, not an `HTMLElement`). Outside-click and
+  Escape handling for menus and popovers lives once, in `ui/kit`, never per component.
+- **Overlays** (dialogs, prompts, menus, the lightbox, toasts) render through `<Portal>` from the
+  kit, trap focus while open, close on Escape and restore focus to what opened them.
+- **Refs and the DOM.** Use `ref` only to call a DOM API (focus, scroll, media, canvas); never write
+  the DOM by hand, never use `innerHTML` (text is always `textContent`/JSX), never
+  `document.querySelector` from a component.
+- **Async.** Socket frames go through the store's reducer; one-shot requests are async actions that
+  report failures as a toast. `createResource` is for data a component fetches itself (the emoji
+  catalogue); `<Suspense>`/`<ErrorBoundary>` wrap what can wait or fail, and nothing fails silently.
+
+### Styling and responsiveness
+
+- Plain CSS, one file per component area (`*.css` imported by the component), class names scoped
+  by a prefix per area; no inline `style` except values computed at runtime (a progress width, a
+  video aspect ratio).
+- Colours, spacing, radii and type sizes are CSS custom properties from `ui/theme.css`, mirroring
+  the app's tokens (§6); a hex colour anywhere else is a lint error. Light and dark come from the
+  same tokens.
+- **Component-level responsiveness uses container queries** (`container-type: inline-size` on the
+  pane, `@container` in the component), so a component adapts to the space it is given, not to the
+  window; media queries are only for the app shell and `(pointer: coarse)` / `(hover: none)`.
+- Every hover affordance has a touch equivalent; nothing is reachable only by hover.
+- Accessibility as §4: a role and a label on every interactive element, `aria-selected` on tabs,
+  keyboard reachable, visible focus, colour never the only signal.
+
+### Tests
+
+- `logic/` and the store reducer: vitest unit tests, no DOM.
+- Components: `@solidjs/testing-library` for behaviour (what opens, what is sent, what is shown).
+- **Rendering is only trusted once it has been seen.** `web/test/` runs the built bundle against a
+  mock phone that speaks the wire, in Playwright on Chromium, Firefox and WebKit, at 360, 768, 1024
+  and 1440 px wide, with real pointer and touch input (never `element.click()` from a script), and
+  compares screenshots of every screen against committed baselines. A UI change updates its
+  baselines in the same commit, after the new screenshots were looked at.
+- `npm run check` (tsc, eslint, vitest) runs in `testDebugUnitTest`'s CI job; `npm run test:e2e`
+  runs in CI on every change under `web/`.

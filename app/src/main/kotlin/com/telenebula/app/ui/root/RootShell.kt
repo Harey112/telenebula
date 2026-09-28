@@ -203,7 +203,7 @@ fun RootShell(activity: MainActivity) {
                             entry<Appearance> { AppearanceScreen(viewModel { AppearanceViewModel(graph.prefs, navigator) }) }
                             entry<Privacy> { PrivacyScreen(viewModel { PrivacyViewModel(graph.prefs, graph.core, graph.runtime, graph.appLock, navigator) }) }
                             entry<Blocked> { BlockedScreen(viewModel { BlockedViewModel(graph.core, navigator) }) }
-                            entry<Network> { NetworkScreen(viewModel { NetworkViewModel(graph.core, graph.vpn, graph.runtime, graph.prefs, graph.notices, navigator) }) }
+                            entry<Network> { NetworkScreen(viewModel { NetworkViewModel(graph.core, graph.vpn, graph.runtime, graph.prefs, graph.notices, navigator, graph.nebulaConfig) }) }
                             entry<Lighthouse> { LighthouseScreen(viewModel { LighthouseViewModel(graph.runtime, graph.identity, graph.nebulaDraft, graph.notices, navigator) }) }
                             entry<Diagnostics> {
                                 DiagnosticsScreen(viewModel { DiagnosticsViewModel(graph.core, graph.peerQueues, graph.vpn, graph.runtime, graph.callEngine, graph.attachments, graph.openWith, graph.notices, navigator) })

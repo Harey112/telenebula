@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.telenebula.app.ui.fragments.EndpointFields
+import com.telenebula.app.ui.fragments.HelpHeading
 import com.telenebula.app.ui.fragments.PrimaryButton
 import com.telenebula.app.ui.fragments.Screen
 import com.telenebula.app.ui.fragments.TnTextField
@@ -26,11 +27,10 @@ fun LighthouseScreen(viewModel: LighthouseViewModel) {
     val s by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = TnTheme.colors
     Screen(title = "Lighthouse", onBack = viewModel::goBack, hasKeyboard = true) {
-        Text(
+        HelpHeading(
+            "Your lighthouse",
             "The lighthouse is the public node peers use to discover each other's addresses. Traffic flows directly between devices when their networks allow it, otherwise through the lighthouse as a relay.",
-            style = TnType.small,
-            color = colors.textMuted,
-            modifier = Modifier.padding(horizontal = TnSpace.xl).padding(top = TnSpace.sm),
+            Modifier.padding(horizontal = TnSpace.lg).padding(top = TnSpace.md),
         )
         Column(
             modifier = Modifier

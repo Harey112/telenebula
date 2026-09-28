@@ -6,8 +6,13 @@ import java.util.Base64
 
 class Session(val token: String, val username: String, val createdAt: Long, val lastSeenAt: Long, val remoteAddress: String)
 
-/** Logged-in browsers by cookie token; sliding expiry, oldest evicted past [capacity]. */
-class Sessions(private val now: () -> Long, private val capacity: Int = DEFAULT_CAPACITY, private val idleMs: Long = Limits.SESSION_IDLE_MS) {
+/** Logged-in browsers by cookie token; sliding idle expiry, an absolute lifetime, oldest evicted past [capacity]. */
+class Sessions(
+    private val now: () -> Long,
+    private val capacity: Int = DEFAULT_CAPACITY,
+    private val idleMs: Long = Limits.SESSION_IDLE_MS,
+    private val maxMs: Long = Limits.SESSION_MAX_MS,
+) {
     private val lock = Any()
     private val random = SecureRandom()
     private val byToken = LinkedHashMap<String, Session>(16, 0.75f, true)
@@ -29,7 +34,7 @@ class Sessions(private val now: () -> Long, private val capacity: Int = DEFAULT_
         return session
     }
 
-    /** The live session for [token], touched; null when unknown or expired. */
+    /** The live session for [token], touched; null when unknown, idle too long, too old or evicted. */
     fun find(token: String?): Session? {
         if (token.isNullOrEmpty() || token.length > MAX_TOKEN_CHARS) return null
         val stamp = now()
@@ -42,6 +47,12 @@ class Sessions(private val now: () -> Long, private val capacity: Int = DEFAULT_
         }
     }
 
+    /** Milliseconds [token] has left before its absolute lifetime ends, for the cookie's Max-Age. */
+    fun remainingMs(token: String): Long = synchronized(lock) {
+        val session = byToken[token] ?: return 0
+        (session.createdAt + maxMs - now()).coerceAtLeast(0)
+    }
+
     fun remove(token: String?): Boolean {
         if (token.isNullOrEmpty()) return false
         return synchronized(lock) { byToken.remove(token) != null }
@@ -50,7 +61,7 @@ class Sessions(private val now: () -> Long, private val capacity: Int = DEFAULT_
     fun clear() = synchronized(lock) { byToken.clear() }
 
     private fun purgeLocked(stamp: Long) {
-        val expired = byToken.values.filter { stamp - it.lastSeenAt > idleMs }
+        val expired = byToken.values.filter { stamp - it.lastSeenAt > idleMs || stamp - it.createdAt > maxMs }
         for (session in expired) byToken.remove(session.token)
     }
 

@@ -25,6 +25,20 @@ class SessionsTest {
     }
 
     @Test
+    fun `however active, a session ends at its absolute lifetime`() {
+        val sessions = Sessions({ clock }, capacity = 4, idleMs = 1_000, maxMs = 5_000)
+        val token = sessions.create("harey", "192.168.1.2").token
+        assertEquals(5_000L, sessions.remainingMs(token))
+        repeat(4) {
+            clock += 900
+            assertNotNull(sessions.find(token))
+        }
+        clock += 1_401
+        assertNull(sessions.find(token))
+        assertEquals(0L, sessions.remainingMs(token))
+    }
+
+    @Test
     fun `unknown, empty and oversized tokens are not sessions`() {
         val sessions = Sessions({ clock })
         sessions.create("harey", "a")

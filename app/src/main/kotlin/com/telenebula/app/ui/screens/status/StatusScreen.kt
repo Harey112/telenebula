@@ -23,7 +23,7 @@ fun StatusScreen(viewModel: StatusViewModel) {
     Screen(title = "Status", onBack = viewModel::goBack) {
         Section(
             title = "Sharing",
-            footnote = "Online: you are using the app and share it. Reachable: your device answers but you are away, or sharing is off. Offline: your device does not answer.",
+            help = "Online: the app is open on this phone and you share it. Reachable: your phone answers but the app is not open, or sharing is off; using Dex counts as reachable. Offline: your phone does not answer.",
         ) {
             row {
                 SwitchRow(

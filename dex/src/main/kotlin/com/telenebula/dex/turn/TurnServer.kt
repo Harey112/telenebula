@@ -1,5 +1,6 @@
 package com.telenebula.dex.turn
 
+import com.telenebula.dex.Backoff
 import com.telenebula.dex.Limits
 import com.telenebula.dex.TurnAccess
 import com.telenebula.dex.TurnCredential
@@ -34,13 +35,13 @@ sealed interface TurnState {
  * A minimal TURN relay over UDP (RFC 5766) for one purpose: a browser on the LAN cannot reach the
  * nebula overlay, so its media is relayed through a socket bound to this phone's overlay address.
  * Long-term credentials only, UDP transport only, one allocation per browser socket, everything
- * bounded by [Limits]. Requests from the overlay itself are refused: a peer is never a client.
+ * bounded by [Limits]. Only a source [isClient] admits is answered: a peer is never a client.
  */
 class TurnServer(
     private val scope: CoroutineScope,
     private val configuredPort: Int,
     private val relayAddress: () -> InetAddress?,
-    private val isOverlayAddress: (InetAddress) -> Boolean,
+    private val isClient: (InetAddress) -> Boolean,
     private val io: CoroutineDispatcher = Dispatchers.IO,
     private val now: () -> Long = System::currentTimeMillis,
     private val random: SecureRandom = SecureRandom(),
@@ -57,8 +58,9 @@ class TurnServer(
     private var job: Job? = null
     private var runScope: CoroutineScope? = null
 
-    private class Credential(val key: ByteArray, val expiresAt: Long)
+    private class Credential(val key: ByteArray, val expiresAt: Long, val owner: String, val peer: InetAddress)
     private val credentials = LinkedHashMap<String, Credential>()
+    private val unauthenticated = TokenBucket(Limits.TURN_UNAUTHENTICATED_PER_S, Limits.TURN_UNAUTHENTICATED_BURST, now)
 
     private class Permission(var expiresAt: Long)
     private class ChannelBinding(val peer: InetSocketAddress, var expiresAt: Long)
@@ -66,6 +68,8 @@ class TurnServer(
     private class Allocation(
         val client: InetSocketAddress,
         val username: String,
+        val owner: String,
+        val peer: InetAddress,
         val relay: DatagramSocket,
         val relayed: InetSocketAddress,
         var expiresAt: Long,
@@ -106,10 +110,13 @@ class TurnServer(
         }
     }
 
-    /** Closes every relay and the listening socket; idempotent. */
+    /** Closes every relay and the listening socket and forgets every credential; idempotent. */
     fun stop() {
         val toClose: List<Allocation>
         synchronized(lock) {
+            credentials.clear()
+            nonceSeed = ByteArray(16).also(random::nextBytes)
+            previousNonceSeed = nonceSeed
             val s = socket ?: return
             socket = null
             toClose = allocations.values.toList()
@@ -123,16 +130,43 @@ class TurnServer(
         for (a in toClose) a.relay.close()
     }
 
-    override fun issue(): TurnCredential {
+    override fun issue(owner: String, peer: InetAddress): TurnCredential {
         val username = randomToken(12)
         val password = randomToken(24)
         val key = Stun.longTermKey(username, REALM, password)
         synchronized(lock) {
             purgeCredentials(now())
             while (credentials.size >= MAX_CREDENTIALS) credentials.remove(credentials.keys.first())
-            credentials[username] = Credential(key, now() + Limits.TURN_CREDENTIAL_MS)
+            credentials[username] = Credential(key, now() + Limits.TURN_CREDENTIAL_MS, owner, peer)
         }
         return TurnCredential(username, password)
+    }
+
+    /** Forgets [owner]'s credentials and closes the relays made with them. */
+    override fun revoke(owner: String) {
+        val closed = ArrayList<Allocation>()
+        synchronized(lock) {
+            credentials.values.removeAll { it.owner == owner }
+            val it = allocations.values.iterator()
+            while (it.hasNext()) {
+                val a = it.next()
+                if (a.owner == owner) {
+                    it.remove()
+                    closed.add(a)
+                }
+            }
+        }
+        for (a in closed) closeAllocation(a)
+    }
+
+    override fun revokeAll() {
+        val closed: List<Allocation>
+        synchronized(lock) {
+            credentials.clear()
+            closed = allocations.values.toList()
+            allocations.clear()
+        }
+        for (a in closed) closeAllocation(a)
     }
 
     /** For tests and the Dex page: live allocations. */
@@ -143,16 +177,19 @@ class TurnServer(
     private suspend fun receiveLoop(s: DatagramSocket) = withContext(io) {
         val buffer = ByteArray(Limits.MAX_UDP_BYTES)
         val packet = DatagramPacket(buffer, buffer.size)
+        val backoff = Backoff("TURN relay", onFault)
         while (!s.isClosed) {
             packet.setData(buffer, 0, buffer.size)
             try {
                 s.receive(packet)
+                backoff.reset()
             } catch (e: IOException) {
                 if (s.isClosed) return@withContext
+                backoff.failed(e)
                 continue
             }
             val from = packet.socketAddress as? InetSocketAddress ?: continue
-            if (isOverlayAddress(from.address)) continue
+            if (!isClient(from.address)) continue
             try {
                 handle(s, from, buffer, packet.length)
             } catch (e: CancellationException) {
@@ -173,7 +210,7 @@ class TurnServer(
         val message = Stun.parse(bytes, length) ?: return
         when {
             message.method == Stun.METHOD_BINDING && message.isRequest -> {
-                send(s, from, Stun.Builder(Stun.METHOD_BINDING, Stun.CLASS_SUCCESS, message.transactionId).xorAddress(Stun.ATTR_XOR_MAPPED_ADDRESS, from).software().build())
+                sendUnauthenticated(s, from, Stun.Builder(Stun.METHOD_BINDING, Stun.CLASS_SUCCESS, message.transactionId).xorAddress(Stun.ATTR_XOR_MAPPED_ADDRESS, from).build())
             }
             message.method == Stun.METHOD_SEND && message.isIndication -> handleSend(from, message)
             message.isRequest -> handleAuthenticated(s, from, message, bytes, length)
@@ -221,7 +258,7 @@ class TurnServer(
     private fun handleAuthenticated(s: DatagramSocket, from: InetSocketAddress, message: Stun.Message, bytes: ByteArray, length: Int) {
         val method = message.method
         if (method != Stun.METHOD_ALLOCATE && method != Stun.METHOD_REFRESH && method != Stun.METHOD_CREATE_PERMISSION && method != Stun.METHOD_CHANNEL_BIND) {
-            send(s, from, error(message, 400, "Bad Request").build())
+            sendUnauthenticated(s, from, error(message, 400, "Bad Request").build())
             return
         }
         val stamp = now()
@@ -230,35 +267,35 @@ class TurnServer(
         val realm = message.first(Stun.ATTR_REALM)?.toString(Charsets.UTF_8)
         val nonce = message.first(Stun.ATTR_NONCE)?.toString(Charsets.UTF_8)
         if (integrity == null || username == null || realm == null || nonce == null) {
-            send(s, from, challenge(message, 401, "Unauthorized", stamp))
+            sendUnauthenticated(s, from, challenge(message, 401, "Unauthorized", stamp))
             return
         }
         if (realm != REALM) {
-            send(s, from, challenge(message, 401, "Unauthorized", stamp))
+            sendUnauthenticated(s, from, challenge(message, 401, "Unauthorized", stamp))
             return
         }
         if (!isValidNonce(nonce)) {
-            send(s, from, challenge(message, 438, "Stale Nonce", stamp))
+            sendUnauthenticated(s, from, challenge(message, 438, "Stale Nonce", stamp))
             return
         }
-        val key: ByteArray? = synchronized(lock) {
+        val credential: Credential? = synchronized(lock) {
             purgeCredentials(stamp)
-            credentials[username]?.key
+            credentials[username]
         }
-        if (key == null || !Stun.verifyIntegrity(bytes, length, key)) {
-            send(s, from, challenge(message, 401, "Unauthorized", stamp))
+        if (credential == null || !Stun.verifyIntegrity(bytes, length, credential.key)) {
+            sendUnauthenticated(s, from, challenge(message, 401, "Unauthorized", stamp))
             return
         }
         val response = when (method) {
-            Stun.METHOD_ALLOCATE -> allocate(from, message, username, stamp)
+            Stun.METHOD_ALLOCATE -> allocate(from, message, username, credential, stamp)
             Stun.METHOD_REFRESH -> refresh(from, message, username, stamp)
             Stun.METHOD_CREATE_PERMISSION -> createPermission(from, message, username, stamp)
             else -> channelBind(from, message, username, stamp)
         }
-        send(s, from, response.build(key))
+        send(s, from, response.build(credential.key))
     }
 
-    private fun allocate(from: InetSocketAddress, message: Stun.Message, username: String, stamp: Long): Stun.Builder {
+    private fun allocate(from: InetSocketAddress, message: Stun.Message, username: String, credential: Credential, stamp: Long): Stun.Builder {
         val transport = message.first(Stun.ATTR_REQUESTED_TRANSPORT)?.let { Stun.readInt(it) }
         if (transport == null) return error(message, 400, "Bad Request")
         if ((transport ushr 24) != Stun.TRANSPORT_UDP) return error(message, 442, "Unsupported Transport Protocol")
@@ -281,7 +318,7 @@ class TurnServer(
             return error(message, 508, "Insufficient Capacity")
         }
         val relayed = InetSocketAddress(relayHost, relay.localPort)
-        val allocation = Allocation(from, username, relay, relayed, stamp + lifetime * 1000L)
+        val allocation = Allocation(from, username, credential.owner, credential.peer, relay, relayed, stamp + lifetime * 1000L)
         val run = synchronized(lock) {
             val raced = allocations[from]
             if (raced != null || allocations.size >= Limits.MAX_TURN_ALLOCATIONS) {
@@ -333,6 +370,7 @@ class TurnServer(
             if (allocation.username != username) return error(message, 441, "Wrong Credentials")
             for (peer in peers) {
                 if (peer.address.address.size != allocation.relayed.address.address.size) return error(message, 443, "Peer Address Family Mismatch")
+                if (!isCallPeer(allocation, peer.address)) return error(message, 403, "Forbidden")
             }
             for (peer in peers) {
                 val existing = allocation.permissions[peer.address]
@@ -356,6 +394,7 @@ class TurnServer(
             val allocation = allocations[from] ?: return error(message, 437, "Allocation Mismatch")
             if (allocation.username != username) return error(message, 441, "Wrong Credentials")
             if (peer.address.address.size != allocation.relayed.address.address.size) return error(message, 443, "Peer Address Family Mismatch")
+            if (!isCallPeer(allocation, peer.address) || peer.port == 0) return error(message, 403, "Forbidden")
             val bound = allocation.channels[channel]
             val boundChannel = allocation.channelByPeer[peer]
             if (bound != null && bound.peer != peer) return error(message, 400, "Bad Request")
@@ -368,6 +407,16 @@ class TurnServer(
             if (permission != null) permission.expiresAt = stamp + Limits.TURN_PERMISSION_MS else allocation.permissions[peer.address] = Permission(stamp + Limits.TURN_PERMISSION_MS)
         }
         return Stun.Builder(Stun.METHOD_CHANNEL_BIND, Stun.CLASS_SUCCESS, message.transactionId).software()
+    }
+
+    /** The one overlay address the call is with; its IPv4-mapped form is the same address. */
+    private fun isCallPeer(allocation: Allocation, address: InetAddress): Boolean =
+        canonical(address).contentEquals(canonical(allocation.peer)) && !address.isAnyLocalAddress && !address.isMulticastAddress
+
+    private fun canonical(address: InetAddress): ByteArray {
+        val b = address.address
+        val isMapped = b.size == 16 && (0 until 10).all { b[it] == 0.toByte() } && b[10] == 0xFF.toByte() && b[11] == 0xFF.toByte()
+        return if (isMapped) b.copyOfRange(12, 16) else b
     }
 
     private fun requestedLifetime(message: Stun.Message): Int {
@@ -384,17 +433,22 @@ class TurnServer(
     private suspend fun relayLoop(allocation: Allocation) = withContext(io) {
         val buffer = ByteArray(Limits.MAX_UDP_BYTES)
         val packet = DatagramPacket(buffer, buffer.size)
+        val backoff = Backoff("TURN relay socket", onFault)
         while (!allocation.relay.isClosed) {
             packet.setData(buffer, 0, buffer.size)
             try {
                 allocation.relay.receive(packet)
+                backoff.reset()
             } catch (e: IOException) {
                 if (allocation.relay.isClosed) return@withContext
+                backoff.failed(e)
                 continue
             }
             val peer = packet.socketAddress as? InetSocketAddress ?: continue
             val channel: Int?
             synchronized(lock) {
+                // a datagram can land between close() and the blocked receive waking; a revoked relay forwards nothing
+                if (allocations[allocation.client] !== allocation) return@withContext
                 val permission = allocation.permissions[peer.address] ?: continue
                 if (permission.expiresAt < now()) continue
                 channel = allocation.channelByPeer[peer]?.takeIf { c -> (allocation.channels[c]?.expiresAt ?: 0L) >= now() }
@@ -425,10 +479,11 @@ class TurnServer(
     fun sweep(stamp: Long) {
         val expired = ArrayList<Allocation>()
         synchronized(lock) {
+            purgeCredentials(stamp)
             val it = allocations.values.iterator()
             while (it.hasNext()) {
                 val a = it.next()
-                if (a.expiresAt < stamp) {
+                if (a.expiresAt < stamp || a.username !in credentials) {
                     it.remove()
                     expired.add(a)
                     continue
@@ -440,7 +495,6 @@ class TurnServer(
                     a.channelByPeer.remove(binding.peer)
                 }
             }
-            purgeCredentials(stamp)
             if (stamp / NONCE_WINDOW_MS != lastNonceWindow) {
                 previousNonceSeed = nonceSeed
                 nonceSeed = ByteArray(16).also(random::nextBytes)
@@ -474,8 +528,12 @@ class TurnServer(
             .errorCode(code, reason)
             .addString(Stun.ATTR_REALM, REALM)
             .addString(Stun.ATTR_NONCE, currentNonce())
-            .software()
             .build()
+
+    /** Anyone admitted may ask these, so they are budgeted: a spoofed source cannot turn the relay into an amplifier. */
+    private fun sendUnauthenticated(s: DatagramSocket, to: InetSocketAddress, bytes: ByteArray) {
+        if (unauthenticated.tryTake()) send(s, to, bytes)
+    }
 
     private fun error(message: Stun.Message, code: Int, reason: String): Stun.Builder =
         Stun.Builder(message.method, Stun.CLASS_ERROR, message.transactionId).errorCode(code, reason).software()

@@ -1,0 +1,1 @@
+{"t":"chat","view":{"peer":"10.0.0.2","contact":{"ip":"10.0.0.2","label":"Alice","name":"Alice"},"messages":[{"id":"m1","peer":"10.0.0.2","dir":"in","body":"hello","ts":42,"status":"delivered","kind":"text"}],"hasMore":false}}

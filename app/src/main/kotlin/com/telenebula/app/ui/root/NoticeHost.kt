@@ -28,6 +28,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.telenebula.app.notices.NoticeCenter
 import com.telenebula.app.ui.fragments.ErrorsCard
+import com.telenebula.app.ui.fragments.HelpCard
 import com.telenebula.app.ui.fragments.LoadingCard
 import com.telenebula.app.ui.fragments.PromptCard
 import com.telenebula.app.ui.fragments.SuccessCard
@@ -57,6 +58,7 @@ fun NoticeHost(center: NoticeCenter) {
         if (notices.loading == null) {
             BackHandler {
                 when {
+                    notices.help != null -> center.clearHelp()
                     hasError -> center.clearErrors()
                     hasWarning -> center.popWarning()
                     hasPrompt -> {
@@ -134,6 +136,9 @@ fun NoticeHost(center: NoticeCenter) {
                 }
                 if (hasError) {
                     Box(modifier = Modifier.zIndex(4f)) { ErrorsCard(notices.errors, onDismiss = center::clearErrors) }
+                }
+                notices.help?.let { help ->
+                    Box(modifier = Modifier.zIndex(4.5f)) { HelpCard(help.topic, help.text, onDismiss = center::clearHelp) }
                 }
                 notices.loading?.let { message ->
                     Box(modifier = Modifier.zIndex(5f)) { LoadingCard(message) }

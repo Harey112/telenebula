@@ -1,0 +1,10 @@
+.dex-login { min-height: 100%; display: grid; place-items: center; padding: var(--space-4); }
+.dex-login-card { width: min(100%, 390px); padding: var(--space-6); border: 1px solid var(--hairline); border-radius: var(--radius-4); background: var(--surface); display: flex; flex-direction: column; }
+.dex-login-logo { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); margin: 0 auto var(--space-3); }
+.dex-login h1 { font-size: 20px; font-weight: 500; line-height: 28px; text-align: center; margin: 0; }
+.dex-login p { color: var(--text-muted); font-size: 14px; text-align: center; margin: var(--space-2) 0 var(--space-6); }
+.dex-login label { font-size: 13px; font-weight: 500; margin-bottom: var(--space-2); }
+.dex-login input { width: 100%; height: 48px; padding: 0 var(--space-3); border: 1px solid var(--hairline); border-radius: var(--radius-3); background: var(--background); color: var(--text); margin-bottom: var(--space-4); }
+.dex-login input:focus { border-color: var(--accent); }
+.dex-login-error { min-height: 22px; color: var(--danger); font-size: 13px; margin-bottom: var(--space-2); }
+.dex-login button { width: 100%; height: 44px; border: 0; border-radius: 22px; background: var(--accent); color: var(--on-accent); font-weight: 500; }

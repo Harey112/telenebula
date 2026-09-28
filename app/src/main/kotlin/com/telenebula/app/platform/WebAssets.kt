@@ -6,14 +6,21 @@ import com.telenebula.dex.DexAssets
 import java.io.ByteArrayInputStream
 import java.io.IOException
 
-/** The web frontend bundled under `assets/dex/`; a handful of small files, read once and kept. */
 class WebAssets(context: Context) : DexAssets {
     private val manager = context.applicationContext.assets
     private val cache = HashMap<String, ByteArray?>()
+    private val files: Set<String> = manager.open("$DIR/dex-assets.txt").use { stream ->
+        stream.bufferedReader().readLines().filter { it.isNotBlank() }.toSet()
+    }.also { listed ->
+        require("index.html" in listed && "emoji_catalog.json" in listed) { "Dex asset manifest is incomplete" }
+        require(listed.all { name -> name.split('/').all { it.matches(Regex("[A-Za-z0-9_.-]+")) && it != ".." } }) {
+            "Dex asset manifest has an invalid path"
+        }
+    }
 
     override fun open(path: String): DexAsset? {
         val name = path.trimStart('/').ifEmpty { "index.html" }
-        if (name !in FILES) return null
+        if (name !in files) return null
         val bytes = synchronized(cache) {
             cache.getOrPut(name) {
                 try {
@@ -37,6 +44,5 @@ class WebAssets(context: Context) : DexAssets {
 
     companion object {
         const val DIR = "dex"
-        val FILES: Set<String> = setOf("index.html", "web.js", "app.css", "favicon.svg", "emoji_catalog.json")
     }
 }

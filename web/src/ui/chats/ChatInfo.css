@@ -1,0 +1,27 @@
+.dex-chat-info { position: absolute; z-index: 5; top: 0; right: 0; bottom: 0; width: min(360px, 100%); display: flex; flex-direction: column; border-left: 1px solid var(--hairline); background: var(--surface); }
+.dex-chat-info > header { flex: none; height: 64px; display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-4); border-bottom: 1px solid var(--hairline); }
+.dex-chat-info h2 { margin: 0; font-size: 17px; font-weight: 500; }
+.dex-chat-info > header button, .dex-chat-info form button { display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 18px; background: transparent; color: var(--text); }
+.dex-chat-info-scroll { min-height: 0; overflow-y: auto; }
+.dex-chat-info section { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4); border-bottom: 1px solid var(--hairline); }
+.dex-chat-info h3 { margin: 0; color: var(--text-muted); font-size: 13px; font-weight: 500; }
+.dex-chat-info-identity { text-align: center; }
+.dex-chat-info-identity strong { font-size: 20px; font-weight: 500; }
+.dex-chat-info-identity > span { color: var(--text-muted); font-size: 12px; }
+.dex-chat-info-identity > div { display: flex; justify-content: center; gap: var(--space-2); }
+.dex-chat-info button:not(header button):not(form button) { min-height: 36px; padding: 0 var(--space-3); border: 1px solid var(--hairline); border-radius: 18px; background: var(--surface-raised); color: var(--text); }
+.dex-chat-info-identity button { display: flex; align-items: center; gap: var(--space-1); }
+.dex-chat-info form { display: flex; align-items: center; border: 1px solid var(--hairline); border-radius: 20px; }
+.dex-chat-info form input { flex: 1; min-width: 0; height: 40px; padding: 0 var(--space-3); border: 0; background: transparent; color: var(--text); }
+.dex-chat-info section > p { margin: 0; color: var(--text-muted); font-size: 13px; }
+.dex-chat-info section > label { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: 40px; }
+.dex-chat-info select { max-width: 170px; min-height: 36px; border: 1px solid var(--hairline); border-radius: 18px; background: var(--background); color: var(--text); }
+.dex-chat-info input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); }
+.dex-chat-info-media { display: flex; align-items: center; gap: var(--space-2); color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
+.dex-chat-info-media small { margin-left: auto; color: var(--text-muted); white-space: nowrap; }
+.dex-chat-info-link { color: var(--accent); overflow-wrap: anywhere; }
+.dex-chat-info-results { display: flex; flex-direction: column; gap: var(--space-2); }
+.dex-chat-info-results > div { display: flex; flex-direction: column; padding: var(--space-2); background: var(--surface-raised); }
+.dex-chat-info-results small { color: var(--text-muted); }
+.dex-chat-info .danger { color: var(--danger) !important; }
+@container (max-width: 640px) { .dex-chat-info { width: 100%; } }

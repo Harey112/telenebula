@@ -77,6 +77,7 @@ enum class TnIcon(internal val lucideName: String) {
     SQUARE_PLUS("square-plus"),
     PAUSE("pause"),
     STOP("square"),
+    HELP("circle-help"),
 }
 
 /** Lucide icons as ImageVectors: 24-unit grid, 2-unit round stroke, no fill. Built once, on first use. */
@@ -161,5 +162,6 @@ internal object TnIconVectors {
         arrayOf("M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M8 12h8", "M12 8v8"), // square_plus
         arrayOf("M15 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-16a1 1 0 0 1 1 -1Z", "M6 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-16a1 1 0 0 1 1 -1Z"), // pause
         arrayOf("M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z"), // stop
+        arrayOf("M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0", "M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3", "M12 17h.01"), // help
     )
 }

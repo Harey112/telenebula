@@ -17,8 +17,13 @@ class HttpRequest(
     val headers: Map<String, String>,
     val contentLength: Long,
     val isKeepAlive: Boolean,
+    /** lower-cased names that appeared more than once */
+    val repeated: Set<String> = emptySet(),
 ) {
     fun header(name: String): String? = headers[name.lowercase()]
+
+    /** The header's value when it was sent exactly once. */
+    fun single(name: String): String? = name.lowercase().let { if (it in repeated) null else headers[it] }
 
     val isUpgrade: Boolean get() = header("upgrade")?.equals("websocket", ignoreCase = true) == true
 
@@ -66,23 +71,26 @@ object HttpParser {
         val rawQuery = if (q >= 0) target.substring(q + 1) else ""
         val path = normalisePath(percentDecode(rawPath) ?: throw HttpError(400, "bad path encoding"))
         val headers = HashMap<String, String>()
+        val repeated = HashSet<String>()
         for (line in lines.drop(1)) {
             val colon = line.indexOf(':')
             if (colon <= 0) throw HttpError(400, "bad header")
             val name = line.substring(0, colon)
             if (!TOKEN.matches(name)) throw HttpError(400, "bad header name")
             val value = line.substring(colon + 1).trim()
-            if (value.any { it < ' ' && it != '\t' }) throw HttpError(400, "bad header value")
+            if (value.any { (it < ' ' && it != '\t') || it == '\u007F' }) throw HttpError(400, "bad header value")
             val key = name.lowercase()
+            if (headers.containsKey(key)) repeated.add(key)
             headers[key] = headers[key]?.let { "$it, $value" } ?: value
         }
         if (headers.containsKey("transfer-encoding")) throw HttpError(411, "length required")
+        if ("content-length" in repeated) throw HttpError(400, "bad content length")
         val contentLength = headers["content-length"]?.let { raw ->
             raw.toLongOrNull()?.takeIf { it >= 0 } ?: throw HttpError(400, "bad content length")
         } ?: 0L
         val connection = headers["connection"]?.lowercase().orEmpty()
         val isKeepAlive = if (isHttp11) "close" !in connection else "keep-alive" in connection
-        return HttpRequest(method, path, parseQuery(rawQuery), headers, contentLength, isKeepAlive)
+        return HttpRequest(method, path, parseQuery(rawQuery), headers, contentLength, isKeepAlive, repeated)
     }
 
     /** Collapses `.` and `..` segments so no path the router sees can climb; a climb past the root is a 400. */

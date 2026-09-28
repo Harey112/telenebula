@@ -71,6 +71,48 @@ object Limits {
     /** One UDP datagram; media packets are well under the path MTU, and STUN messages are small. */
     const val MAX_UDP_BYTES = 4_096
 
-    /** A TURN credential issued for a call is good for this long. */
-    const val TURN_CREDENTIAL_MS = 24L * 60 * 60 * 1000
+    /** A TURN credential dies with its call or its browser; this caps one that is never revoked. */
+    const val TURN_CREDENTIAL_MS = 8L * 60 * 60 * 1000
+
+    /** Answers sent before a credential is checked (Binding, 401, 438): a spoofed source must not turn the relay into an amplifier. */
+    const val TURN_UNAUTHENTICATED_PER_S = 20
+
+    /** The burst those answers may reach: one browser's ICE start sends a handful at once. */
+    const val TURN_UNAUTHENTICATED_BURST = 40
+
+    /** A session this old logs in again however active it is, so a stolen cookie does not live for ever. */
+    const val SESSION_MAX_MS = 30L * 24 * 60 * 60 * 1000
+
+    /** How often live sockets are checked against their session's expiry. */
+    const val SESSION_CHECK_MS = 30_000L
+
+    /** Bytes of server-to-browser frames waiting on a slow socket; a chat snapshot is large, a queue of them is not. */
+    const val WS_OUT_QUEUE_BYTES = 8L * 1024 * 1024
+
+    /** PBKDF2 checks at once; each costs a core for a moment, and a login flood must not starve the phone. */
+    const val MAX_PASSWORD_CHECKS = 2
+
+    /** Uploads streaming in at once across every browser. */
+    const val MAX_UPLOADS = 4
+
+    /** Uploads streaming in at once from one login. */
+    const val MAX_UPLOADS_PER_SESSION = 2
+
+    /** Bytes of uploads staged on disk at once, however many browsers are sending. */
+    const val MAX_STAGING_BYTES = 1024L * 1024 * 1024
+
+    /** Space an upload must leave free, so a browser can never fill the phone's storage. */
+    const val UPLOAD_FREE_SPACE_RESERVE = 256L * 1024 * 1024
+
+    /** The phone's interfaces are re-read at most this often when a connection comes from an address they did not have. */
+    const val ADMISSION_REFRESH_MS = 1_000L
+
+    /** Consecutive failures of a socket loop before the streak is reported. */
+    const val LOOP_FAILURES_BEFORE_REPORT = 5
+
+    /** First wait after a failed accept or receive; doubles per failure. */
+    const val LOOP_BACKOFF_MIN_MS = 10L
+
+    /** Longest wait between retries of a failing socket loop. */
+    const val LOOP_BACKOFF_MAX_MS = 1_000L
 }

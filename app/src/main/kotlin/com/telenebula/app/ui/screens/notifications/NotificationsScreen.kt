@@ -17,33 +17,33 @@ fun NotificationsScreen(viewModel: NotificationsViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val n = state.prefs
     Screen(title = "Notifications and sounds", onBack = viewModel::goBack) {
-        Section(title = "Messages") {
-            row { SwitchRow(TnIcon.CHATS, "Show notifications", n.messages.enabled, { viewModel.update { it.copy(messages = it.messages.copy(enabled = !it.messages.enabled)) } }) }
-            row { SwitchRow(TnIcon.PERSON, "Show sender name", n.messages.showSender, { viewModel.update { it.copy(messages = it.messages.copy(showSender = !it.messages.showSender)) } }, subtitle = "Off shows “TeleNebula” instead") }
-            row { SwitchRow(TnIcon.LIST, "Message preview", n.messages.preview, { viewModel.update { it.copy(messages = it.messages.copy(preview = !it.messages.preview)) } }, subtitle = "Off shows “New message” instead of the text") }
-            row { SwitchRow(TnIcon.SPEAKER, "Sound", n.messages.sound, { viewModel.update { it.copy(messages = it.messages.copy(sound = !it.messages.sound)) } }) }
+        Section(title = "Messages", help = "Show notifications, preview and sound are this phone's own; Dex browsers have their own in their Settings. The other switches affect only this phone. With sender name off the alert says “TeleNebula”; with preview off it says “New message”.") {
+            row { SwitchRow(TnIcon.CHATS, "Show notifications", state.isEnabled, viewModel::toggleEnabled) }
+            row { SwitchRow(TnIcon.PERSON, "Show sender name", n.messages.showSender, { viewModel.update { it.copy(messages = it.messages.copy(showSender = !it.messages.showSender)) } }) }
+            row { SwitchRow(TnIcon.LIST, "Message preview", state.isPreview, viewModel::togglePreview) }
+            row { SwitchRow(TnIcon.SPEAKER, "Sound", state.isSound, viewModel::toggleSound) }
             row { SwitchRow(TnIcon.VIBRATE, "Vibrate", n.messages.vibrate, { viewModel.update { it.copy(messages = it.messages.copy(vibrate = !it.messages.vibrate)) } }) }
-            row { SwitchRow(TnIcon.BELL, "Pop-up notifications", n.messages.popup, { viewModel.update { it.copy(messages = it.messages.copy(popup = !it.messages.popup)) } }, subtitle = "Appear at the top of the screen") }
-            row { SwitchRow(TnIcon.EMOJI, "Reaction notifications", n.messages.reactions, { viewModel.update { it.copy(messages = it.messages.copy(reactions = !it.messages.reactions)) } }, subtitle = "When someone reacts to your message") }
+            row { SwitchRow(TnIcon.BELL, "Pop-up notifications", n.messages.popup, { viewModel.update { it.copy(messages = it.messages.copy(popup = !it.messages.popup)) } }) }
+            row { SwitchRow(TnIcon.EMOJI, "Reaction notifications", n.messages.reactions, { viewModel.update { it.copy(messages = it.messages.copy(reactions = !it.messages.reactions)) } }) }
         }
-        Section(title = "Calls") {
-            row { SwitchRow(TnIcon.CALL, "Ring for incoming calls", n.calls.ring, { viewModel.update { it.copy(calls = it.calls.copy(ring = !it.calls.ring)) } }, subtitle = "Off declines every call automatically") }
+        Section(title = "Calls", help = "With ringing off, every incoming call is declined and logged as declined.") {
+            row { SwitchRow(TnIcon.CALL, "Ring for incoming calls", n.calls.ring, { viewModel.update { it.copy(calls = it.calls.copy(ring = !it.calls.ring)) } }) }
             row { SwitchRow(TnIcon.VIBRATE, "Vibrate while ringing", n.calls.vibrate, { viewModel.update { it.copy(calls = it.calls.copy(vibrate = !it.calls.vibrate)) } }) }
             row { SwitchRow(TnIcon.CALL_MISSED, "Missed call notifications", n.calls.missedNotification, { viewModel.update { it.copy(calls = it.calls.copy(missedNotification = !it.calls.missedNotification)) } }) }
         }
-        Section(title = "In-app") {
-            row { SwitchRow(TnIcon.VIBRATE, "Vibrate on new message", n.inApp.vibrate, { viewModel.update { it.copy(inApp = it.inApp.copy(vibrate = !it.inApp.vibrate)) } }, subtitle = "While the app is open") }
+        Section(title = "In-app", help = "Vibrates when a message arrives in the chat you have open; other chats get a normal notification.") {
+            row { SwitchRow(TnIcon.VIBRATE, "Vibrate on new message", n.inApp.vibrate, { viewModel.update { it.copy(inApp = it.inApp.copy(vibrate = !it.inApp.vibrate)) } }) }
         }
-        Section(title = "Quiet hours") {
-            row { SwitchRow(TnIcon.CLOCK, "Quiet hours", n.quietHours.enabled, { viewModel.update { it.copy(quietHours = it.quietHours.copy(enabled = !it.quietHours.enabled)) } }, subtitle = "Silence message alerts in this window; calls still ring") }
+        Section(title = "Quiet hours", help = "Silences message notifications and in-app vibration in this window; calls still ring.") {
+            row { SwitchRow(TnIcon.CLOCK, "Quiet hours", n.quietHours.enabled, { viewModel.update { it.copy(quietHours = it.quietHours.copy(enabled = !it.quietHours.enabled)) } }) }
             if (n.quietHours.enabled) {
                 row { ValueRow("From", formatTime(n.quietHours.fromHour, n.quietHours.fromMinute)) { viewModel.openMenu(QUIET_FROM) } }
                 row { ValueRow("To", formatTime(n.quietHours.toHour, n.quietHours.toMinute)) { viewModel.openMenu(QUIET_TO) } }
             }
         }
-        Section(title = "System", footnote = "These settings only make alerts quieter. Your phone’s sound profile and Do Not Disturb are always respected.") {
-            row { SettingRow(TnIcon.BELL_OFF, "Tunnel notification", subtitle = "Keeps the app alive in the background; silence or minimise it in Android's settings", onClick = viewModel::openTunnelNotificationSettings) }
-            row { SettingRow(TnIcon.SETTINGS, "Android notification settings", subtitle = "Channels, tones, Do Not Disturb exceptions", onClick = viewModel::openSystemSettings) }
+        Section(title = "System", help = "These settings never override your phone's sound profile or Do Not Disturb. The tunnel notification keeps the app running in the background; silence or minimise it in Android's settings. Reset to defaults resets this screen; Dex browsers keep their own switches.") {
+            row { SettingRow(TnIcon.BELL_OFF, "Tunnel notification", onClick = viewModel::openTunnelNotificationSettings) }
+            row { SettingRow(TnIcon.SETTINGS, "Android notification settings", onClick = viewModel::openSystemSettings) }
             row { SettingRow(TnIcon.RETRY, "Reset to defaults", onClick = viewModel::resetToDefaults) }
         }
     }

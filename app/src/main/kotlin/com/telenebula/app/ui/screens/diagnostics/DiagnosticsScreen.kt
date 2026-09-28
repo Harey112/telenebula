@@ -50,7 +50,7 @@ fun DiagnosticsScreen(viewModel: DiagnosticsViewModel) {
                 SettingRow(
                     TnIcon.RETRY,
                     if (s.isTesting) "Testing…" else "Test peer connectivity",
-                    subtitle = "Pings every contact over the message link and shows the round trip",
+                    help = "Pings every contact you have not blocked over the message link and shows each round trip.",
                     onClick = if (s.isTesting) null else viewModel::runPeerTest,
                 )
             }
@@ -77,7 +77,7 @@ fun DiagnosticsScreen(viewModel: DiagnosticsViewModel) {
                 SettingRow(
                     TnIcon.FOLDER,
                     if (s.isExporting) "Preparing…" else "Export diagnostics",
-                    subtitle = "Versions, node, hostmap, stats and the nebula log tail as JSON",
+                    help = "Saves versions, node, hostmap, stats and the end of the nebula log as one JSON file.",
                     onClick = if (s.isExporting) null else viewModel::exportDiagnostics,
                 )
             }

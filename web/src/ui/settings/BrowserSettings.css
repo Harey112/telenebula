@@ -1,0 +1,40 @@
+.dex-settings-pane { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; background: var(--background); }
+.dex-settings-layout { display: flex; overflow: hidden; }
+.dex-settings-categories { width: 192px; flex: none; overflow-y: auto; padding: var(--space-4) var(--space-2); border-right: 1px solid var(--hairline); background: var(--surface); }
+.dex-settings-categories h1 { padding: 0 var(--space-2) var(--space-4); }
+.dex-settings-categories [role="tablist"] { display: flex; flex-direction: column; gap: var(--space-1); }
+.dex-settings-categories button { min-height: 40px; padding: 0 var(--space-3); border: 0; border-radius: 20px; background: transparent; color: var(--text); text-align: left; }
+.dex-settings-categories button[aria-selected="true"] { background: var(--accent-soft); font-weight: 500; }
+.dex-settings-content { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; }
+.dex-settings-content > header { min-height: 64px; display: flex; align-items: center; padding: var(--space-4) var(--space-6); border-bottom: 1px solid var(--hairline); background: var(--surface); }
+.dex-settings-content > header h1 { margin: 0; }
+.dex-settings-action { min-height: 40px; margin: var(--space-3) var(--space-4); padding: 0 var(--space-4); border: 1px solid var(--hairline); border-radius: 20px; background: var(--surface-raised); color: var(--text); }
+.dex-settings-action.danger { color: var(--danger); }
+.dex-settings-log { margin: 0; padding: var(--space-3) var(--space-4); overflow-wrap: anywhere; white-space: pre-wrap; font-size: 12px; }
+.dex-settings-pane > header { min-height: 80px; padding: var(--space-4) var(--space-6); border-bottom: 1px solid var(--hairline); background: var(--surface); }
+.dex-settings-pane h1 { margin: 0; font-size: 20px; font-weight: 500; }
+.dex-settings-pane > header p { margin: var(--space-1) 0 0; color: var(--text-muted); font-size: 13px; }
+.dex-settings-waiting { color: var(--text-muted); padding: var(--space-6); }
+.dex-settings-sections { width: min(100%, 800px); display: grid; gap: var(--space-5); padding: var(--space-6); margin: 0 auto; }
+.dex-settings-section { overflow: hidden; border: 1px solid var(--hairline); border-radius: var(--radius-3); background: var(--surface); }
+.dex-settings-section h2 { margin: 0; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--hairline); color: var(--text-muted); font-size: 13px; font-weight: 500; }
+.dex-settings-row { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-3) var(--space-4); }
+.dex-settings-row > span { min-width: 0; display: grid; gap: var(--space-1); }
+.dex-settings-row strong { font-weight: 500; }
+.dex-settings-info { border-bottom: 1px solid var(--hairline); }
+.dex-settings-info span { color: var(--text-muted); text-align: right; overflow-wrap: anywhere; }
+.dex-settings-row small { color: var(--text-muted); font-size: 12px; }
+.dex-settings-row select { min-width: 168px; min-height: 40px; padding: 0 var(--space-3); border: 1px solid var(--hairline); border-radius: 20px; background: var(--background); color: var(--text); }
+.dex-settings-row input[type="checkbox"] { width: 20px; height: 20px; flex: none; accent-color: var(--accent); }
+.dex-settings-note { margin: 0; padding: 0 var(--space-4) var(--space-4); color: var(--text-muted); font-size: 13px; }
+@media (max-width: 600px) {
+  .dex-settings-layout { flex-direction: column; }
+  .dex-settings-categories { width: 100%; overflow-x: auto; overflow-y: hidden; padding: var(--space-2); border-right: 0; border-bottom: 1px solid var(--hairline); }
+  .dex-settings-categories h1 { display: none; }
+  .dex-settings-categories [role="tablist"] { flex-direction: row; width: max-content; }
+  .dex-settings-content > header { min-height: 56px; padding: var(--space-3) var(--space-4); }
+  .dex-settings-sections { padding: var(--space-4); }
+  .dex-settings-row { align-items: flex-start; flex-direction: column; }
+  .dex-settings-info { align-items: center; flex-direction: row; }
+  .dex-settings-row select { width: 100%; }
+}

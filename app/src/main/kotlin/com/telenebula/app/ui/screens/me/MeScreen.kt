@@ -39,7 +39,7 @@ private fun Menu(state: MeUiState, actions: MeActions) {
                 trailing = if (state.hasUpdate) ({ DotBadge("Update available") }) else null,
             )
         }
-        row { SettingRow(TnIcon.CIRCLE, "Status", subtitle = "What contacts see when they check on you", onClick = { actions.open(Status) }) }
+        row { SettingRow(TnIcon.CIRCLE, "Status", onClick = { actions.open(Status) }) }
         row { SettingRow(TnIcon.DESKTOP, "Dex", subtitle = state.dexLabel, onClick = { actions.open(Dex) }) }
         row {
             SettingRow(

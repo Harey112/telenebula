@@ -39,6 +39,7 @@ fun Collapsible(
     hasError: Boolean = false,
     /** flat header inside a card instead of a standalone card */
     isNested: Boolean = false,
+    help: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = TnTheme.colors
@@ -64,7 +65,10 @@ fun Collapsible(
             horizontalArrangement = Arrangement.spacedBy(TnSpace.md),
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = TnType.body.copy(fontWeight = FontWeight.Medium), color = if (hasError) colors.danger else colors.text)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, style = TnType.body.copy(fontWeight = FontWeight.Medium), color = if (hasError) colors.danger else colors.text, modifier = Modifier.weight(1f, fill = false))
+                    if (help != null) HelpButton(title, help)
+                }
                 if (subtitle != null) Text(subtitle, style = TnType.small, color = colors.textMuted, modifier = Modifier.padding(top = 2.dp))
             }
             if (hasError) Icon(TnIcon.CLOSE, tint = colors.danger, size = 16.dp)

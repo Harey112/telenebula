@@ -37,10 +37,10 @@ fun StorageScreen(viewModel: StorageViewModel) {
             row { InfoField("Unreferenced media · ${s.orphanCount} files", Format.bytes(s.orphanBytes)) }
             if (s.partialCount > 0) row { InfoField("Downloads still in progress · ${s.partialCount} files", Format.bytes(s.partialBytes)) }
         }
-        Section(title = "Cleanup") {
-            row { SettingRow(TnIcon.CLEAR, "Remove unreferenced media", subtitle = "Files left behind by deleted messages; downloads stuck for a week are given up", onClick = viewModel::clearOrphans) }
-            row { SwitchRow(TnIcon.RETRY, "Clean automatically on start", state.autoCleanOrphans, viewModel::toggleAutoClean, subtitle = "Remove unreferenced media every launch") }
-            row { SettingRow(TnIcon.TRASH, "Clear all chat history", subtitle = "Every message on this device; contacts stay", onClick = viewModel::clearAllHistory, tone = RowTone.DANGER) }
+        Section(title = "Cleanup", help = "Removing unreferenced media deletes files no message uses and gives up downloads stuck for a week, deleting their partial files; with automatic cleanup it runs every time the app starts. Clearing all chat history deletes every message on this phone; contacts stay.") {
+            row { SettingRow(TnIcon.CLEAR, "Remove unreferenced media", onClick = viewModel::clearOrphans) }
+            row { SwitchRow(TnIcon.RETRY, "Clean automatically on start", state.autoCleanOrphans, viewModel::toggleAutoClean) }
+            row { SettingRow(TnIcon.TRASH, "Clear all chat history", onClick = viewModel::clearAllHistory, tone = RowTone.DANGER) }
         }
     }
 }

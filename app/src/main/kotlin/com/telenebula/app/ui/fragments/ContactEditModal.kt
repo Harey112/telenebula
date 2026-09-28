@@ -52,13 +52,14 @@ fun ContactEditModal(
                 .padding(20.dp),
         ) {
             Text("Edit contact", style = TnType.body.copy(fontSize = 18.sp, fontWeight = FontWeight.Medium), color = colors.text)
+            Row(modifier = Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Nebula IPv6 address", style = TnType.caption, color = colors.textMuted)
+                HelpButton(
+                    "Changing the address",
+                    "Changing the address moves this chat with it. Use it when the contact received a new certificate; if they already wrote to you from the new address, both records merge.",
+                )
+            }
             ModalInput(address, onAddressChange, "Nebula IPv6 address", isMono = true)
-            Text(
-                "Changing the address moves this chat with it. Use it when the contact received a new certificate; if they already wrote to you from the new address, both records merge.",
-                style = TnType.caption,
-                color = colors.textMuted,
-                modifier = Modifier.padding(top = 6.dp),
-            )
             ModalInput(nickname, onNicknameChange, "Nickname")
             ModalInput(notes, onNotesChange, "Notes", isMultiline = true)
             Row(modifier = Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(26.dp, Alignment.End)) {

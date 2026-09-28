@@ -16,6 +16,7 @@ import java.io.OutputStream
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -39,21 +40,25 @@ import kotlinx.serialization.SerializationException
  */
 class ClientSession(
     val client: DexClient,
+    /** the login this socket belongs to; when it ends, so does the socket */
+    val sessionToken: String,
     private val socket: Socket,
     private val input: InputStream,
     private val output: OutputStream,
     private val backend: DexBackend,
     private val iceServers: () -> List<DexIceServer>,
+    private val onCallReleased: () -> Unit,
     private val io: CoroutineDispatcher,
 ) {
     private sealed interface Outgoing {
-        class Frame(val frame: ServerFrame) : Outgoing
+        class Frame(val bytes: ByteArray) : Outgoing
         class Ping(val payload: ByteArray) : Outgoing
         class Pong(val payload: ByteArray) : Outgoing
         class Close(val code: Int, val reason: String) : Outgoing
     }
 
     private val out = Channel<Outgoing>(Limits.WS_OUT_QUEUE)
+    private val queuedBytes = AtomicLong(0)
     private val isClosing = AtomicBoolean(false)
     private val unansweredPings = AtomicInteger(0)
     private val chatLock = Any()
@@ -64,7 +69,9 @@ class ClientSession(
     /** False once the browser is too slow to keep up; it is then closed and resyncs on reconnect. */
     fun send(frame: ServerFrame): Boolean {
         if (isClosing.get()) return false
-        if (out.trySend(Outgoing.Frame(frame)).isSuccess) return true
+        val bytes = WsCodec.encodeText(DexJson.encodeToString(ServerFrame.serializer(), frame))
+        if (queuedBytes.addAndGet(bytes.size.toLong()) <= Limits.WS_OUT_QUEUE_BYTES && out.trySend(Outgoing.Frame(bytes)).isSuccess) return true
+        queuedBytes.addAndGet(-bytes.size.toLong())
         close(WsClose.TRY_AGAIN_LATER, "too slow")
         return false
     }
@@ -110,7 +117,7 @@ class ClientSession(
         try {
             for (item in out) {
                 val bytes = when (item) {
-                    is Outgoing.Frame -> WsCodec.encodeText(DexJson.encodeToString(ServerFrame.serializer(), item.frame))
+                    is Outgoing.Frame -> item.bytes.also { queuedBytes.addAndGet(-it.size.toLong()) }
                     is Outgoing.Ping -> WsCodec.encode(WsOpcode.PING, item.payload)
                     is Outgoing.Pong -> WsCodec.encode(WsOpcode.PONG, item.payload)
                     is Outgoing.Close -> WsCodec.encodeClose(item.code, item.reason)
@@ -161,6 +168,7 @@ class ClientSession(
         feed("presence", backend.presence()) { ServerFrame.Presence(it) }
         feed("typing", backend.typing()) { ServerFrame.Typing(it.toList()) }
         feed("queues", backend.queues()) { ServerFrame.Queues(it) }
+        feed("tunnel", backend.tunnel()) { ServerFrame.Tunnel(it) }
         feed("call", backend.callState) { ServerFrame.CallState(it) }
         feed("call", backend.callEvents.filter { it.clientId == client.id }) { toFrame(it) }
         feed("settings", backend.settings()) { ServerFrame.Settings(it) }
@@ -217,7 +225,10 @@ class ClientSession(
         )
         is DexCallEvent.Sdp -> ServerFrame.CallSdp(event.callId, event.sdp, event.sdpType)
         is DexCallEvent.Ice -> ServerFrame.CallIce(event.callId, event.candidate)
-        is DexCallEvent.Release -> ServerFrame.CallRelease(event.callId, event.reason)
+        is DexCallEvent.Release -> {
+            onCallReleased()
+            ServerFrame.CallRelease(event.callId, event.reason)
+        }
     }
 
     // --- inbound ----------------------------------------------------------------------------
@@ -270,13 +281,17 @@ class ClientSession(
                 val messages = backend.messagesBefore(peer, frame.beforeTs, id(frame.beforeId), Limits.CHAT_PAGE)
                 send(ServerFrame.ChatMore(peer, messages, hasMore = messages.size >= Limits.CHAT_PAGE))
             }
-            is ClientFrame.SendText -> command("send_text") {
+            is ClientFrame.SendText -> command("send_text", frame.requestId) {
                 backend.sendText(peer(frame.peer), body(frame.body), frame.replyTo?.let(::id), frame.covered)
+                send(ServerFrame.Done("send_text", requestId = frame.requestId))
             }
             is ClientFrame.Typing -> command("typing") { backend.sendTyping(peer(frame.peer), frame.isTyping) }
             is ClientFrame.MarkRead -> command("mark_read") { backend.markRead(peer(frame.peer)) }
             is ClientFrame.React -> command(frame.messageId) { backend.react(id(frame.messageId), emoji(frame.emoji)) }
-            is ClientFrame.Edit -> command(frame.messageId) { backend.edit(id(frame.messageId), body(frame.body)) }
+            is ClientFrame.Edit -> command(frame.messageId) {
+                backend.edit(id(frame.messageId), body(frame.body))
+                send(ServerFrame.Done("edit", requestId = frame.messageId))
+            }
             is ClientFrame.Delete -> command(frame.messageId) { backend.delete(id(frame.messageId), frame.forEveryone) }
             is ClientFrame.RetryAction -> command(frame.actionId) { backend.retryAction(id(frame.actionId)) }
             is ClientFrame.CancelAction -> command(frame.actionId) { backend.cancelAction(id(frame.actionId)) }
@@ -306,10 +321,10 @@ class ClientSession(
                 send(ServerFrame.ContactDetail(detail))
             }
             is ClientFrame.ContactSave -> done("contact_save") {
-                backend.saveContact(peer(frame.peer), text(frame.name), text(frame.nickname), notes(frame.notes))
+                backend.saveContact(peer(frame.peer), text(frame.nickname), notes(frame.notes))
             }
             is ClientFrame.ContactAdd -> done("contact_add") {
-                backend.addContact(peer(frame.peer), text(frame.name), text(frame.nickname), notes(frame.notes))
+                backend.addContact(peer(frame.peer), text(frame.nickname), notes(frame.notes))
             }
             is ClientFrame.ContactDelete -> done("contact_delete") { backend.deleteContact(peer(frame.peer)) }
             is ClientFrame.ContactFlagsSet -> done("contact_flags") { backend.setContactFlags(peer(frame.peer), frame.flags) }
@@ -360,13 +375,15 @@ class ClientSession(
     }
 
     /** One backend call; anything but cancellation becomes one error frame to this browser. */
-    private suspend fun command(ref: String, block: suspend () -> Unit) {
+    private suspend fun command(ref: String, rawRequestId: String? = null, block: suspend () -> Unit) {
+        var requestId: String? = null
         try {
+            requestId = rawRequestId?.let(::id)
             block()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            send(ServerFrame.Error(backend.describe(e), ref))
+            send(ServerFrame.Error(backend.describe(e), ref, requestId))
         }
     }
 

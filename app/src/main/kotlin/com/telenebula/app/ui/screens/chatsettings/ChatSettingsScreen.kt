@@ -69,15 +69,15 @@ fun ChatSettingsScreen(viewModel: ChatSettingsViewModel) {
             Icon(TnIcon.CHEVRON_RIGHT, tint = colors.textMuted, size = 20.dp)
         }
         Section(title = "Chat") {
-            row { SettingRow(TnIcon.BELL, "Notifications and sounds", subtitle = "Overrides for this chat", onClick = viewModel::openNotificationSettings) }
+            row { SettingRow(TnIcon.BELL, "Notifications and sounds", onClick = viewModel::openNotificationSettings) }
             row { SettingRow(TnIcon.CLOCK, "Disappearing messages", subtitle = state.disappearLabel, onClick = viewModel::openDisappearMenu) }
             row { SettingRow(if (state.isMuted) TnIcon.BELL else TnIcon.BELL_OFF, if (state.isMuted) "Unmute" else "Mute", subtitle = if (state.isMuted) "Alerts are off for this chat" else "Silence alerts for this chat", onClick = viewModel::toggleMute) }
             row { SettingRow(if (state.isArchived) TnIcon.UNARCHIVE else TnIcon.ARCHIVE, if (state.isArchived) "Unarchive" else "Archive", onClick = viewModel::toggleArchive) }
-            row { SettingRow(TnIcon.SEARCH, "Search in chat", subtitle = "Find a message in this conversation", onClick = viewModel::openSearch) }
-            row { SettingRow(TnIcon.FOLDER, "Export chat", subtitle = "Plain-text transcript", onClick = viewModel::exportChat) }
+            row { SettingRow(TnIcon.SEARCH, "Search in chat", onClick = viewModel::openSearch) }
+            row { SettingRow(TnIcon.FOLDER, "Export chat as text", onClick = viewModel::exportChat) }
             row { SettingRow(TnIcon.SEND, "Queued actions", subtitle = state.queueLabel, onClick = viewModel::sendQueuedNow) }
         }
-        Section(title = "Privacy") {
+        Section(title = "Privacy", help = "Read receipts, typing and reveal apply to this chat on the phone and in Dex; a code or the phone's lock is answered on the phone only. Block screenshots protects this phone's screen only. Default follows the phone's or the browser's own setting.") {
             row { SelectMenuRow("Send read receipts", viewModel.privacyOptions, state.readReceipts.key) { viewModel.openMenu(READ_RECEIPTS) } }
             row { SelectMenuRow("Send typing indicator", viewModel.privacyOptions, state.typingIndicators.key) { viewModel.openMenu(TYPING) } }
             row { SelectMenuRow("Block screenshots", viewModel.privacyOptions, state.blockScreenshots.key) { viewModel.openMenu(SCREENSHOTS) } }
@@ -107,18 +107,17 @@ fun ChatSettingsScreen(viewModel: ChatSettingsViewModel) {
             for (link in state.linksPreview) row { LinkRow(link, onClick = { viewModel.openLink(link.url) }) }
             row { SettingRow(TnIcon.LINK, "All links", subtitle = state.linksLabel, onClick = viewModel::openLinks) }
         }
-        Section(title = "Danger zone") {
+        Section(title = "Danger zone", help = "Block drops their messages and calls. Clear history deletes every message in this chat on this phone. Delete chat removes the chat and the contact.") {
             row {
                 SettingRow(
                     TnIcon.BLOCK,
                     if (state.isBlocked) "Unblock" else "Block",
-                    subtitle = if (state.isBlocked) "Messages and calls are dropped" else "Drop their messages and calls",
                     onClick = viewModel::toggleBlock,
                     tone = if (state.isBlocked) RowTone.DEFAULT else RowTone.DANGER,
                 )
             }
-            row { SettingRow(TnIcon.CLEAR, "Clear history", subtitle = "Delete every message in this chat on this device", onClick = viewModel::clearHistory) }
-            row { SettingRow(TnIcon.TRASH, "Delete chat", subtitle = "Removes the chat and the contact", onClick = viewModel::deleteChat, tone = RowTone.DANGER) }
+            row { SettingRow(TnIcon.CLEAR, "Clear history", onClick = viewModel::clearHistory) }
+            row { SettingRow(TnIcon.TRASH, "Delete chat", onClick = viewModel::deleteChat, tone = RowTone.DANGER) }
         }
     }
     val menu = remember(state.disappearSeconds) { viewModel.disappearMenu(state.disappearSeconds) }

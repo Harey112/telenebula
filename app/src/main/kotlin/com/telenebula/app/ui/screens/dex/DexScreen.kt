@@ -30,7 +30,7 @@ fun DexScreen(viewModel: DexViewModel) {
     val s by viewModel.uiState.collectAsStateWithLifecycle()
     Screen(title = "Dex", onBack = viewModel::goBack) {
         s.failure?.let { ErrorBanner(it, modifier = Modifier.padding(horizontal = TnSpace.lg, vertical = TnSpace.md)) }
-        Section(footnote = "Your chats and calls in a browser on the same Wi‑Fi, hotspot, USB or Bluetooth tethering. Everything still runs on this phone.") {
+        Section(help = "Your chats and calls in a browser on the same Wi‑Fi, hotspot, USB or Bluetooth tethering. Everything still runs on this phone.") {
             row { SwitchRow(TnIcon.DESKTOP, "Dex", s.isEnabled, viewModel::toggleEnabled, subtitle = s.statusLabel) }
         }
         Section(title = "Login") {
@@ -40,11 +40,11 @@ fun DexScreen(viewModel: DexViewModel) {
         }
         Addresses(s, viewModel)
         if (s.fingerprint.isNotEmpty()) {
-            Section(title = "Certificate", footnote = "The browser warns once about this self-signed certificate. Continue only if it shows this fingerprint.") {
+            Section(title = "Certificate", help = "The browser warns once about this self-signed certificate. Continue only if it shows this fingerprint.") {
                 row { InfoField("SHA-256 fingerprint", s.fingerprint, isMono = true, isSmall = true) }
             }
         }
-        Clients(s)
+        Clients(s, viewModel)
     }
     EditNameModal(
         isVisible = s.editor == DexEditor.Username,
@@ -93,14 +93,14 @@ private fun Addresses(s: DexUiState, actions: DexActions) {
 }
 
 @Composable
-private fun Clients(s: DexUiState) {
+private fun Clients(s: DexUiState, actions: DexActions) {
     if (!s.isEnabled) return
     Section(title = "Connected clients (${s.clients.size})") {
         if (s.clients.isEmpty()) {
             row { Text("Nobody is logged in.", style = TnType.body, color = TnTheme.colors.textMuted, modifier = Modifier.padding(TnSpace.lg)) }
         }
         for (client in s.clients) {
-            row { key(client.id) { SettingRow(TnIcon.DESKTOP, client.label, subtitle = client.detail) } }
+            row { key(client.id) { SettingRow(TnIcon.DESKTOP, client.label, subtitle = client.detail, onClick = { actions.confirmDisconnect(client.id) }) } }
         }
     }
 }

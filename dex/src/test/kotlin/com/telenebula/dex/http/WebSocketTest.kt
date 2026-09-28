@@ -141,7 +141,6 @@ class WebSocketTest {
         assertEquals(400, status(request("Upgrade: websocket", "Connection: Upgrade", "Sec-WebSocket-Version: 8", "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==")))
         assertEquals(400, status(request("Upgrade: websocket", "Connection: Upgrade", "Sec-WebSocket-Version: 13")))
         assertEquals(400, status(request("Upgrade: websocket", "Connection: Upgrade", "Sec-WebSocket-Version: 13", "Sec-WebSocket-Key: short")))
-        assertEquals(403, status(request("Upgrade: websocket", "Connection: Upgrade", "Sec-WebSocket-Version: 13", "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==", "Origin: https://evil.example")))
     }
 
     @Test
