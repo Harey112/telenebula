@@ -1,5 +1,6 @@
 package com.telenebula.core.engine
 
+import com.telenebula.core.db.Standing
 import com.telenebula.core.CoreException
 import com.telenebula.core.CorePaths
 import com.telenebula.core.Ip
@@ -257,7 +258,20 @@ internal class Outbox(private val engine: Engine) {
 
     fun sendText(peerIp: String, body: String, replyToId: String?, isCovered: Boolean = false) {
         requireRoom(peerIp)
+        requireFriend(peerIp)
         createOutgoing(peerIp, body, null, MessageKind.TEXT, replyToId, null, isCovered)
+    }
+
+    /** The note that carries a friend request or its acceptance: a plain message, so every build delivers and acks it. */
+    fun sendFriendNote(peerIp: String, body: String) {
+        requireRoom(peerIp)
+        createOutgoing(peerIp, body, null, MessageKind.TEXT, null, null)
+    }
+
+    private fun requireFriend(peerIp: String) {
+        if (store.standing(Ip.normalize(peerIp)) == Standing.REQUEST_SENT) {
+            throw CoreException.internal("They haven't accepted your friend request yet.")
+        }
     }
 
     /**
@@ -279,6 +293,7 @@ internal class Outbox(private val engine: Engine) {
      */
     fun sendAttachment(peerIp: String, path: String, meta: MessageAttachment, replyToId: String?, isCovered: Boolean = false) {
         requireRoom(peerIp)
+        requireFriend(peerIp)
         val attachment = MessageAttachment(
             name = meta.name,
             mime = meta.mime,

@@ -2,7 +2,7 @@ package com.telenebula.core.model
 
 /** What comparing a peer's authenticated certificate with the pinned one found. */
 enum class FingerprintCheck {
-    /** no contact at that address */
+    /** no contact at that address, or one whose request is still open */
     UNKNOWN,
     PINNED,
     MATCHES,

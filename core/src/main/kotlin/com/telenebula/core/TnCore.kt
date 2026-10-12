@@ -2,6 +2,7 @@ package com.telenebula.core
 
 import com.telenebula.core.model.FingerprintCheck
 import com.telenebula.core.backup.BackupService
+import com.telenebula.core.db.Standing
 import com.telenebula.core.db.Store
 import com.telenebula.core.db.Wire
 import com.telenebula.core.db.Wire.wire
@@ -337,7 +338,19 @@ internal class TnCore(
 
     override fun acceptRequest(ip: String) {
         val normalized = Ip.normalize(ip)
-        if (requireStore().acceptContact(normalized)) engine?.events?.contactChanged(normalized)
+        if (!requireStore().acceptContact(normalized)) return
+        engine?.outbox?.sendFriendNote(normalized, ACCEPTED_NOTE)
+        engine?.events?.contactChanged(normalized)
+    }
+
+    override fun addFriend(ip: String, name: String, fingerprint: String?) {
+        val normalized = Ip.normalize(ip)
+        when (requireStore().addFriend(normalized, name, fingerprint)) {
+            Standing.STRANGER -> engine?.outbox?.sendFriendNote(normalized, REQUEST_NOTE)
+            Standing.REQUEST -> engine?.outbox?.sendFriendNote(normalized, ACCEPTED_NOTE)
+            else -> Unit
+        }
+        engine?.events?.contactChanged(normalized)
     }
 
     override fun ensureContact(ip: String, name: String) {
@@ -443,6 +456,10 @@ internal class TnCore(
     companion object {
         /** Shown on the About screen and in a diagnostics report: the wire version and who speaks it. */
         const val CORE_VERSION = "1.0.0-kotlin"
+
+        /** what the peer reads, on any build, when this device asks to be friends or accepts */
+        const val REQUEST_NOTE = "👋 I'd like to add you as a friend on TeleNebula."
+        const val ACCEPTED_NOTE = "✓ I accepted your friend request."
 
         private const val MAX_PAGE = 1000
         private const val MAX_LIST = 500

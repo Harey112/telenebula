@@ -1,6 +1,8 @@
 package com.telenebula.core.engine
 
+import com.telenebula.core.CoreException
 import com.telenebula.core.CorePaths
+import com.telenebula.core.db.Standing
 import com.telenebula.core.db.JdbcSqlDb
 import com.telenebula.core.db.Schema
 import com.telenebula.core.db.Store
@@ -31,6 +33,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -183,6 +186,43 @@ class EngineLoopbackTest {
             a.store.getMessages(b.ip, 100).count { a.store.getAction(it.id)?.status == MessageActionStatus.SUCCESS } == total
         }
         assertEquals(Limits.MAX_REQUEST_MESSAGES, b.store.getMessages(a.ip, 100).size)
+    }
+
+    @Test
+    fun `a friend request waits for an answer, and accepting makes both friends`() = runBlocking {
+        val (a, b) = strangers()
+        assertEquals(Standing.STRANGER, a.store.addFriend(b.ip, "bob", null))
+        a.engine.outbox.sendFriendNote(b.ip, "hi, it's alice")
+        waitFor("the request to arrive") { b.store.standing(a.ip) == Standing.REQUEST }
+        assertEquals(Standing.REQUEST_SENT, a.store.standing(b.ip))
+        assertThrows(CoreException::class.java) { a.engine.outbox.sendText(b.ip, "hello??", null) }
+
+        assertTrue(b.store.acceptContact(a.ip))
+        b.engine.outbox.sendFriendNote(a.ip, "accepted")
+        waitFor("the answer to arrive") { a.store.standing(b.ip) == Standing.CONTACT }
+        assertEquals(Standing.CONTACT, b.store.standing(a.ip))
+        a.engine.outbox.sendText(b.ip, "now we can talk", null)
+        waitFor("a message between friends") { b.store.getMessages(a.ip, 10).any { it.body == "now we can talk" } }
+    }
+
+    @Test
+    fun `a reply from a build without friend requests still answers one`() = runBlocking {
+        val (a, b) = strangers()
+        a.store.addFriend(b.ip, "bob", null)
+        a.engine.outbox.sendFriendNote(b.ip, "hi")
+        waitFor("the request to arrive") { b.store.getMessages(a.ip, 10).isNotEmpty() }
+        b.engine.outbox.sendText(a.ip, "who is this?", null)
+        waitFor("the reply to make them friends") { a.store.standing(b.ip) == Standing.CONTACT }
+    }
+
+    @Test
+    fun `two people adding each other at once become friends`() = runBlocking {
+        val (a, b) = strangers()
+        a.store.addFriend(b.ip, "bob", null)
+        b.store.addFriend(a.ip, "alice", null)
+        a.engine.outbox.sendFriendNote(b.ip, "hi bob")
+        b.engine.outbox.sendFriendNote(a.ip, "hi alice")
+        waitFor("both to be friends") { a.store.standing(b.ip) == Standing.CONTACT && b.store.standing(a.ip) == Standing.CONTACT }
     }
 
     @Test

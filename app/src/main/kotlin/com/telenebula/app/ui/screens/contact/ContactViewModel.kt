@@ -19,6 +19,7 @@ import com.telenebula.app.platform.deniedCallPermission
 import com.telenebula.app.platform.userMessage
 import com.telenebula.app.runtime.AppRuntime
 import com.telenebula.calls.CallEngine
+import com.telenebula.core.model.Friendship
 import com.telenebula.core.CoreClient
 import com.telenebula.core.PresenceStore
 import com.telenebula.core.PeerQueueStore
@@ -299,6 +300,10 @@ class ContactViewModel(
     private fun startCall(video: Boolean) {
         if (contact?.isBlocked == true) {
             notices.addWarning("Contact is blocked: Unblock them to call.")
+            return
+        }
+        if (contact?.friendship != Friendship.FRIEND) {
+            notices.addWarning("Not friends yet: You can call once the friend request is accepted.")
             return
         }
         viewModelScope.launch {

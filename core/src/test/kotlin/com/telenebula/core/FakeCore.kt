@@ -84,6 +84,7 @@ internal open class FakeCore : MessagingCore {
 
     override fun upsertContact(ip: String, name: String, fingerprint: String?) = Unit
     override fun acceptRequest(ip: String) = Unit
+    override fun addFriend(ip: String, name: String, fingerprint: String?) = Unit
     override fun checkFingerprint(ip: String, fingerprint: String, certName: String) = FingerprintCheck.UNKNOWN
     override fun trustChangedFingerprint(ip: String) = Unit
     override fun ensureContact(ip: String, name: String) = Unit

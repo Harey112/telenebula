@@ -50,7 +50,18 @@ data class Contact(
     val certFingerprint: String? = null,
     /** a different certificate the peer has since presented, until the person trusts it */
     val changedFingerprint: String? = null,
-)
+    /** when this device asked to be friends; null once the peer answered, or for a contact from before friend requests */
+    val requestSentAt: Long? = null,
+) {
+    val friendship: Friendship
+        get() = when {
+            isRequest -> Friendship.REQUEST_RECEIVED
+            requestSentAt != null -> Friendship.REQUEST_SENT
+            else -> Friendship.FRIEND
+        }
+}
+
+enum class Friendship { FRIEND, REQUEST_RECEIVED, REQUEST_SENT }
 
 /** Per-contact privacy; null means the global setting applies. */
 @Serializable

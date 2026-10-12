@@ -47,7 +47,7 @@ import com.telenebula.app.ui.theme.TnType
 fun NewContactScreen(viewModel: NewContactViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = TnTheme.colors
-    Screen(title = "New Contact", onBack = viewModel::goBack, hasKeyboard = true) {
+    Screen(title = "Add Friend", onBack = viewModel::goBack, hasKeyboard = true) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = TnSpace.lg).padding(top = TnSpace.sm), verticalArrangement = Arrangement.spacedBy(TnSpace.md)) {
             Field(label = "Nickname (optional)") {
                 PlainInput(state.nickname, viewModel::setNickname, placeholder = "What you call them", label = "Nickname")
@@ -74,7 +74,7 @@ fun NewContactScreen(viewModel: NewContactViewModel) {
             Field(label = null) {
                 PlainInput(state.notes, viewModel::setNotes, placeholder = "Notes (optional)", label = "Notes", isMultiline = true)
             }
-            PrimaryButton(label = "Create Contact", onClick = viewModel::createContact, isEnabled = state.canCreate)
+            PrimaryButton(label = "Send Friend Request", onClick = viewModel::createContact, isEnabled = state.canCreate)
         }
     }
 }
