@@ -37,7 +37,6 @@ data class CallPrefs(
     val ringForCalls: Boolean,
     val vibrateWhileRinging: Boolean,
     val missedNotification: Boolean,
-    val videoSpeakerDefault: Boolean,
     /** the Network screen's verbose switch: libwebrtc logs and the call trail go to logcat too */
     val isVerboseLogging: Boolean = false,
 )
