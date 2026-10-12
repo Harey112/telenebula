@@ -153,6 +153,8 @@ internal object Schema {
             "typing_indicators" to "typing_indicators INTEGER",
             "block_screenshots" to "block_screenshots INTEGER",
             "reveal_gate" to "reveal_gate TEXT",
+            // added after every install had contacts, so the default makes each existing one accepted
+            "is_request" to "is_request INTEGER NOT NULL DEFAULT 0",
         )
         for ((column, ddl) in contactAdditions) {
             if (column !in contactColumns) addColumn(db, "contacts", ddl)

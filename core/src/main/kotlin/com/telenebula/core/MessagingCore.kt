@@ -153,6 +153,8 @@ internal interface MessagingCore {
 
     fun upsertContact(ip: String, name: String)
 
+    fun acceptRequest(ip: String)
+
     /** Adds the contact when unknown and syncs the username the peer announces. */
     fun ensureContact(ip: String, name: String)
 

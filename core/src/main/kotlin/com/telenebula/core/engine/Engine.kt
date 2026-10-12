@@ -73,7 +73,11 @@ internal class Engine(
     /** "send read receipts" privacy switch (chats are still marked read locally) */
     val sendReadReceipts = AtomicBoolean(sendReadReceipts)
 
-    fun sendsReadReceiptsTo(peerIp: String): Boolean = store.getContact(peerIp)?.privacy?.sendReadReceipts ?: sendReadReceipts.get()
+    fun sendsReadReceiptsTo(peerIp: String): Boolean {
+        val contact = store.getContact(peerIp) ?: return false
+        if (contact.isRequest) return false
+        return contact.privacy.sendReadReceipts ?: sendReadReceipts.get()
+    }
 
     /**
      * Whether the overlay is up. Defaults to true so a caller that never reports it (the tests)

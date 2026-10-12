@@ -322,6 +322,11 @@ internal class TnCore(
 
     override fun upsertContact(ip: String, name: String) = requireStore().upsertContact(Ip.normalize(ip), name)
 
+    override fun acceptRequest(ip: String) {
+        val normalized = Ip.normalize(ip)
+        if (requireStore().acceptContact(normalized)) engine?.events?.contactChanged(normalized)
+    }
+
     override fun ensureContact(ip: String, name: String) {
         requireStore().syncContact(Ip.normalize(ip), name)
     }

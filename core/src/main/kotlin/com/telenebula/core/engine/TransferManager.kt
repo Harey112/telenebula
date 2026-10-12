@@ -106,6 +106,10 @@ internal class TransferManager(private val engine: Engine) {
         val totalChunks = envelope.totalChunks ?: return
         if (!isSane(size, totalChunks)) return
         if (!mayReceiveInto(envelope.id, fromIp)) return
+        if (!store.standing(fromIp).isContact) {
+            sendOfferAnswer(link, envelope.id, accept = false, reason = DECLINED, resumeFrom = 0)
+            return
+        }
         store.syncContact(fromIp, envelope.from.name)
 
         // Re-offers are expected: the sender repeats them on reconnect because it cannot know
@@ -216,6 +220,10 @@ internal class TransferManager(private val engine: Engine) {
         // stricter than the old byte cap: it rejects a peer claiming a small file and then
         // streaming forever, which is what the cap was really guarding against.
         if (!isSane(size, totalChunks)) return
+        if (!store.standing(fromIp).isContact) {
+            sendTransferError(fromIp, envelope.id, DECLINED)
+            return
+        }
 
         // anything over the auto-accept size must have been offered and accepted first; an older
         // peer never sends one, so this can only be a peer that skipped the handshake
@@ -223,7 +231,9 @@ internal class TransferManager(private val engine: Engine) {
             sendTransferError(fromIp, envelope.id, OFFER_REQUIRED)
             return
         }
-        if (engine.incoming.size >= Limits.MAX_INCOMING_TRANSFERS && !engine.incoming.containsKey(envelope.id)) {
+        val isResuming = engine.incoming.containsKey(envelope.id)
+        val fromPeer = engine.incoming.values.count { it.fromIp == fromIp }
+        if (!isResuming && (engine.incoming.size >= Limits.MAX_INCOMING_TRANSFERS || fromPeer >= Limits.MAX_INCOMING_TRANSFERS_PER_PEER)) {
             sendTransferError(fromIp, envelope.id, BUSY)
             return
         }
@@ -239,6 +249,11 @@ internal class TransferManager(private val engine: Engine) {
         engine.incoming.remove(envelope.id)?.discard()
 
         if (!ensureAttachmentsDir()) return
+        // an offered file was measured when it was answered; this is the path that never asks
+        if (engine.attachmentsDir.usableSpace - size < Limits.ATT_SPACE_RESERVE) {
+            sendTransferError(fromIp, envelope.id, NO_SPACE)
+            return
+        }
         val file = attachmentFile(envelope.id, name)
 
         // Resume where an interrupted transfer stopped. The saved count is only trusted when the

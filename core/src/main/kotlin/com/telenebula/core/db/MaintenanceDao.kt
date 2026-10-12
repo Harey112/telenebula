@@ -28,10 +28,11 @@ internal class MaintenanceDao(
         db.update("DELETE FROM attachment_transfers WHERE peer_ip = ?", listOf(peerIp))
     }
 
+    /** A blocked contact keeps its row, so deleting the history never lifts the block. */
     fun deleteContact(ip: String) = lockedTransaction {
         clearMessagesNow(ip)
         db.update("DELETE FROM call_logs WHERE peer_ip = ?", listOf(ip))
-        db.update("DELETE FROM contacts WHERE ip = ?", listOf(ip))
+        db.update("DELETE FROM contacts WHERE ip = ? AND is_blocked = 0", listOf(ip))
         Unit
     }
 

@@ -452,6 +452,8 @@ class CoreClient internal constructor(
 
     suspend fun upsertContact(ip: String, name: String) = localChange { core.upsertContact(ip, name) }
 
+    suspend fun acceptRequest(ip: String) = localChange { core.acceptRequest(ip) }
+
     suspend fun ensureContact(ip: String, name: String) = localChange { core.ensureContact(ip, name) }
 
     suspend fun updateContactDetails(ip: String, name: String, nickname: String, notes: String) =

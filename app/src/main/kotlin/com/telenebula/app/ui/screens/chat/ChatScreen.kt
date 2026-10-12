@@ -11,6 +11,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -304,6 +306,10 @@ private data class Banner(val icon: TnIcon, val text: String, val onCancel: () -
 @Composable
 private fun Composer(state: ChatUiState, actions: ChatActions) {
     val colors = TnTheme.colors
+    if (state.isRequest && !state.isBlocked) {
+        RequestPanel(state.peerName, actions)
+        return
+    }
     val notice = when {
         state.isArchived -> ComposerNotice("This chat is archived.", "Unarchive", actions::unarchive)
         state.isBlocked -> ComposerNotice("You blocked this contact.", "Unblock", actions::unblock)
@@ -374,6 +380,38 @@ private fun Composer(state: ChatUiState, actions: ChatActions) {
 }
 
 private class ComposerNotice(val message: String, val action: String, val onAction: () -> Unit)
+
+@Composable
+private fun RequestPanel(name: String, actions: ChatActions) {
+    val colors = TnTheme.colors
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = TnSpace.lg, vertical = TnSpace.md),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(TnSpace.md),
+    ) {
+        Text(
+            "$name isn't in your contacts. Until you accept, they can't see that you're online, send you files or call you.",
+            style = TnType.small,
+            color = colors.textMuted,
+            textAlign = TextAlign.Center,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(TnSpace.xl)) {
+            RequestAction("Block", colors.danger, actions::blockRequest)
+            RequestAction("Delete", colors.danger, actions::deleteRequest)
+            RequestAction("Accept", colors.accent, actions::acceptRequest)
+        }
+    }
+}
+
+@Composable
+private fun RequestAction(label: String, color: Color, onClick: () -> Unit) {
+    Text(
+        label,
+        style = TnType.body.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+        color = color,
+        modifier = Modifier.clickable(role = Role.Button, onClick = onClick).padding(vertical = TnSpace.sm),
+    )
+}
 
 /** Takes the composer's place for a voice message: recording shows a timer and stop; stopped shows play, the length and cancel. Only Send sends. */
 @Composable

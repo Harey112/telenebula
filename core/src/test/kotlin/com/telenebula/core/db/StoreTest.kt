@@ -974,4 +974,73 @@ class StoreTest {
         /** mute_until: 0 = not muted, -1 = muted forever, else epoch ms */
         const val MUTE_FOREVER = -1L
     }
+
+    @Test
+    fun `a stranger opens a request until the open requests reach the cap`() {
+        val s = store()
+        assertEquals(Standing.NEW_REQUEST, s.admit("fd::1", "one", maxOpenRequests = 2))
+        assertEquals(Standing.REQUEST, s.admit("fd::1", "one", maxOpenRequests = 2))
+        assertEquals(Standing.NEW_REQUEST, s.admit("fd::2", "two", maxOpenRequests = 2))
+        assertEquals(Standing.STRANGER, s.admit("fd::3", "three", maxOpenRequests = 2))
+        assertNull(s.getContact("fd::3"))
+    }
+
+    @Test
+    fun `accepting or adding a requester makes it a contact`() {
+        val s = store()
+        s.admit("fd::1", "one", maxOpenRequests = 10)
+        s.admit("fd::2", "two", maxOpenRequests = 10)
+        assertTrue(s.acceptContact("fd::1"))
+        assertFalse("only an open request is accepted", s.acceptContact("fd::1"))
+        s.upsertContact("fd::2", "two")
+        assertEquals(Standing.CONTACT, s.standing("fd::1"))
+        assertEquals(Standing.CONTACT, s.standing("fd::2"))
+    }
+
+    @Test
+    fun `a contact added by this device is never a request`() {
+        val s = store()
+        s.upsertContact("fd::1", "one")
+        assertEquals(Standing.CONTACT, s.admit("fd::1", "one", maxOpenRequests = 0))
+    }
+
+    @Test
+    fun `deleting a blocked contact erases the history but keeps the block`() {
+        val s = store()
+        s.upsertContact("fd::1", "one")
+        s.insertMessage(message("m1", peer = "fd::1"))
+        s.setContactFlags("fd::1", ContactFlagsPatch(isBlocked = true))
+        s.deleteContact("fd::1")
+        assertTrue(s.isBlocked("fd::1"))
+        assertTrue(s.getMessages("fd::1", 10).isEmpty())
+
+        s.setContactFlags("fd::1", ContactFlagsPatch(isBlocked = false))
+        s.deleteContact("fd::1")
+        assertNull(s.getContact("fd::1"))
+    }
+
+    @Test
+    fun `a contact from before requests existed opens as a contact`() {
+        scratch.mkdirs()
+        val path = File(scratch, "old.db").path
+        JdbcSqlDb.open(path).use { old ->
+            old.execute("CREATE TABLE contacts (ip TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, added_at INTEGER NOT NULL, last_seen_at INTEGER)")
+            old.insert("INSERT INTO contacts (ip, name, added_at) VALUES (?, ?, ?)", listOf("fd::1", "old friend", 1L))
+        }
+        val s = store("old.db")
+        assertEquals(Standing.CONTACT, s.standing("fd::1"))
+        assertEquals(false, s.getContact("fd::1")?.isRequest)
+    }
+
+    @Test
+    fun `a request's messages stay out of the unread badge`() {
+        val s = store()
+        s.upsertContact("fd::1", "friend")
+        s.admit("fd::2", "stranger", maxOpenRequests = 10)
+        s.insertMessage(message("m1", peer = "fd::1"))
+        s.insertMessage(message("m2", peer = "fd::2"))
+        assertEquals(1, s.getUnreadTotal())
+        s.acceptContact("fd::2")
+        assertEquals(2, s.getUnreadTotal())
+    }
 }

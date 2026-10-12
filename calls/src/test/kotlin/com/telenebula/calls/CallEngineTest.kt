@@ -32,7 +32,8 @@ class CallEngineTest {
         }
 
         override suspend fun pingPeer(peerIp: String, timeoutMs: Int): Long = pingResult
-        override suspend fun contact(ip: String): CallContact = CallContact("Harey", isBlocked = false, callsAllowed = true)
+        var known: (String) -> CallContact? = { CallContact("Harey", isBlocked = false, callsAllowed = true) }
+        override suspend fun contact(ip: String): CallContact? = known(ip)
         override suspend fun ensureContact(ip: String, name: String) = Unit
         override suspend fun logCall(entry: CallLogEntry) {
             logged += entry
@@ -288,6 +289,27 @@ class CallEngineTest {
         h.signal(InboundSignal.End(CALL_ID))
         runCurrent()
         assertTrue("the peer itself still can", h.engine.state.value is CallState.Ended)
+    }
+
+    @Test
+    fun anOfferFromAStranger_isRefusedWithoutRingingOrALogRow() = runTest {
+        val h = Harness(this)
+        h.core.known = { null }
+        h.offer()
+        advanceUntilIdle()
+        assertEquals(CallState.Idle, h.engine.state.value)
+        assertEquals(1, h.sentOfType(CallSignalType.REJECT).size)
+        assertTrue(h.core.logged.isEmpty())
+    }
+
+    @Test
+    fun anOfferFromARequest_isDeclined() = runTest {
+        val h = Harness(this)
+        h.core.known = { CallContact("Someone", isBlocked = false, callsAllowed = false) }
+        h.offer()
+        advanceUntilIdle()
+        assertEquals(CallState.Idle, h.engine.state.value)
+        assertEquals(CallOutcome.DECLINED, h.core.logged.single().outcome)
     }
 
     @Test

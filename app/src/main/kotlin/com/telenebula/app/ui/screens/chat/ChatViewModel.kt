@@ -133,6 +133,8 @@ data class ChatUiState(
     val pingResult: PingResult? = null,
     val isBlocked: Boolean = false,
     val isArchived: Boolean = false,
+    /** the peer wrote first and has not been accepted: the composer is replaced by accept, block and delete */
+    val isRequest: Boolean = false,
     val isPeerTyping: Boolean = false,
     val isPeerOnline: Boolean = false,
     val isDisappearing: Boolean = false,
@@ -234,6 +236,9 @@ interface ChatActions {
     fun toggleMessageDetails(msg: ChatMessage)
     fun unarchive()
     fun unblock()
+    fun acceptRequest()
+    fun blockRequest()
+    fun deleteRequest()
 }
 
 /**
@@ -414,6 +419,7 @@ class ChatViewModel(
             pingResult = l.pingResult?.let { if (it == PingResult.REACHABLE && presenceNow == PeerPresence.ONLINE) PingResult.ONLINE else it },
             isBlocked = isBlocked,
             isArchived = isArchived,
+            isRequest = contact?.isRequest == true,
             isPeerTyping = peerIp in typingSet,
             isPeerOnline = presenceNow == PeerPresence.ONLINE,
             isDisappearing = disappear > 0,
@@ -445,7 +451,7 @@ class ChatViewModel(
             isCoverOn = l.isCoverOn,
             revealedIds = l.revealed,
             cancelledByMe = d.view.cancelledByMe,
-            canSend = l.draft.isNotBlank() && !isBlocked && !isArchived && running,
+            canSend = l.draft.isNotBlank() && !isBlocked && !isArchived && contact?.isRequest != true && running,
             composer = composer,
             isSearching = l.isSearching,
             searchQuery = l.searchQuery,
@@ -535,7 +541,7 @@ class ChatViewModel(
             stopTyping()
             return
         }
-        if (!s.isTypingIndicatorOn || s.isBlocked) return
+        if (!s.isTypingIndicatorOn || s.isBlocked || s.isRequest) return
         // at most one "typing" signal every 4 s; a "stopped" signal after 5 s of silence
         val now = System.currentTimeMillis()
         if (now - lastTypingSentAt > TYPING_INTERVAL_MS) {
@@ -867,6 +873,24 @@ class ChatViewModel(
 
     override fun unblock() {
         viewModelScope.launch { core.setContactFlags(peerIp, ContactFlagsPatch(isBlocked = false)) }
+    }
+
+    override fun acceptRequest() {
+        viewModelScope.launch { core.acceptRequest(peerIp) }
+    }
+
+    override fun blockRequest() {
+        viewModelScope.launch {
+            core.setContactFlags(peerIp, ContactFlagsPatch(isBlocked = true))
+            navigator.pop()
+        }
+    }
+
+    override fun deleteRequest() {
+        viewModelScope.launch {
+            core.deleteContact(peerIp)
+            navigator.pop()
+        }
     }
 
     override fun openSettings() = navigator.switchTab(Tab.ME)

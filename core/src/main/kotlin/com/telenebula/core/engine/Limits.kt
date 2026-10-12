@@ -109,6 +109,27 @@ internal object Limits {
     /** Reassemblies in flight at once: each costs a file handle and a little metadata. */
     const val MAX_INCOMING_TRANSFERS = 8
 
+    /** One peer's share of [MAX_INCOMING_TRANSFERS], so a single sender cannot hold every slot. */
+    const val MAX_INCOMING_TRANSFERS_PER_PEER = 3
+
+    /** Requests a stranger can open at once; past it a new stranger is answered but nothing is stored. */
+    const val MAX_OPEN_REQUESTS = 100
+
+    /** Messages kept from one unanswered request; the rest are acked and dropped so the sender stops. */
+    const val MAX_REQUEST_MESSAGES = 50
+
+    /** Live inbound connections; each holds a socket and two coroutines. */
+    const val MAX_INBOUND_CONNECTIONS = 64
+
+    /** A connection silent this long is closed; the next send opens a fresh one. */
+    const val IDLE_READ_TIMEOUT_MS = 10 * 60_000
+
+    /** Frames per second one connection may sustain; 64 KiB chunks make this ~12 MB/s, above any overlay link. */
+    const val FRAME_RATE_PER_SEC = 200
+
+    /** Frames one connection may send in a burst before [FRAME_RATE_PER_SEC] applies. */
+    const val FRAME_BURST = 600
+
     /** per-connection outbound queue (frames); bounds the memory one peer can cost */
     const val PEER_QUEUE_CAP = 16
 
