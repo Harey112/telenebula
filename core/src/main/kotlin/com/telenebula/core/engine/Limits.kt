@@ -118,6 +118,18 @@ internal object Limits {
     /** Messages kept from one unanswered request; the rest are acked and dropped so the sender stops. */
     const val MAX_REQUEST_MESSAGES = 50
 
+    /** Longest message text kept; past it the rest is cut, since a frame alone allows 256 KiB of it. */
+    const val MAX_BODY_CHARS = 65_536
+
+    /** Longest display or file name kept from a frame. */
+    const val MAX_NAME_CHARS = 128
+
+    /** A reaction is one emoji; a long sequence of joiners still fits, a paragraph does not. */
+    const val MAX_EMOJI_CHARS = 32
+
+    /** How far ahead of this clock a sender's timestamp may be before it is replaced with now. */
+    const val MAX_CLOCK_SKEW_MS = 5 * 60_000L
+
     /** Live inbound connections; each holds a socket and two coroutines. */
     const val MAX_INBOUND_CONNECTIONS = 64
 

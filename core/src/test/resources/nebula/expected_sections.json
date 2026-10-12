@@ -288,6 +288,7 @@
       {
         "path": "relay.amRelay",
         "label": "Act as a relay",
+        "helper": "Any host your CA signed can then route its traffic through this phone, with no limit, using your data and battery",
         "isSwitch": true
       }
     ]

@@ -37,8 +37,9 @@ internal class InboundDispatcher(private val engine: Engine) {
 
     private val specs: Map<EnvelopeType, Spec> = EnvelopeType.entries.associateWith(::specFor)
 
-    suspend fun handle(envelope: Envelope, fromIp: String, link: PeerLink) {
+    suspend fun handle(received: Envelope, fromIp: String, link: PeerLink) {
         if (fromIp.isEmpty()) return
+        val envelope = InboundText.bound(received, System.currentTimeMillis())
         // after the block guard on purpose: someone we blocked must not be able to wake our queue
         if (store.isBlocked(fromIp)) return
 
