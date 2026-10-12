@@ -1,5 +1,6 @@
 package com.telenebula.core
 
+import com.telenebula.core.model.FingerprintCheck
 import com.telenebula.core.model.MessageCursor
 import com.telenebula.core.model.ContactPrivacyPrefs
 import com.telenebula.core.model.BackupSummary
@@ -81,8 +82,10 @@ internal open class FakeCore : MessagingCore {
 
     override fun deleteCallLogs(ids: List<String>) = Unit
 
-    override fun upsertContact(ip: String, name: String) = Unit
+    override fun upsertContact(ip: String, name: String, fingerprint: String?) = Unit
     override fun acceptRequest(ip: String) = Unit
+    override fun checkFingerprint(ip: String, fingerprint: String, certName: String) = FingerprintCheck.UNKNOWN
+    override fun trustChangedFingerprint(ip: String) = Unit
     override fun ensureContact(ip: String, name: String) = Unit
     override fun updateContactDetails(ip: String, name: String, nickname: String, notes: String) = Unit
     override fun deleteContact(ip: String) = Unit

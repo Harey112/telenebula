@@ -46,6 +46,10 @@ data class Contact(
     val privacy: ContactPrivacyPrefs = ContactPrivacyPrefs(),
     /** the peer wrote first and has not been accepted: no ringing, files, presence or receipts */
     val isRequest: Boolean = false,
+    /** the nebula certificate this contact was first seen with, or the one its QR code named */
+    val certFingerprint: String? = null,
+    /** a different certificate the peer has since presented, until the person trusts it */
+    val changedFingerprint: String? = null,
 )
 
 /** Per-contact privacy; null means the global setting applies. */

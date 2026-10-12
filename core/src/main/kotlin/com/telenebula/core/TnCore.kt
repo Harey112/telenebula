@@ -1,5 +1,6 @@
 package com.telenebula.core
 
+import com.telenebula.core.model.FingerprintCheck
 import com.telenebula.core.backup.BackupService
 import com.telenebula.core.db.Store
 import com.telenebula.core.db.Wire
@@ -320,7 +321,19 @@ internal class TnCore(
 
     // --- contacts ---
 
-    override fun upsertContact(ip: String, name: String) = requireStore().upsertContact(Ip.normalize(ip), name)
+    override fun upsertContact(ip: String, name: String, fingerprint: String?) = requireStore().upsertContact(Ip.normalize(ip), name, fingerprint)
+
+    override fun checkFingerprint(ip: String, fingerprint: String, certName: String): FingerprintCheck {
+        val normalized = Ip.normalize(ip)
+        return requireStore().checkFingerprint(normalized, fingerprint, certName).also {
+            if (it != FingerprintCheck.MATCHES && it != FingerprintCheck.UNKNOWN) engine?.events?.contactChanged(normalized)
+        }
+    }
+
+    override fun trustChangedFingerprint(ip: String) {
+        val normalized = Ip.normalize(ip)
+        if (requireStore().trustChangedFingerprint(normalized)) engine?.events?.contactChanged(normalized)
+    }
 
     override fun acceptRequest(ip: String) {
         val normalized = Ip.normalize(ip)

@@ -46,6 +46,19 @@ fun ContactScreen(viewModel: ContactViewModel) {
     LaunchedEffect(Unit) { viewModel.onShown() }
     Screen {
         ContactHeader(state, viewModel)
+        state.changedFingerprint?.let { changed ->
+            Section(title = "Certificate changed") {
+                row {
+                    SettingRow(
+                        TnIcon.SHIELD,
+                        "Trust the new certificate",
+                        subtitle = "They now present $changed instead of ${state.pinnedFingerprint}. Check with them before you trust it.",
+                        onClick = viewModel::trustNewCertificate,
+                        tone = RowTone.DANGER,
+                    )
+                }
+            }
+        }
         Section {
             row { InfoField("Mobile (Nebula IPv6)", state.ip, isMono = true) }
             if (state.notes.isNotEmpty()) row { InfoField("Notes", state.notes) }
@@ -171,6 +184,7 @@ private fun AdvancedSection(state: ContactUiState, actions: ContactActions) {
         row { InfoField("Identity", "Authenticated by your nebula CA (Noise IK, mutual certificates)") }
         row { InfoField("Certificate name seen by nebula", state.peerCertName, isMono = true) }
         row { InfoField("Certificate fingerprint", state.peerCertFingerprint, isMono = true, isSmall = true) }
+        row { InfoField("Pinned fingerprint", state.pinnedFingerprint, isMono = true, isSmall = true) }
     }
     val s = state.stats
     Section(title = "Traffic") {

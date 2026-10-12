@@ -8,6 +8,7 @@ import com.telenebula.core.model.ChatMessage
 import com.telenebula.core.model.ContactFlagsPatch
 import com.telenebula.core.model.ContactNotificationPrefs
 import com.telenebula.core.model.CoverRevealGate
+import com.telenebula.core.model.FingerprintCheck
 import com.telenebula.core.model.MessageAction
 import com.telenebula.core.model.MessageActionStatus
 import com.telenebula.core.model.MessageActionType
@@ -413,7 +414,7 @@ class StoreTest {
     }
 
     @Test
-    fun `syncing a contact fills and updates the username but keeps the nickname`() {
+    fun `syncing a contact fills an empty username but keeps the nickname`() {
         val store = store()
         // created from the form with a nickname only
         store.upsertContact("fd::1", "")
@@ -422,6 +423,7 @@ class StoreTest {
         assertFalse("an empty announcement changes nothing", store.syncContact("fd::1", ""))
         assertTrue("the peer's hello brings the real username", store.syncContact("fd::1", "alice"))
         assertFalse("the same name again is not a change", store.syncContact("fd::1", "alice"))
+        assertFalse("an announced name never replaces a known one", store.syncContact("fd::1", "mallory"))
 
         val contact = store.getContact("fd::1")
         assertEquals("alice", contact?.name)
@@ -1042,5 +1044,43 @@ class StoreTest {
         assertEquals(1, s.getUnreadTotal())
         s.acceptContact("fd::2")
         assertEquals(2, s.getUnreadTotal())
+    }
+
+    @Test
+    fun `the first certificate seen is pinned and names the contact`() {
+        val s = store()
+        s.upsertContact("fd::1", "")
+        assertEquals(FingerprintCheck.PINNED, s.checkFingerprint("fd::1", "AB12", "alice-phone"))
+        assertEquals(FingerprintCheck.MATCHES, s.checkFingerprint("fd::1", "ab12", "alice-phone"))
+        assertEquals("ab12", s.getContact("fd::1")?.certFingerprint)
+        assertEquals("alice-phone", s.getContact("fd::1")?.name)
+        assertEquals(FingerprintCheck.UNKNOWN, s.checkFingerprint("fd::9", "ab12", "x"))
+    }
+
+    @Test
+    fun `a different certificate is held until the person trusts it`() {
+        val s = store()
+        s.upsertContact("fd::1", "alice", fingerprint = "aaaa")
+        assertEquals(FingerprintCheck.CHANGED, s.checkFingerprint("fd::1", "bbbb", "impostor"))
+        assertEquals(FingerprintCheck.STILL_CHANGED, s.checkFingerprint("fd::1", "bbbb", "impostor"))
+        val held = s.getContact("fd::1")
+        assertEquals("aaaa", held?.certFingerprint)
+        assertEquals("bbbb", held?.changedFingerprint)
+        assertEquals("a changed certificate does not rename the contact", "alice", held?.name)
+
+        assertTrue(s.trustChangedFingerprint("fd::1"))
+        assertEquals("bbbb", s.getContact("fd::1")?.certFingerprint)
+        assertNull(s.getContact("fd::1")?.changedFingerprint)
+        assertEquals(FingerprintCheck.MATCHES, s.checkFingerprint("fd::1", "bbbb", "alice-new"))
+    }
+
+    @Test
+    fun `a scanned code re-pins and clears a held change`() {
+        val s = store()
+        s.upsertContact("fd::1", "alice", fingerprint = "aaaa")
+        s.checkFingerprint("fd::1", "bbbb", "alice")
+        s.upsertContact("fd::1", "alice", fingerprint = "BBBB")
+        assertEquals("bbbb", s.getContact("fd::1")?.certFingerprint)
+        assertNull(s.getContact("fd::1")?.changedFingerprint)
     }
 }
