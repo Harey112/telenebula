@@ -1,5 +1,9 @@
 package com.telenebula.app.ui.fragments
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -135,6 +139,8 @@ fun PromptCard(prompt: Prompt, value: String, onValueChange: (String) -> Unit, o
                 singleLine = true,
                 textStyle = TnType.body.copy(color = colors.text),
                 cursorBrush = SolidColor(colors.accent),
+                visualTransformation = if (prompt.isSecret) PasswordVisualTransformation() else VisualTransformation.None,
+                keyboardOptions = if (prompt.isSecret) KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false) else KeyboardOptions.Default,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(44.dp)

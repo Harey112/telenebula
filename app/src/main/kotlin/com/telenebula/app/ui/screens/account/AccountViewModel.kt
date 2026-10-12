@@ -70,13 +70,44 @@ class AccountViewModel(
 
     fun exportBackup() {
         if (isBusy.value) return
+        notices.setPrompt(
+            Prompt(
+                message = "Backup password\n\nChoose a password of at least ${CoreClient.MIN_BACKUP_PASSWORD_CHARS} characters. The backup can't be opened without it, and nobody can recover it for you.",
+                placeholder = "Password",
+                rightLabel = "Next",
+                isSecret = true,
+                onRight = ::confirmBackupPassword,
+            ),
+        )
+    }
+
+    private fun confirmBackupPassword(first: String) {
+        if (first.length < CoreClient.MIN_BACKUP_PASSWORD_CHARS) {
+            notices.addWarning("Password too short: Use at least ${CoreClient.MIN_BACKUP_PASSWORD_CHARS} characters.")
+            return
+        }
+        notices.setPrompt(
+            Prompt(
+                message = "Confirm the password\n\nType it once more.",
+                placeholder = "Password",
+                rightLabel = "Create backup",
+                isSecret = true,
+                onRight = { second ->
+                    if (second == first) runExport(second.toCharArray()) else notices.addWarning("Passwords don't match: The backup was not created.")
+                },
+            ),
+        )
+    }
+
+    private fun runExport(password: CharArray) {
+        if (isBusy.value) return
         isBusy.value = true
         viewModelScope.launch {
             try {
-                val summary = notices.withLoading("Copying the database, settings and media…") { core.createBackup(BuildConfig.VERSION_NAME) }
-                openWith.shareFile(File(summary.path), "application/x-tar")
+                val summary = notices.withLoading("Copying and encrypting the database, settings and media…") { core.createBackup(BuildConfig.VERSION_NAME, password) }
+                openWith.shareFile(File(summary.path), "application/octet-stream")
                 notices.setSuccess(
-                    "Backup ready: ${summary.contacts} contacts · ${summary.messages} messages · ${summary.attachments} files · ${Format.bytes(summary.bytes)}. Your private key is not in the file.",
+                    "Backup ready: ${summary.contacts} contacts · ${summary.messages} messages · ${summary.attachments} files · ${Format.bytes(summary.bytes)}. It's encrypted with your password, and your private key is not in it.",
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -106,15 +137,40 @@ class AccountViewModel(
     private fun runRestore(uri: android.net.Uri, name: String) {
         isBusy.value = true
         viewModelScope.launch {
-            try {
-                val summary = notices.withLoading("Reading $name…") {
-                    val archive = files.copyToCache(uri)
-                    try {
-                        core.importBackup(archive.absolutePath)
-                    } finally {
+            val archive = try {
+                files.copyToCache(uri)
+            } catch (e: CancellationException) {
+                isBusy.value = false
+                throw e
+            } catch (e: Exception) {
+                notices.addError("Couldn't read $name: ${e.userMessage()}")
+                isBusy.value = false
+                return@launch
+            }
+            if (!core.isEncryptedBackup(archive.absolutePath)) {
+                importArchive(archive, name, null)
+                return@launch
+            }
+            notices.setPrompt(
+                Prompt(
+                    message = "Backup password\n\nEnter the password $name was created with.",
+                    placeholder = "Password",
+                    rightLabel = "Restore",
+                    isSecret = true,
+                    onLeft = {
                         archive.delete()
-                    }
-                }
+                        isBusy.value = false
+                    },
+                    onRight = { importArchive(archive, name, it.toCharArray()) },
+                ),
+            )
+        }
+    }
+
+    private fun importArchive(archive: File, name: String, password: CharArray?) {
+        viewModelScope.launch {
+            try {
+                val summary = notices.withLoading("Reading $name…") { core.importBackup(archive.absolutePath, password) }
                 prefs.load()
                 notices.setSuccess("Backup restored: ${summary.contacts} contacts, ${summary.messages} messages and ${summary.attachments} files were added.")
             } catch (e: CancellationException) {
@@ -122,6 +178,7 @@ class AccountViewModel(
             } catch (e: Exception) {
                 notices.addError("Couldn't restore the backup: ${e.userMessage()}")
             } finally {
+                archive.delete()
                 isBusy.value = false
             }
         }

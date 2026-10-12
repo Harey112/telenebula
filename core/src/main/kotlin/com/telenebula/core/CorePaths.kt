@@ -21,6 +21,9 @@ class CorePaths(filesDir: File, private val cacheDir: File) {
     fun backupFile(nowMs: Long = System.currentTimeMillis()): File =
         File(cacheDir, backupFileName(nowMs))
 
+    /** Every backup this app left in the cache, sealed or half-written. */
+    fun backupFiles(): List<File> = cacheDir.listFiles { file: File -> file.name.startsWith(BACKUP_PREFIX) }?.toList().orEmpty()
+
     companion object {
         private val UNSAFE_NAME_CHARS = Regex("[^A-Za-z0-9._-]")
 
@@ -40,12 +43,14 @@ class CorePaths(filesDir: File, private val cacheDir: File) {
             return clean.ifEmpty { "file" }
         }
 
-        /** `telenebula-backup-YYYYMMDD-HHmm.tar` in local time. */
+        private const val BACKUP_PREFIX = "telenebula-backup-"
+
+        /** `telenebula-backup-YYYYMMDD-HHmm.tnbackup` in local time. */
         fun backupFileName(nowMs: Long): String {
             val c = Calendar.getInstance().apply { timeInMillis = nowMs }
             return String.format(
                 Locale.ROOT,
-                "telenebula-backup-%04d%02d%02d-%02d%02d.tar",
+                "$BACKUP_PREFIX%04d%02d%02d-%02d%02d.tnbackup",
                 c.get(Calendar.YEAR),
                 c.get(Calendar.MONTH) + 1,
                 c.get(Calendar.DAY_OF_MONTH),
