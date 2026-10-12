@@ -29,4 +29,6 @@ data class CoreStartConfig(
     val msgPort: Int,
     val sendReadReceipts: Boolean,
     val appVersion: String,
+    /** the certificate's overlay CIDRs; an inbound connection from outside them is refused */
+    val networks: List<String> = emptyList(),
 )

@@ -114,7 +114,7 @@ class CallEngineTest {
         val diagnostics = CallDiagnostics(isVerbose = { false }, now = { testScope.testScheduler.currentTime })
         val engine = CallEngine(
             core = core,
-            prefs = { CallPrefs(ringForCalls = true, vibrateWhileRinging = false, missedNotification = false, videoSpeakerDefault = false) },
+            prefs = { CallPrefs(ringForCalls = true, vibrateWhileRinging = false, missedNotification = false, videoSpeakerDefault = false, overlayIp = SELF) },
             audio = FakeAudio(),
             media = media,
             system = FakeSystem(),
@@ -302,11 +302,12 @@ class CallEngineTest {
     }
 
     @Test
-    fun candidatesThatAreNotHost_areRefused() = runTest {
+    fun candidatesThatAreNotHostOnThePeersOverlayAddress_areRefused() = runTest {
         val h = Harness(this)
         h.offer()
         h.ice("candidate:3 1 udp 1 203.0.113.9 3478 typ relay raddr 0.0.0.0 rport 0")
         h.ice("candidate:4 1 udp 1 203.0.113.9 3478 typ srflx raddr 0.0.0.0 rport 0")
+        h.ice(LAN_CANDIDATE)
         h.ice(CANDIDATE_A)
         h.engine.accept()
         runCurrent()
@@ -355,8 +356,8 @@ class CallEngineTest {
         h.engine.startCall(PEER, video = false)
         runCurrent()
         val callId = h.session?.callId ?: ""
-        h.media.listener?.onLocalCandidate(IceCandidate("0", 0, CANDIDATE_A))
-        h.media.listener?.onLocalCandidate(IceCandidate("0", 0, CANDIDATE_B))
+        h.media.listener?.onLocalCandidate(IceCandidate("0", 0, SELF_CANDIDATE))
+        h.media.listener?.onLocalCandidate(IceCandidate("0", 0, LAN_CANDIDATE))
         h.media.listener?.onLocalGatheringComplete()
         runCurrent()
         assertTrue("held while contacting", h.sentOfType(CallSignalType.ICE).isEmpty())
@@ -364,7 +365,7 @@ class CallEngineTest {
         h.signal(InboundSignal.Ringing(callId))
         runCurrent()
         val ice = h.sentOfType(CallSignalType.ICE)
-        assertEquals(listOf(CANDIDATE_A, CANDIDATE_B, null), ice.map { it.candidate?.candidate })
+        assertEquals("only the overlay address leaves the phone", listOf(SELF_CANDIDATE, null), ice.map { it.candidate?.candidate })
     }
 
     @Test
@@ -463,6 +464,9 @@ class CallEngineTest {
         const val STRANGER = "fd10:100::999"
         const val CALL_ID = "call-1"
         const val CANDIDATE_A = "candidate:1 1 udp 2130706431 fd10:100::107 50000 typ host"
-        const val CANDIDATE_B = "candidate:2 1 udp 2130706431 192.168.1.20 50001 typ host"
+        const val CANDIDATE_B = "candidate:2 1 udp 2130706431 fd10:100::107 50001 typ host"
+        const val SELF = "fd10:100::1"
+        const val SELF_CANDIDATE = "candidate:1 1 udp 2130706431 fd10:100::1 50000 typ host"
+        const val LAN_CANDIDATE = "candidate:2 1 udp 2130706431 192.168.1.20 50001 typ host"
     }
 }

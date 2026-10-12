@@ -13,11 +13,16 @@ import com.telenebula.core.model.MessageActionType
 import com.telenebula.core.model.MessageAttachment
 import com.telenebula.core.model.MessageDirection
 import com.telenebula.core.model.MessageKind
+import com.telenebula.core.model.Envelope
+import com.telenebula.core.model.EnvelopeFrom
 import com.telenebula.core.model.EnvelopeType
+import com.telenebula.core.protocol.FrameCodec
 import com.telenebula.core.model.MessageStatus
 import java.io.File
 import java.util.Base64
+import java.net.InetSocketAddress
 import java.net.ServerSocket
+import java.net.Socket
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -39,7 +44,7 @@ class EngineLoopbackTest {
     private val scratch = File(System.getProperty("java.io.tmpdir"), "tn-engine-${System.nanoTime()}")
     private val nodes = ArrayList<Node>()
 
-    private inner class Node(val ip: String, val name: String, val port: Int) {
+    private inner class Node(val ip: String, val name: String, val port: Int, val bindHost: String = ip, val networks: List<String> = emptyList()) {
         val events = CopyOnWriteArrayList<CoreEvent>()
         val attachments = File(scratch, "$name/attachments").apply { mkdirs() }
         val store: Store = run {
@@ -59,7 +64,8 @@ class EngineLoopbackTest {
                 displayName = name,
                 msgPort = port,
                 appVersion = "test",
-                bindHost = ip,
+                bindHost = bindHost,
+                networks = networks,
             ),
             attachmentsDir = attachments,
             sendReadReceipts = true,
@@ -114,6 +120,48 @@ class EngineLoopbackTest {
         nodes += a
         nodes += b
         return a to b
+    }
+
+    @Test
+    fun `a connection that did not arrive on the overlay address is closed unread`() = runBlocking {
+        val port = ServerSocket(0).use { it.localPort }
+        val node = Node("127.0.0.4", "dave", port, bindHost = "127.0.0.5").also { nodes += it }
+        Socket("127.0.0.5", port).use { socket ->
+            socket.soTimeout = 5_000
+            socket.getOutputStream().write(FrameCodec.encode(Envelope(type = EnvelopeType.HELLO, from = EnvelopeFrom(ip = "127.0.0.9", name = "mallory"))))
+            assertEquals(-1, socket.getInputStream().read())
+        }
+        assertTrue(node.store.getContacts().isEmpty())
+    }
+
+    private fun dialFrom(source: String, target: String, port: Int): Socket =
+        Socket().apply {
+            bind(InetSocketAddress(source, 0))
+            connect(InetSocketAddress(target, port), 5_000)
+            soTimeout = 5_000
+        }
+
+    private fun hello(from: String) = FrameCodec.encode(Envelope(type = EnvelopeType.HELLO, from = EnvelopeFrom(ip = from, name = "someone")))
+
+    @Test
+    fun `a sender outside the certificate's networks is closed unread`() = runBlocking {
+        val port = ServerSocket(0).use { it.localPort }
+        val node = Node("127.0.0.6", "erin", port, networks = listOf("127.0.0.6/31")).also { nodes += it }
+        dialFrom("127.0.0.8", node.ip, port).use { socket ->
+            socket.getOutputStream().write(hello("127.0.0.8"))
+            assertEquals(-1, socket.getInputStream().read())
+        }
+        assertTrue(node.store.getContacts().isEmpty())
+    }
+
+    @Test
+    fun `a sender inside the certificate's networks is served`() = runBlocking {
+        val port = ServerSocket(0).use { it.localPort }
+        val node = Node("127.0.0.6", "erin", port, networks = listOf("127.0.0.6/31")).also { nodes += it }
+        dialFrom("127.0.0.7", node.ip, port).use { socket ->
+            socket.getOutputStream().write(hello("127.0.0.7"))
+            waitFor("the hello to make a contact") { node.store.getContacts().any { it.ip == "127.0.0.7" } }
+        }
     }
 
     /** Headroom demanded of the next scheduled probe, so no timer can drain the queue on its own. */

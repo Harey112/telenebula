@@ -82,6 +82,7 @@ internal class TnCore(
                     displayName = config.displayName,
                     msgPort = config.msgPort,
                     appVersion = config.appVersion,
+                    networks = config.networks,
                 ),
                 attachmentsDir = File(paths.attachmentsDir),
                 sendReadReceipts = config.sendReadReceipts,

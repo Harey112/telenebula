@@ -2,7 +2,7 @@
   "config": {
     "pki": {
       "blocklist": [],
-      "disconnectInvalid": false,
+      "disconnectInvalid": true,
       "initiatingVersion": 1
     },
     "staticHosts": [],

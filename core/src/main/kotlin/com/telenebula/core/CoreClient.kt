@@ -141,6 +141,7 @@ class CoreClient internal constructor(
             msgPort = profile.msgPort,
             sendReadReceipts = prefs.sendReadReceipts,
             appVersion = appVersion,
+            networks = profile.networks,
         )
         withContext(io) { core.start(config) }
     }

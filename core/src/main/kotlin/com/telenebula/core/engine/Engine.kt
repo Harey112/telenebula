@@ -28,6 +28,7 @@ internal class EngineProfile(
      * two engines can run on one host and still see each other as two different peers.
      */
     val bindHost: String = "::",
+    val networks: List<String> = emptyList(),
 )
 
 /**

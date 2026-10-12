@@ -38,6 +38,8 @@ data class CallPrefs(
     val vibrateWhileRinging: Boolean,
     val missedNotification: Boolean,
     val videoSpeakerDefault: Boolean,
+    /** this phone's own overlay address: the only one a local call candidate may carry */
+    val overlayIp: String,
     /** the Network screen's verbose switch: libwebrtc logs and the call trail go to logcat too */
     val isVerboseLogging: Boolean = false,
 )
