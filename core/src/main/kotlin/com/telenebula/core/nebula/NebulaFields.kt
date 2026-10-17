@@ -534,6 +534,7 @@ private val SECTION_TABLE: List<SectionEntry> = listOf(
             switchField(
                 path = "relay.amRelay",
                 label = "Act as a relay",
+                helper = "Any host your CA signed can then route its traffic through this phone, with no limit, using your data and battery",
                 read = { it.relay.amRelay },
                 write = { c, v -> c.copy(relay = c.relay.copy(amRelay = v)) },
             ),
