@@ -43,7 +43,6 @@ import com.telenebula.app.nav.Privacy
 import com.telenebula.app.nav.RenewCertificate
 import com.telenebula.app.nav.MeTab
 import com.telenebula.app.nav.Settings
-import com.telenebula.app.nav.Dex
 import com.telenebula.app.nav.Status
 import com.telenebula.app.nav.TabKey
 import com.telenebula.app.nav.Setup
@@ -121,8 +120,6 @@ import com.telenebula.app.ui.screens.settings.SettingsScreen
 import com.telenebula.app.ui.screens.settings.SettingsViewModel
 import com.telenebula.app.ui.screens.me.MeScreen
 import com.telenebula.app.ui.screens.me.MeViewModel
-import com.telenebula.app.ui.screens.dex.DexScreen
-import com.telenebula.app.ui.screens.dex.DexViewModel
 import com.telenebula.app.ui.screens.status.StatusScreen
 import com.telenebula.app.ui.screens.status.StatusViewModel
 import com.telenebula.app.ui.screens.setup.SetupScreen
@@ -169,7 +166,6 @@ fun RootShell(activity: MainActivity) {
                                 MeScreen(viewModel { MeViewModel(graph.runtime, graph.core, graph.notices, graph.updateMonitor, navigator) })
                             }
                             entry<Settings> { SettingsScreen(viewModel { SettingsViewModel(graph.runtime, graph.updateMonitor, navigator) }) }
-                            entry<Dex> { DexScreen(viewModel { DexViewModel(navigator) }) }
                             entry<Status> { StatusScreen(viewModel { StatusViewModel(graph.prefs, graph.runtime, navigator) }) }
                             entry<Call>(metadata = NavDisplay.transitionSpec { fadeIn(tween(120)) togetherWith ExitTransition.None }) {
                                 CallScreen(
