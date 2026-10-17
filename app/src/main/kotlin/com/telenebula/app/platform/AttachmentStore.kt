@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.StatFs
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import com.telenebula.app.model.AttachmentKind
@@ -70,6 +71,17 @@ class AttachmentStore(context: Context, private val io: CoroutineDispatcher = Di
         resolver.openInputStream(source)?.use { input -> dest.outputStream().use { input.copyTo(it) } }
             ?: throw IOException("Could not read the picked file")
         dest
+    }
+
+    suspend fun writeToDocument(file: File, target: Uri) = withContext(io) {
+        resolver.openOutputStream(target, "wt")?.use { out -> file.inputStream().use { it.copyTo(out) } }
+            ?: throw IOException("Could not write to the chosen location")
+    }
+
+    /** Removes a document this app created and then could not fill. */
+    suspend fun deleteDocument(target: Uri) = withContext(io) {
+        runCatching { DocumentsContract.deleteDocument(resolver, target) }
+        Unit
     }
 
     /** Saves a received image or video into the system gallery under Pictures|Movies/TeleNebula. */

@@ -202,7 +202,7 @@ fun RootShell(activity: MainActivity) {
                             entry<Contact> { key -> ContactScreen(viewModel(key = key.peerIp) { ContactViewModel(key.peerIp, graph.core, graph.peerQueues, graph.peerPresence, graph.prefs, graph.vpn, graph.runtime, graph.callEngine, graph.gateway, graph.notices, navigator) }) }
                             entry<ContactCalls> { key -> ContactCallsScreen(viewModel(key = key.peerIp) { ContactCallsViewModel(key.peerIp, graph.core, navigator) }) }
                             entry<NewContact> { NewContactScreen(viewModel { NewContactViewModel(graph.core, graph.gateway, graph.notices, navigator) }) }
-                            entry<Account> { AccountScreen(viewModel { AccountViewModel(graph.runtime, graph.core, graph.identity, graph.prefs, graph.gateway, graph.attachments, graph.openWith, graph.notices, navigator) }) }
+                            entry<Account> { AccountScreen(viewModel { AccountViewModel(graph.runtime, graph.core, graph.identity, graph.prefs, graph.gateway, graph.attachments, graph.notices, navigator) }) }
                             entry<RenewCertificate> { RenewCertificateScreen(viewModel { RenewCertificateViewModel(graph.runtime, graph.gateway, graph.attachments, graph.certs, graph.identity, graph.notices, navigator) }) }
                             entry<Appearance> { AppearanceScreen(viewModel { AppearanceViewModel(graph.prefs, navigator) }) }
                             entry<Privacy> { PrivacyScreen(viewModel { PrivacyViewModel(graph.prefs, graph.core, graph.runtime, graph.appLock, navigator) }) }

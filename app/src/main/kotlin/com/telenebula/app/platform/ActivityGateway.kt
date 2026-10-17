@@ -25,11 +25,13 @@ class ActivityGateway {
     private var permission: ActivityResultLauncher<String>? = null
     private var openDocument: ActivityResultLauncher<Array<String>>? = null
     private var pickMedia: ActivityResultLauncher<PickVisualMediaRequest>? = null
+    private var createDocument: ActivityResultLauncher<String>? = null
 
     private var pendingConsent: CompletableDeferred<Boolean>? = null
     private var pendingPermission: CompletableDeferred<Boolean>? = null
     private var pendingDocument: CompletableDeferred<Uri?>? = null
     private var pendingMedia: CompletableDeferred<Uri?>? = null
+    private var pendingSave: CompletableDeferred<Uri?>? = null
 
     /** Starts an activity from the attached one; a caller that kept its own Activity reference would leak it. */
     fun startActivity(build: (Context) -> Intent) {
@@ -65,6 +67,10 @@ class ActivityGateway {
             pendingMedia?.complete(it)
             pendingMedia = null
         }
+        createDocument = host.registerForActivityResult(ActivityResultContracts.CreateDocument(BINARY_MIME)) {
+            pendingSave?.complete(it)
+            pendingSave = null
+        }
     }
 
     fun detach(host: ComponentActivity) {
@@ -74,6 +80,7 @@ class ActivityGateway {
         permission = null
         openDocument = null
         pickMedia = null
+        createDocument = null
         cancelPending()
     }
 
@@ -82,6 +89,8 @@ class ActivityGateway {
         pendingPermission?.complete(false)
         pendingDocument?.complete(null)
         pendingMedia?.complete(null)
+        pendingSave?.complete(null)
+        pendingSave = null
         pendingConsent = null
         pendingPermission = null
         pendingDocument = null
@@ -120,6 +129,12 @@ class ActivityGateway {
         return await(pendingDocument, { pendingDocument = it }) { launcher.launch(mimeTypes) }
     }
 
+    /** System "Save as" screen: the person picks the folder and name; null when cancelled. */
+    suspend fun pickSaveLocation(suggestedName: String): Uri? {
+        val launcher = createDocument ?: return null
+        return await(pendingSave, { pendingSave = it }) { launcher.launch(suggestedName) }
+    }
+
     /** Photo picker for images and videos; null when cancelled. */
     suspend fun pickVisualMedia(): Uri? {
         val launcher = pickMedia ?: return null
@@ -138,5 +153,9 @@ class ActivityGateway {
         store(deferred)
         launch()
         return deferred.await()
+    }
+
+    private companion object {
+        const val BINARY_MIME = "application/octet-stream"
     }
 }
