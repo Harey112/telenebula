@@ -128,6 +128,7 @@ class AppRuntime(
         if (!isBooted.compareAndSet(false, true)) return
         bootJob = scope.launch {
             core.openStore()
+            launch { core.discardBackupFiles() }
             val loaded = prefs.load()
             prefs.loadFailure?.let { notices.addWarning("Settings could not be read: $it. The defaults are in use.") }
             launch { prefs.prefs.map { it.themeMode }.distinctUntilChanged().collect(nightMode::apply) }

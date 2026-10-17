@@ -1,7 +1,9 @@
 package com.telenebula.core
 
-import com.telenebula.core.model.FingerprintCheck
 import android.content.Context
+import com.telenebula.core.backup.BackupCrypto
+import com.telenebula.core.model.FingerprintCheck
+import java.io.File
 import com.telenebula.core.events.CoreEventBus
 import com.telenebula.core.events.CoreInvalidations
 import com.telenebula.core.events.CoreInvalidations.Companion.BUMP_COALESCE_MS
@@ -494,13 +496,47 @@ class CoreClient internal constructor(
     }
 
     /** Writes a tar backup (never the private key) into the cache directory. Throws on failure. */
-    suspend fun createBackup(appVersion: String): BackupSummary = withContext(io) {
-        core.createBackup(paths.prefsPath, paths.backupFile().path, appVersion)
+    /** Writes the archive, seals it under [password] and wipes the password; only the sealed file is left. Throws on failure. */
+    suspend fun createBackup(appVersion: String, password: CharArray): BackupSummary = withContext(io) {
+        if (password.size < MIN_BACKUP_PASSWORD_CHARS) throw CoreException.protocol("the backup password is too short")
+        discardBackupFilesNow()
+        val sealed = paths.backupFile()
+        val plain = File("${sealed.path}.tar")
+        try {
+            val summary = core.createBackup(paths.prefsPath, plain.path, appVersion)
+            BackupCrypto.seal(plain, sealed, password)
+            summary.copy(path = sealed.path, bytes = sealed.length())
+        } catch (e: Exception) {
+            sealed.delete()
+            throw e
+        } finally {
+            plain.delete()
+            password.fill('\u0000')
+        }
     }
 
-    /** Merges a backup archive into this device; existing rows are never touched. Throws on failure. */
-    suspend fun importBackup(archivePath: String): BackupSummary =
-        withContext(io) { core.importBackup(archivePath, paths.prefsPath) }.also { invalidations.refresh() }
+    suspend fun isEncryptedBackup(archivePath: String): Boolean = withContext(io) { BackupCrypto.isSealed(File(archivePath)) }
+
+    /** Merges a backup archive into this device; existing rows are never touched. A sealed one needs [password]. Throws on failure. */
+    suspend fun importBackup(archivePath: String, password: CharArray?): BackupSummary = withContext(io) {
+        val archive = File(archivePath)
+        if (!BackupCrypto.isSealed(archive)) return@withContext core.importBackup(archivePath, paths.prefsPath)
+        val plain = File("$archivePath.tar")
+        try {
+            BackupCrypto.open(archive, plain, password ?: throw CoreException.protocol("this backup needs its password"))
+            core.importBackup(plain.path, paths.prefsPath)
+        } finally {
+            plain.delete()
+            password?.fill('\u0000')
+        }
+    }.also { invalidations.refresh() }
+
+    /** A shared backup outlives the share sheet; the next start removes it. */
+    suspend fun discardBackupFiles() = withContext(io) { discardBackupFilesNow() }
+
+    private fun discardBackupFilesNow() {
+        paths.backupFiles().forEach { it.delete() }
+    }
 
     // --- network waits (the timeout is the only cancellation) ---
 
@@ -637,5 +673,7 @@ class CoreClient internal constructor(
 
         /** Lower-case, with no IPv4-mapped prefix, brackets or zone id. */
         fun normalizeIp(ip: String?): String = Ip.normalize(ip)
+
+        const val MIN_BACKUP_PASSWORD_CHARS = BackupCrypto.MIN_PASSWORD_CHARS
     }
 }

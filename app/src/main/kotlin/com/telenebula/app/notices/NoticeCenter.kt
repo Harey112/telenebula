@@ -14,6 +14,8 @@ class Prompt(
     val rightLabel: String? = null,
     /** the right button confirms something destructive */
     val isDestructive: Boolean = false,
+    /** the typed text is a password: masked, and kept out of the keyboard's suggestions */
+    val isSecret: Boolean = false,
     val onLeft: () -> Unit = {},
     val onRight: (String) -> Unit,
 )
