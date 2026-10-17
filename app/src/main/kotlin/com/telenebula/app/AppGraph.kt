@@ -163,6 +163,7 @@ class AppGraph(app: Application) {
             ringForCalls = p.notifications.calls.ring,
             vibrateWhileRinging = p.notifications.calls.vibrate,
             missedNotification = p.notifications.calls.missedNotification,
+            overlayIp = runtime.profile.value?.overlayIp.orEmpty(),
             isVerboseLogging = p.nebulaLogLevel == NebulaLogLevel.DEBUG,
         )
     }

@@ -422,15 +422,11 @@ class CallEngine internal constructor(
     }
 
     /**
-     * Only what this app can produce: a host candidate of sane length. There is no STUN or TURN
-     * on either side, so a relayed or reflexive candidate is an address a peer wants us to probe.
+     * Only what this app can produce: a host candidate of sane length on the peer's overlay address.
+     * Anything else is media outside nebula, or an address a peer wants us to probe.
      */
-    private fun isAcceptableCandidate(c: IceCandidatePayload): Boolean {
-        if (c.candidate.length > MAX_CANDIDATE_CHARS) return false
-        val parts = c.candidate.split(' ')
-        val type = parts.indexOf("typ").takeIf { it >= 0 }?.let { parts.getOrNull(it + 1) }
-        return type == "host"
-    }
+    private fun isAcceptableCandidate(c: IceCandidatePayload, peerIp: String): Boolean =
+        c.candidate.length <= MAX_CANDIDATE_CHARS && IceCandidates.type(c.candidate) == "host" && IceCandidates.isOnAddress(c.candidate, peerIp)
 
     /**
      * A candidate that arrives before this side has a session (the callee still rings) waits for
@@ -442,7 +438,7 @@ class CallEngine internal constructor(
             diag.note("remote: end of candidates")
             return
         }
-        if (!isAcceptableCandidate(c)) {
+        if (!isAcceptableCandidate(c, current.attempt.peer.ip)) {
             diag.note("remote candidate refused")
             return
         }
@@ -670,6 +666,10 @@ class CallEngine internal constructor(
         val current = current(attempt) ?: return
         when (event) {
             is LinkEvent.LocalCandidate -> {
+                if (!IceCandidates.isOnAddress(event.candidate.sdp, prefs().overlayIp)) {
+                    diag.note("local candidate kept back: not on the overlay")
+                    return
+                }
                 val payload = IceCandidatePayload(event.candidate.sdp, event.candidate.sdpMid, event.candidate.sdpMLineIndex)
                 // queued in order; the sender starts once the peer is known to be there
                 if (media.iceOut.trySend(OutboundCallSignal(CallSignalType.ICE, attempt.callId, candidate = payload)).isFailure) {

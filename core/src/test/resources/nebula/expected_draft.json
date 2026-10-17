@@ -53,7 +53,7 @@
     "sshd.trustedCas": ""
   },
   "flags": {
-    "pki.disconnectInvalid": false,
+    "pki.disconnectInvalid": true,
     "listen.udpOffloads": false,
     "punchy.punch": true,
     "punchy.respond": true,

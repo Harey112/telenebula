@@ -50,7 +50,7 @@ data class UnsafeRoute(
 @Serializable
 data class NebulaPki(
     val blocklist: List<String> = emptyList(),
-    val disconnectInvalid: Boolean = false,
+    val disconnectInvalid: Boolean = true,
     val initiatingVersion: Int = 1,
 )
 

@@ -132,6 +132,7 @@ internal class Traffic {
  */
 internal class Transport(private val engine: Engine) {
     private val generations = AtomicLong(1)
+    private val overlayAddress: InetAddress? = engine.profile.overlayIp.takeIf { it.isNotBlank() }?.let { runCatching { Ip.unmapped(InetAddress.getByName(it)) }.getOrNull() }
 
     /**
      * Binds before returning, then accepts in the background. The bind is synchronous on purpose:
@@ -162,10 +163,25 @@ internal class Transport(private val engine: Engine) {
                     delay(ACCEPT_BACKOFF_MS)
                     continue
                 }
+                if (!arrivedOverOverlay(socket)) {
+                    CoreLog.warn(TAG, "refused a connection that did not arrive on the overlay")
+                    runCatching { socket.close() }
+                    continue
+                }
                 // a connection accepted while the engine is stopping has nobody to serve it
                 runCatching { attach(socket, Ip.normalize(socket.inetAddress?.hostAddress)) }.onFailure { runCatching { socket.close() } }
             }
         }
+    }
+
+    /** Linux accepts a packet for any local address on any interface, so the sender must be in the overlay too. */
+    private fun arrivedOverOverlay(socket: Socket): Boolean {
+        val local = socket.localAddress?.let(Ip::unmapped) ?: return false
+        if (overlayAddress == null || local != overlayAddress) return false
+        val networks = engine.profile.networks
+        if (networks.isEmpty()) return true
+        val remote = socket.inetAddress ?: return false
+        return networks.any { Ip.isInCidr(remote, it) }
     }
 
     /** Registers the connection's outbound queue and starts its reader and writer. */
