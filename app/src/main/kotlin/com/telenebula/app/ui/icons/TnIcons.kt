@@ -73,7 +73,6 @@ enum class TnIcon(internal val lucideName: String) {
     MARK_UNREAD("mail-open"),
     VIBRATE("vibrate"),
     PING("satellite-dish"),
-    DESKTOP("monitor"),
     SQUARE_PLUS("square-plus"),
     PAUSE("pause"),
     STOP("square"),
@@ -157,7 +156,6 @@ internal object TnIconVectors {
         arrayOf("M21.2 8.4c.5.38.8.97.8 1.6v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V10a2 2 0 0 1 .8-1.6l8-6a2 2 0 0 1 2.4 0l8 6Z", "m22 10-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 10"), // mark_unread
         arrayOf("m2 8 2 2-2 2 2 2-2 2", "m22 8-2 2 2 2-2 2 2 2", "M9 5h6a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-12a1 1 0 0 1 1 -1Z"), // vibrate
         arrayOf("M4 10a7.31 7.31 0 0 0 10 10Z", "m9 15 3-3", "M17 13a6 6 0 0 0-6-6", "M21 13A10 10 0 0 0 11 3"), // ping
-        arrayOf("M4 3h16a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2Z", "M8 21L16 21", "M12 17L12 21"), // desktop
         arrayOf("M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M8 12h8", "M12 8v8"), // square_plus
         arrayOf("M15 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-16a1 1 0 0 1 1 -1Z", "M6 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-16a1 1 0 0 1 1 -1Z"), // pause
         arrayOf("M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z"), // stop

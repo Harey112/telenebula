@@ -36,7 +36,6 @@ data class ContactCalls(val peerIp: String) : TnKey
 data object NewContact : TnKey
 
 data object Settings : TnKey
-data object Dex : TnKey
 data object Status : TnKey
 data object Account : TnKey
 data object RenewCertificate : TnKey

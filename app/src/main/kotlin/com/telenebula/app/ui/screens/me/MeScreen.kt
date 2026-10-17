@@ -4,7 +4,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.telenebula.app.nav.ArchivedChats
-import com.telenebula.app.nav.Dex
 import com.telenebula.app.nav.Settings
 import com.telenebula.app.nav.Status
 import com.telenebula.app.ui.fragments.DotBadge
@@ -40,7 +39,6 @@ private fun Menu(state: MeUiState, actions: MeActions) {
             )
         }
         row { SettingRow(TnIcon.CIRCLE, "Status", subtitle = "What contacts see when they check on you", onClick = { actions.open(Status) }) }
-        row { SettingRow(TnIcon.DESKTOP, "Dex", subtitle = "Coming soon", onClick = { actions.open(Dex) }) }
         row {
             SettingRow(
                 TnIcon.ARCHIVE,
