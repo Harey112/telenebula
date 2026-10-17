@@ -13,6 +13,7 @@ import com.telenebula.core.CoreClient
 import com.telenebula.core.model.CallLog
 import com.telenebula.core.model.Envelope
 import com.telenebula.core.model.EnvelopeType
+import com.telenebula.core.model.Friendship
 import com.telenebula.core.model.IceCandidatePayload
 import com.telenebula.core.model.MessageDirection
 import com.telenebula.core.model.OutboundSignal
@@ -29,7 +30,7 @@ class CoreSignalingAdapter(private val core: CoreClient) : CoreSignaling {
     override suspend fun pingPeer(peerIp: String, timeoutMs: Int): Long = core.pingPeer(peerIp, timeoutMs)
 
     override suspend fun contact(ip: String): CallContact? = core.contact(ip)?.let {
-        CallContact(label = ContactLabels.chatLabel(it), isBlocked = it.isBlocked, callsAllowed = it.notifications?.calls != false && !it.isRequest)
+        CallContact(label = ContactLabels.chatLabel(it), isBlocked = it.isBlocked, callsAllowed = it.notifications?.calls != false && it.friendship == Friendship.FRIEND)
     }
 
     override suspend fun ensureContact(ip: String, name: String) = core.ensureContact(ip, name)

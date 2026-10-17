@@ -30,6 +30,8 @@ internal class ContactsDao(db: SqlDb, lock: ReentrantLock) : Dao(db, lock) {
         val row = db.queryFirst("SELECT cert_fingerprint, changed_fingerprint FROM contacts WHERE ip = ?", listOf(ip)) {
             it.stringOrNull(0) to it.stringOrNull(1)
         } ?: return@lockedTransaction FingerprintCheck.UNKNOWN
+        // nothing is pinned for someone whose request is still open: they are not a friend yet
+        if (standing(ip) == Standing.REQUEST) return@lockedTransaction FingerprintCheck.UNKNOWN
         val (pinned, changed) = row
         when {
             pinned == null -> {
@@ -64,11 +66,37 @@ internal class ContactsDao(db: SqlDb, lock: ReentrantLock) : Dao(db, lock) {
     private fun normalizeFingerprint(value: String): String = value.trim().lowercase()
 
     fun standing(ip: String): Standing = locked {
-        when (db.queryFirst("SELECT is_request FROM contacts WHERE ip = ?", listOf(ip)) { it.boolean(0) }) {
-            null -> Standing.STRANGER
-            true -> Standing.REQUEST
-            false -> Standing.CONTACT
+        val row = db.queryFirst("SELECT is_request, request_sent_at FROM contacts WHERE ip = ?", listOf(ip)) {
+            it.boolean(0) to (it.longOrNull(1) != null)
         }
+        when {
+            row == null -> Standing.STRANGER
+            row.first -> Standing.REQUEST
+            row.second -> Standing.REQUEST_SENT
+            else -> Standing.CONTACT
+        }
+    }
+
+    /**
+     * The person adds [ip]: someone new gets a request, someone whose request is open is accepted,
+     * a friend is only updated. Returns what [ip] was before, so the caller knows which note to send.
+     */
+    fun addFriend(ip: String, name: String, fingerprint: String?): Standing = lockedTransaction {
+        val before = standing(ip)
+        if (before == Standing.STRANGER) {
+            db.insert("INSERT INTO contacts (ip, name, added_at, request_sent_at) VALUES (?, ?, ?, ?)", listOf(ip, name, now(), now()))
+        }
+        if (before == Standing.REQUEST) acceptContact(ip)
+        if (name.isNotBlank()) db.update("UPDATE contacts SET name = ? WHERE ip = ?", listOf(name, ip))
+        fingerprint?.takeIf { it.isNotBlank() }?.let {
+            db.update("UPDATE contacts SET cert_fingerprint = ?, changed_fingerprint = NULL WHERE ip = ?", listOf(normalizeFingerprint(it), ip))
+        }
+        before
+    }
+
+    /** The peer answered a request this device sent; true when that made it a friend. */
+    fun answerSentRequest(ip: String): Boolean = locked {
+        db.update("UPDATE contacts SET request_sent_at = NULL WHERE ip = ? AND request_sent_at IS NOT NULL", listOf(ip)) > 0
     }
 
     /** A stranger becomes an open request, unless [maxOpenRequests] are already open; a known peer's name is synced. */

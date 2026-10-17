@@ -1083,4 +1083,39 @@ class StoreTest {
         assertEquals("bbbb", s.getContact("fd::1")?.certFingerprint)
         assertNull(s.getContact("fd::1")?.changedFingerprint)
     }
+
+    @Test
+    fun `adding someone new sends a request, adding someone who asked accepts them`() {
+        val s = store()
+        assertEquals(Standing.STRANGER, s.addFriend("fd::1", "bob", "AA"))
+        assertEquals(Standing.REQUEST_SENT, s.standing("fd::1"))
+        assertEquals("aa", s.getContact("fd::1")?.certFingerprint)
+
+        s.admit("fd::2", "carol", maxOpenRequests = 10)
+        assertEquals(Standing.REQUEST, s.addFriend("fd::2", "carol", null))
+        assertEquals(Standing.CONTACT, s.standing("fd::2"))
+
+        s.upsertContact("fd::3", "dave")
+        assertEquals(Standing.CONTACT, s.addFriend("fd::3", "dave", null))
+        assertEquals(Standing.CONTACT, s.standing("fd::3"))
+    }
+
+    @Test
+    fun `an answer ends a sent request once`() {
+        val s = store()
+        s.addFriend("fd::1", "bob", null)
+        assertTrue(s.answerSentRequest("fd::1"))
+        assertFalse(s.answerSentRequest("fd::1"))
+        assertEquals(Standing.CONTACT, s.standing("fd::1"))
+    }
+
+    @Test
+    fun `nothing is pinned for an open request`() {
+        val s = store()
+        s.admit("fd::1", "stranger", maxOpenRequests = 10)
+        assertEquals(FingerprintCheck.UNKNOWN, s.checkFingerprint("fd::1", "aa", "x"))
+        assertNull(s.getContact("fd::1")?.certFingerprint)
+        s.acceptContact("fd::1")
+        assertEquals(FingerprintCheck.PINNED, s.checkFingerprint("fd::1", "aa", "x"))
+    }
 }

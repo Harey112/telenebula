@@ -3,6 +3,7 @@ package com.telenebula.core.engine
 import com.telenebula.core.Ip
 import com.telenebula.core.db.Store
 import com.telenebula.core.events.CoreEvent
+import com.telenebula.core.model.Friendship
 import com.telenebula.core.model.PeerPresence
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -75,7 +76,7 @@ internal class Engine(
 
     fun sendsReadReceiptsTo(peerIp: String): Boolean {
         val contact = store.getContact(peerIp) ?: return false
-        if (contact.isRequest) return false
+        if (contact.friendship != Friendship.FRIEND) return false
         return contact.privacy.sendReadReceipts ?: sendReadReceipts.get()
     }
 

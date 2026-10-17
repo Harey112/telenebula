@@ -52,7 +52,7 @@ private fun ChatList(state: ChatsUiState, actions: ChatsActions) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         if (state.requestCount > 0) {
             item(key = "requests", contentType = "requests") {
-                SettingRow(TnIcon.PERSON_ADD, "Message requests", subtitle = "${state.requestCount} waiting", onClick = actions::openRequests)
+                SettingRow(TnIcon.PERSON_ADD, "Friend requests", subtitle = "${state.requestCount} waiting", onClick = actions::openRequests)
             }
         }
         items(state.chats, key = { it.ip }, contentType = { "chat" }) { chat ->

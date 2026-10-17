@@ -22,9 +22,9 @@ import com.telenebula.app.ui.theme.TnType
 fun MessageRequestsScreen(viewModel: MessageRequestsViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.onShown() }
-    Screen(title = "Message requests", onBack = viewModel::goBack, isScrolling = false) {
+    Screen(title = "Friend requests", onBack = viewModel::goBack, isScrolling = false) {
         if (state.chats.isEmpty()) {
-            Text("No message requests.", style = TnType.body, color = TnTheme.colors.textMuted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(TnSpace.xl))
+            Text("No friend requests.", style = TnType.body, color = TnTheme.colors.textMuted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(TnSpace.xl))
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(state.chats, key = { it.ip }, contentType = { "chat" }) { chat -> ChatListRow(chat, onClick = viewModel::openChat, onLongClick = viewModel::openChat) }

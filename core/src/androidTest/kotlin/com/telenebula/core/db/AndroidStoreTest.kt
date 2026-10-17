@@ -458,4 +458,16 @@ class AndroidStoreTest {
         assertEquals("bbbb", store.getContact(PEER)?.certFingerprint)
         assertFalse(store.syncContact(PEER, "mallory"))
     }
+
+    @Test
+    fun friendRequests_runOnTheFrameworkDatabase() {
+        val store = store("friends.db")
+        assertEquals(Standing.STRANGER, store.addFriend(PEER, "bob", "AA"))
+        assertEquals(Standing.REQUEST_SENT, store.standing(PEER))
+        assertTrue(store.answerSentRequest(PEER))
+        assertEquals(Standing.CONTACT, store.standing(PEER))
+        store.admit(OTHER, "carol", maxOpenRequests = 10)
+        assertEquals(Standing.REQUEST, store.addFriend(OTHER, "carol", null))
+        assertEquals(Standing.CONTACT, store.standing(OTHER))
+    }
 }

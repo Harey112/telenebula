@@ -12,6 +12,7 @@ import com.telenebula.app.platform.ActivityGateway
 import com.telenebula.app.platform.ContactLabels
 import com.telenebula.app.platform.QrPayloads
 import com.telenebula.core.CoreClient
+import com.telenebula.core.model.Friendship
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -90,9 +91,11 @@ class NewContactViewModel(
         if (!s.canCreate) return
         val ip = s.ip.trim().lowercase()
         viewModelScope.launch {
-            core.upsertContact(ip, s.scannedName, s.scannedFingerprint.ifEmpty { null })
+            core.addFriend(ip, s.scannedName, s.scannedFingerprint.ifEmpty { null })
             core.updateContactDetails(ip, s.scannedName, s.nickname.trim(), s.notes.trim())
-            notices.setSuccess("${s.nickname.trim().ifEmpty { s.scannedName.ifEmpty { ip } }} was added to your contacts.")
+            val label = s.nickname.trim().ifEmpty { s.scannedName.ifEmpty { ip } }
+            val isFriend = core.contact(ip)?.friendship == Friendship.FRIEND
+            notices.setSuccess(if (isFriend) "$label is now your friend." else "Friend request sent to $label. You can chat once they accept.")
             navigator.pop()
             navigator.push(Chat(ip))
         }

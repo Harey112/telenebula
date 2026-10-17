@@ -54,6 +54,8 @@ internal class Store(
     fun standing(ip: String): Standing = contacts.standing(ip)
     fun admit(ip: String, name: String, maxOpenRequests: Int): Standing = contacts.admit(ip, name, maxOpenRequests)
     fun acceptContact(ip: String): Boolean = contacts.acceptContact(ip)
+    fun addFriend(ip: String, name: String, fingerprint: String?): Standing = contacts.addFriend(ip, name, fingerprint)
+    fun answerSentRequest(ip: String): Boolean = contacts.answerSentRequest(ip)
     fun touchContact(ip: String) = contacts.touchContact(ip)
     fun setClientVersion(ip: String, version: String) = contacts.setClientVersion(ip, version)
     fun updateContactDetails(ip: String, name: String, nickname: String, notes: String) = contacts.updateContactDetails(ip, name, nickname, notes)

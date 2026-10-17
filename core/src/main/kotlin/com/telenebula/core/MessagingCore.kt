@@ -156,6 +156,9 @@ internal interface MessagingCore {
 
     fun acceptRequest(ip: String)
 
+    /** Adds [ip] as a friend: a request to someone new, an acceptance to someone who asked first. */
+    fun addFriend(ip: String, name: String, fingerprint: String?)
+
     fun checkFingerprint(ip: String, fingerprint: String, certName: String): FingerprintCheck
 
     fun trustChangedFingerprint(ip: String)

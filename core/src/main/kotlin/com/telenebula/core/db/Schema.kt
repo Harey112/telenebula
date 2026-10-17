@@ -157,6 +157,7 @@ internal object Schema {
             "is_request" to "is_request INTEGER NOT NULL DEFAULT 0",
             "cert_fingerprint" to "cert_fingerprint TEXT",
             "changed_fingerprint" to "changed_fingerprint TEXT",
+            "request_sent_at" to "request_sent_at INTEGER",
         )
         for ((column, ddl) in contactAdditions) {
             if (column !in contactColumns) addColumn(db, "contacts", ddl)

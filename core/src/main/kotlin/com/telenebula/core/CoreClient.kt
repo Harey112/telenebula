@@ -463,6 +463,8 @@ class CoreClient internal constructor(
 
     suspend fun acceptRequest(ip: String) = localChange { core.acceptRequest(ip) }
 
+    suspend fun addFriend(ip: String, name: String, fingerprint: String?) = localChange { core.addFriend(ip, name, fingerprint) }
+
     suspend fun ensureContact(ip: String, name: String) = localChange { core.ensureContact(ip, name) }
 
     suspend fun updateContactDetails(ip: String, name: String, nickname: String, notes: String) =

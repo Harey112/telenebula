@@ -147,7 +147,14 @@ internal class InboundDispatcher(private val engine: Engine) {
         val body = c.envelope.body ?: return false
         if (c.envelope.id.isEmpty()) return false
         // past either cap the frame is acked and dropped, so the sender's queue stops retrying it
-        val standing = store.admit(c.fromIp, c.envelope.from.name, Limits.MAX_OPEN_REQUESTS)
+        val admitted = store.admit(c.fromIp, c.envelope.from.name, Limits.MAX_OPEN_REQUESTS)
+        // a message from someone this device asked is their answer, whichever build wrote it
+        val standing = if (admitted == Standing.REQUEST_SENT && store.answerSentRequest(c.fromIp)) {
+            engine.events.contactChanged(c.fromIp)
+            Standing.CONTACT
+        } else {
+            admitted
+        }
         if (standing == Standing.STRANGER) return true
         if (standing == Standing.REQUEST && store.countIncoming(c.fromIp) >= Limits.MAX_REQUEST_MESSAGES) return true
         val isNew = storeIncoming(c.envelope, c.fromIp, withAttachment = standing.isContact)
@@ -340,7 +347,7 @@ internal class InboundDispatcher(private val engine: Engine) {
         const val COVERED_PREVIEW = "Covered message"
 
         /** a request's first message is announced without its content */
-        const val REQUEST_PREVIEW = "Message request"
+        const val REQUEST_PREVIEW = "Friend request"
 
         /** One line for an attachment, as the chat list names it: the caption if there is one, else the kind. */
         fun attachmentPreview(mime: String, name: String, body: String, isCovered: Boolean): String = when {

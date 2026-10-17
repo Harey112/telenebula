@@ -312,6 +312,7 @@ private fun Composer(state: ChatUiState, actions: ChatActions) {
     }
     val notice = when {
         state.isCertificateChanged -> ComposerNotice("Their certificate changed.", "Review", actions::openContact)
+        state.isRequestSent -> ComposerNotice("Waiting for them to accept.", "Cancel request", actions::deleteRequest)
         state.isArchived -> ComposerNotice("This chat is archived.", "Unarchive", actions::unarchive)
         state.isBlocked -> ComposerNotice("You blocked this contact.", "Unblock", actions::unblock)
         !state.isTunnelOn -> ComposerNotice("Nebula tunnel is off.", "Turn it on", actions::openSettings)
@@ -391,14 +392,14 @@ private fun RequestPanel(name: String, actions: ChatActions) {
         verticalArrangement = Arrangement.spacedBy(TnSpace.md),
     ) {
         Text(
-            "$name isn't in your contacts. Until you accept, they can't see that you're online, send you files or call you.",
+            "$name wants to be your friend. Until you accept, they can't see that you're online, send you files or call you.",
             style = TnType.small,
             color = colors.textMuted,
             textAlign = TextAlign.Center,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(TnSpace.xl)) {
             RequestAction("Block", colors.danger, actions::blockRequest)
-            RequestAction("Delete", colors.danger, actions::deleteRequest)
+            RequestAction("Decline", colors.danger, actions::deleteRequest)
             RequestAction("Accept", colors.accent, actions::acceptRequest)
         }
     }

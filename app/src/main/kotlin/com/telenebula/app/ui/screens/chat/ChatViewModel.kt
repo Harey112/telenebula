@@ -57,6 +57,7 @@ import com.telenebula.core.model.ChatView
 import com.telenebula.core.model.ChatTextSize
 import com.telenebula.core.model.Contact
 import com.telenebula.core.model.ContactFlagsPatch
+import com.telenebula.core.model.Friendship
 import com.telenebula.core.model.CoverRevealGate
 import com.telenebula.core.model.MessageAction
 import com.telenebula.core.model.MessageActionStatus
@@ -135,6 +136,8 @@ data class ChatUiState(
     val isArchived: Boolean = false,
     /** the peer wrote first and has not been accepted: the composer is replaced by accept, block and delete */
     val isRequest: Boolean = false,
+    /** this device asked to be friends and the peer has not answered: nothing can be sent yet */
+    val isRequestSent: Boolean = false,
     /** the peer presented a certificate other than the pinned one, and nobody has trusted it yet */
     val isCertificateChanged: Boolean = false,
     val isPeerTyping: Boolean = false,
@@ -423,6 +426,7 @@ class ChatViewModel(
             isArchived = isArchived,
             isRequest = contact?.isRequest == true,
             isCertificateChanged = contact?.changedFingerprint != null,
+            isRequestSent = contact?.friendship == Friendship.REQUEST_SENT,
             isPeerTyping = peerIp in typingSet,
             isPeerOnline = presenceNow == PeerPresence.ONLINE,
             isDisappearing = disappear > 0,
@@ -454,7 +458,7 @@ class ChatViewModel(
             isCoverOn = l.isCoverOn,
             revealedIds = l.revealed,
             cancelledByMe = d.view.cancelledByMe,
-            canSend = l.draft.isNotBlank() && !isBlocked && !isArchived && contact?.isRequest != true && running,
+            canSend = l.draft.isNotBlank() && !isBlocked && !isArchived && contact?.friendship == Friendship.FRIEND && running,
             composer = composer,
             isSearching = l.isSearching,
             searchQuery = l.searchQuery,
@@ -855,6 +859,10 @@ class ChatViewModel(
     override fun startAudioCall() {
         if (uiState.value.isBlocked) {
             notices.addWarning("Contact is blocked: Unblock them to call.")
+            return
+        }
+        if (uiState.value.isRequest || uiState.value.isRequestSent) {
+            notices.addWarning("Not friends yet: You can call once the friend request is accepted.")
             return
         }
         viewModelScope.launch {
