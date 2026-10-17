@@ -311,6 +311,7 @@ private fun Composer(state: ChatUiState, actions: ChatActions) {
         return
     }
     val notice = when {
+        state.isCertificateChanged -> ComposerNotice("Their certificate changed.", "Review", actions::openContact)
         state.isArchived -> ComposerNotice("This chat is archived.", "Unarchive", actions::unarchive)
         state.isBlocked -> ComposerNotice("You blocked this contact.", "Unblock", actions::unblock)
         !state.isTunnelOn -> ComposerNotice("Nebula tunnel is off.", "Turn it on", actions::openSettings)

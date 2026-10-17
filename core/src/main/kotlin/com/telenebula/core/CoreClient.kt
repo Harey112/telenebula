@@ -1,5 +1,6 @@
 package com.telenebula.core
 
+import com.telenebula.core.model.FingerprintCheck
 import android.content.Context
 import com.telenebula.core.events.CoreEventBus
 import com.telenebula.core.events.CoreInvalidations
@@ -450,7 +451,13 @@ class CoreClient internal constructor(
         return ok
     }
 
-    suspend fun upsertContact(ip: String, name: String) = localChange { core.upsertContact(ip, name) }
+    suspend fun upsertContact(ip: String, name: String, fingerprint: String? = null) = localChange { core.upsertContact(ip, name, fingerprint) }
+
+    suspend fun checkFingerprint(ip: String, fingerprint: String, certName: String): FingerprintCheck =
+        query(FingerprintCheck.UNKNOWN) { core.checkFingerprint(ip, fingerprint, certName) }
+            .also { if (it != FingerprintCheck.MATCHES && it != FingerprintCheck.UNKNOWN) invalidations.refresh() }
+
+    suspend fun trustChangedFingerprint(ip: String) = localChange { core.trustChangedFingerprint(ip) }
 
     suspend fun acceptRequest(ip: String) = localChange { core.acceptRequest(ip) }
 

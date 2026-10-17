@@ -60,7 +60,7 @@ class MeViewModel(
         overlayIp = profile?.overlayIp.orEmpty(),
         isOnline = running,
         isQrOpen = l.isQrOpen,
-        qrValue = QrPayloads.encode(profile?.certName.orEmpty(), profile?.overlayIp.orEmpty()),
+        qrValue = QrPayloads.encode(profile?.certName.orEmpty(), profile?.overlayIp.orEmpty(), profile?.certFingerprint.orEmpty()),
         isVpnRunning = running,
         isBusy = l.isBusy,
         archivedCount = chats.orEmpty().count { it.isArchived && it.lastTs != null },

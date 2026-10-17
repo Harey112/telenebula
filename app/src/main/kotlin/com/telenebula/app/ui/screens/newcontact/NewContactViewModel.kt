@@ -24,6 +24,8 @@ data class NewContactUiState(
     val notes: String = "",
     /** username taken from a scanned profile QR */
     val scannedName: String = "",
+    /** certificate fingerprint from a scanned profile QR, pinned on save */
+    val scannedFingerprint: String = "",
     val isScannerOpen: Boolean = false,
     val hasCameraPermission: Boolean = false,
 ) {
@@ -51,7 +53,7 @@ class NewContactViewModel(
     val uiState: StateFlow<NewContactUiState> = mutable.asStateFlow()
 
     /** A hand-edited address no longer belongs to the scanned identity. */
-    fun setIp(value: String) = mutable.update { it.copy(ip = value, scannedName = "") }
+    fun setIp(value: String) = mutable.update { it.copy(ip = value, scannedName = "", scannedFingerprint = "") }
     fun setNickname(value: String) = mutable.update { it.copy(nickname = value) }
     fun setNotes(value: String) = mutable.update { it.copy(notes = value) }
     fun openScanner() = mutable.update { it.copy(isScannerOpen = true) }
@@ -80,7 +82,7 @@ class NewContactViewModel(
             notices.addWarning("Unrecognised QR code: That code doesn't look like a TeleNebula contact.")
             return
         }
-        mutable.update { it.copy(ip = ip, scannedName = payload?.name?.trim().orEmpty(), isScannerOpen = false) }
+        mutable.update { it.copy(ip = ip, scannedName = payload?.name?.trim().orEmpty(), scannedFingerprint = payload?.fp?.trim().orEmpty(), isScannerOpen = false) }
     }
 
     fun createContact() {
@@ -88,7 +90,7 @@ class NewContactViewModel(
         if (!s.canCreate) return
         val ip = s.ip.trim().lowercase()
         viewModelScope.launch {
-            core.upsertContact(ip, s.scannedName)
+            core.upsertContact(ip, s.scannedName, s.scannedFingerprint.ifEmpty { null })
             core.updateContactDetails(ip, s.scannedName, s.nickname.trim(), s.notes.trim())
             notices.setSuccess("${s.nickname.trim().ifEmpty { s.scannedName.ifEmpty { ip } }} was added to your contacts.")
             navigator.pop()

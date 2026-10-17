@@ -87,6 +87,7 @@ class AppRuntime(
     private val appVersion: String,
 ) {
     private val app = context.applicationContext
+    private val peerIdentity = PeerIdentity(core, { ip -> vpn.hostInfo(ip, profile.value?.lighthouses?.map { it.nebulaIp }.orEmpty()) }, notices)
 
     private val mutableState = MutableStateFlow<RuntimeState>(RuntimeState.Booting)
     val state: StateFlow<RuntimeState> = mutableState.asStateFlow()
@@ -343,10 +344,15 @@ class AppRuntime(
         scope.launch {
             CoreEventBus.events.collect { event ->
                 when (event) {
-                    is CoreEvent.Signal -> CoreSignalingAdapter.toInboundSignal(event.envelope)
-                        ?.let { callEngine.handleSignal(event.fromIp, it) }
+                    is CoreEvent.Signal -> {
+                        CoreSignalingAdapter.toInboundSignal(event.envelope)?.let { callEngine.handleSignal(event.fromIp, it) }
+                        verifyPeer(event.fromIp)
+                    }
                     is CoreEvent.TunnelToggle -> onTunnelToggle()
-                    is CoreEvent.MessageReceived -> buzzInApp(event.ip, event.isMuted)
+                    is CoreEvent.MessageReceived -> {
+                        buzzInApp(event.ip, event.isMuted)
+                        verifyPeer(event.ip)
+                    }
                     is CoreEvent.ReactionReceived -> buzzInApp(event.ip, event.isMuted)
                     else -> Unit
                 }
@@ -354,6 +360,11 @@ class AppRuntime(
         }
         scope.launch { callEngine.warnings.collect(notices::addWarning) }
         notificationRouter.start()
+    }
+
+    fun verifyPeer(ip: String) {
+        if (!tunnelRunning.value) return
+        scope.launch { peerIdentity.check(ip) }
     }
 
     /** The notification's tunnel action: off also ends the background service, a stopped tunnel receives nothing. */

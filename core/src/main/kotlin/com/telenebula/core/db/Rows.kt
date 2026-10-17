@@ -20,7 +20,7 @@ internal const val ACTION_COLS = "id, message_id, peer_ip, type, payload_json, s
     "created_at, updated_at"
 
 internal const val CONTACT_COLS = "ip, name, nickname, notes, added_at, last_seen_at, pinned_at, is_archived, " +
-    "is_blocked, mute_until, is_marked_unread, notif_json, client_version, disappear_seconds, read_receipts, typing_indicators, block_screenshots, reveal_gate, is_request"
+    "is_blocked, mute_until, is_marked_unread, notif_json, client_version, disappear_seconds, read_receipts, typing_indicators, block_screenshots, reveal_gate, is_request, cert_fingerprint, changed_fingerprint"
 
 internal const val CALL_COLS = "id, peer_ip, direction, is_video, outcome, started_at, connected_at, ended_at"
 
@@ -51,6 +51,8 @@ internal fun toContact(row: SqlRow) = Contact(
         revealGate = Wire.revealGate(row.stringOrNull(17)),
     ),
     isRequest = row.boolean(18),
+    certFingerprint = row.stringOrNull(19),
+    changedFingerprint = row.stringOrNull(20),
 )
 
 internal fun toMessage(row: SqlRow): ChatMessage {

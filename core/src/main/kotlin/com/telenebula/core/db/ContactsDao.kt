@@ -7,14 +7,61 @@ import com.telenebula.core.model.Contact
 import com.telenebula.core.model.ContactFlagsPatch
 import com.telenebula.core.model.ContactNotificationPrefs
 import com.telenebula.core.model.ContactPrivacyPrefs
+import com.telenebula.core.model.FingerprintCheck
 import java.util.concurrent.locks.ReentrantLock
 
 internal class ContactsDao(db: SqlDb, lock: ReentrantLock) : Dao(db, lock) {
-    fun upsertContact(ip: String, name: String) = lockedTransaction {
+    /** A [fingerprint] read from the peer's QR code is pinned as it stands, replacing whatever was seen before. */
+    fun upsertContact(ip: String, name: String, fingerprint: String? = null) = lockedTransaction {
         db.insert("INSERT OR IGNORE INTO contacts (ip, name, added_at) VALUES (?, ?, ?)", listOf(ip, name, now()))
         db.update("UPDATE contacts SET name = ?, is_request = 0 WHERE ip = ?", listOf(name, ip))
+        fingerprint?.takeIf { it.isNotBlank() }?.let {
+            db.update("UPDATE contacts SET cert_fingerprint = ?, changed_fingerprint = NULL WHERE ip = ?", listOf(normalizeFingerprint(it), ip))
+        }
         Unit
     }
+
+    /**
+     * Compares the certificate nebula authenticated for [ip] with the pinned one, pinning it when
+     * none is, and takes the certificate's name as the contact's. A mismatch is held for the person.
+     */
+    fun checkFingerprint(ip: String, fingerprint: String, certName: String): FingerprintCheck = lockedTransaction {
+        val seen = normalizeFingerprint(fingerprint)
+        val row = db.queryFirst("SELECT cert_fingerprint, changed_fingerprint FROM contacts WHERE ip = ?", listOf(ip)) {
+            it.stringOrNull(0) to it.stringOrNull(1)
+        } ?: return@lockedTransaction FingerprintCheck.UNKNOWN
+        val (pinned, changed) = row
+        when {
+            pinned == null -> {
+                db.update("UPDATE contacts SET cert_fingerprint = ? WHERE ip = ?", listOf(seen, ip))
+                syncCertName(ip, certName)
+                FingerprintCheck.PINNED
+            }
+            pinned == seen -> {
+                syncCertName(ip, certName)
+                FingerprintCheck.MATCHES
+            }
+            changed == seen -> FingerprintCheck.STILL_CHANGED
+            else -> {
+                db.update("UPDATE contacts SET changed_fingerprint = ? WHERE ip = ?", listOf(seen, ip))
+                FingerprintCheck.CHANGED
+            }
+        }
+    }
+
+    /** The person accepted the new certificate: it becomes the pinned one. */
+    fun trustChangedFingerprint(ip: String): Boolean = locked {
+        db.update(
+            "UPDATE contacts SET cert_fingerprint = changed_fingerprint, changed_fingerprint = NULL WHERE ip = ? AND changed_fingerprint IS NOT NULL",
+            listOf(ip),
+        ) > 0
+    }
+
+    private fun syncCertName(ip: String, certName: String) {
+        if (certName.isNotBlank()) db.update("UPDATE contacts SET name = ? WHERE ip = ?", listOf(certName, ip))
+    }
+
+    private fun normalizeFingerprint(value: String): String = value.trim().lowercase()
 
     fun standing(ip: String): Standing = locked {
         when (db.queryFirst("SELECT is_request FROM contacts WHERE ip = ?", listOf(ip)) { it.boolean(0) }) {
@@ -46,9 +93,8 @@ internal class ContactsDao(db: SqlDb, lock: ReentrantLock) : Dao(db, lock) {
     }
 
     /**
-     * Adds the contact if missing and keeps its username in sync with what the peer announces (the
-     * certificate name is authoritative). An empty announced name never clears a known one, and
-     * nicknames are the user's — they are never touched here. True when anything changed.
+     * Adds the contact if missing. A name the peer announces only fills an empty one: anyone can
+     * announce anything, so a known name changes only through [checkFingerprint]'s certificate name.
      */
     fun syncContact(ip: String, name: String): Boolean = locked {
         val inserted = db.insert(
@@ -57,7 +103,7 @@ internal class ContactsDao(db: SqlDb, lock: ReentrantLock) : Dao(db, lock) {
         )
         if (inserted) return@locked true
         if (name.isEmpty()) return@locked false
-        db.update("UPDATE contacts SET name = ? WHERE ip = ? AND name <> ?", listOf(name, ip, name)) > 0
+        db.update("UPDATE contacts SET name = ? WHERE ip = ? AND name = ''", listOf(name, ip)) > 0
     }
 
     fun touchContact(ip: String) = locked {

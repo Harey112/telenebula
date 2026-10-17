@@ -66,6 +66,9 @@ data class ContactUiState(
     val endpoint: String = "—",
     val peerCertName: String = "—",
     val peerCertFingerprint: String = "Available once a tunnel is established",
+    val pinnedFingerprint: String = "Pinned on first contact",
+    /** a certificate other than the pinned one, waiting for the person to trust it */
+    val changedFingerprint: String? = null,
     val stats: PeerStats = PeerStats(),
     /** actions still waiting to reach this peer */
     val queuedCount: Int = 0,
@@ -101,6 +104,7 @@ interface ContactActions {
     fun startChat()
     fun startVideoCall()
     fun toggleAdvanced()
+    fun trustNewCertificate()
 }
 
 class ContactViewModel(
@@ -217,6 +221,8 @@ class ContactViewModel(
             endpoint = host?.currentRemote ?: host?.remoteAddrs?.firstOrNull() ?: "—",
             peerCertName = host?.certName ?: "—",
             peerCertFingerprint = host?.certFingerprint ?: "Available once a tunnel is established",
+            pinnedFingerprint = contact?.certFingerprint ?: "Pinned on first contact",
+            changedFingerprint = contact?.changedFingerprint,
             stats = d.stats,
             firstMessageText = d.stats.firstMessageAt?.let(Format::listTime) ?: "—",
             lastActivityText = d.stats.lastActivityAt?.let(Format::listTime) ?: "—",
@@ -230,7 +236,21 @@ class ContactViewModel(
     /** the same record [uiState] is built from, read without a second subscription */
     private val contact: Contact? get() = core.cachedContact(ip)
 
-    fun onShown() = core.refresh()
+    fun onShown() {
+        core.refresh()
+        runtime.verifyPeer(ip)
+    }
+
+    override fun trustNewCertificate() {
+        val name = contact?.let(ContactLabels::chatLabel) ?: ip
+        notices.setPrompt(
+            Prompt(
+                message = "Trust the new certificate\n\nOnly do this once $name has told you, in person or another way you trust, that they renewed it.",
+                rightLabel = "Trust",
+                onRight = { viewModelScope.launch { core.trustChangedFingerprint(ip) } },
+            ),
+        )
+    }
     override fun toggleAdvanced() = local.update { it.copy(isAdvancedOpen = !it.isAdvancedOpen) }
     override fun clearError() = local.update { it.copy(error = null) }
     override fun openAllCalls() = navigator.push(ContactCalls(ip))

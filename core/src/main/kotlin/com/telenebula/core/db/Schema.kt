@@ -155,6 +155,8 @@ internal object Schema {
             "reveal_gate" to "reveal_gate TEXT",
             // added after every install had contacts, so the default makes each existing one accepted
             "is_request" to "is_request INTEGER NOT NULL DEFAULT 0",
+            "cert_fingerprint" to "cert_fingerprint TEXT",
+            "changed_fingerprint" to "changed_fingerprint TEXT",
         )
         for ((column, ddl) in contactAdditions) {
             if (column !in contactColumns) addColumn(db, "contacts", ddl)

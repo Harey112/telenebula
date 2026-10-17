@@ -2,6 +2,7 @@ package com.telenebula.core.db
 
 import com.telenebula.core.model.MessageCursor
 import com.telenebula.core.model.ContactPrivacyPrefs
+import com.telenebula.core.model.FingerprintCheck
 import com.telenebula.core.model.CallLog
 import com.telenebula.core.model.ChatLink
 import com.telenebula.core.model.ChatMessage
@@ -46,7 +47,9 @@ internal class Store(
 
     // --- contacts ---
 
-    fun upsertContact(ip: String, name: String) = contacts.upsertContact(ip, name)
+    fun upsertContact(ip: String, name: String, fingerprint: String? = null) = contacts.upsertContact(ip, name, fingerprint)
+    fun checkFingerprint(ip: String, fingerprint: String, certName: String): FingerprintCheck = contacts.checkFingerprint(ip, fingerprint, certName)
+    fun trustChangedFingerprint(ip: String): Boolean = contacts.trustChangedFingerprint(ip)
     fun syncContact(ip: String, name: String): Boolean = contacts.syncContact(ip, name)
     fun standing(ip: String): Standing = contacts.standing(ip)
     fun admit(ip: String, name: String, maxOpenRequests: Int): Standing = contacts.admit(ip, name, maxOpenRequests)

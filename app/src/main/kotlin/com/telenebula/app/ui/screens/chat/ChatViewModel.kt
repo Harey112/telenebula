@@ -135,6 +135,8 @@ data class ChatUiState(
     val isArchived: Boolean = false,
     /** the peer wrote first and has not been accepted: the composer is replaced by accept, block and delete */
     val isRequest: Boolean = false,
+    /** the peer presented a certificate other than the pinned one, and nobody has trusted it yet */
+    val isCertificateChanged: Boolean = false,
     val isPeerTyping: Boolean = false,
     val isPeerOnline: Boolean = false,
     val isDisappearing: Boolean = false,
@@ -420,6 +422,7 @@ class ChatViewModel(
             isBlocked = isBlocked,
             isArchived = isArchived,
             isRequest = contact?.isRequest == true,
+            isCertificateChanged = contact?.changedFingerprint != null,
             isPeerTyping = peerIp in typingSet,
             isPeerOnline = presenceNow == PeerPresence.ONLINE,
             isDisappearing = disappear > 0,
@@ -529,6 +532,7 @@ class ChatViewModel(
 
     fun onShown() {
         isVisible.value = true
+        runtime.verifyPeer(peerIp)
     }
 
 

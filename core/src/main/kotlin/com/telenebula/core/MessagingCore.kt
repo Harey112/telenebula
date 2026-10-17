@@ -1,5 +1,6 @@
 package com.telenebula.core
 
+import com.telenebula.core.model.FingerprintCheck
 import com.telenebula.core.model.MessageCursor
 import com.telenebula.core.model.ContactPrivacyPrefs
 import com.telenebula.core.model.BackupSummary
@@ -151,9 +152,13 @@ internal interface MessagingCore {
 
     // --- contacts ---
 
-    fun upsertContact(ip: String, name: String)
+    fun upsertContact(ip: String, name: String, fingerprint: String? = null)
 
     fun acceptRequest(ip: String)
+
+    fun checkFingerprint(ip: String, fingerprint: String, certName: String): FingerprintCheck
+
+    fun trustChangedFingerprint(ip: String)
 
     /** Adds the contact when unknown and syncs the username the peer announces. */
     fun ensureContact(ip: String, name: String)

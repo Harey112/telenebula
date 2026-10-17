@@ -8,6 +8,7 @@ import com.telenebula.core.model.CallLog
 import com.telenebula.core.model.CallOutcome
 import com.telenebula.core.model.ChatMessage
 import com.telenebula.core.model.ContactFlagsPatch
+import com.telenebula.core.model.FingerprintCheck
 import com.telenebula.core.model.MessageAction
 import com.telenebula.core.model.MessageActionStatus
 import com.telenebula.core.model.MessageActionType
@@ -113,8 +114,12 @@ class AndroidStoreTest {
         assertTrue("a new contact is a change", store.syncContact(PEER, "alice"))
         assertFalse("the same name again is not", store.syncContact(PEER, "alice"))
         assertFalse("an empty announcement never clears a name", store.syncContact(PEER, ""))
-        assertTrue("a new name is", store.syncContact(PEER, "alice-renamed"))
-        assertEquals("alice-renamed", store.getContact(PEER)?.name)
+        assertFalse("an announced name never replaces a known one", store.syncContact(PEER, "alice-renamed"))
+        assertEquals("alice", store.getContact(PEER)?.name)
+
+        store.upsertContact(OTHER, "")
+        assertTrue("it fills an empty one", store.syncContact(OTHER, "bob"))
+        assertEquals("bob", store.getContact(OTHER)?.name)
     }
 
     /** Typed argument binding: longs in a WHERE, a LIMIT and an IN clause all in one test. */
@@ -440,5 +445,17 @@ class AndroidStoreTest {
         store.setContactFlags(PEER, ContactFlagsPatch(isBlocked = true))
         store.deleteContact(PEER)
         assertTrue(store.isBlocked(PEER))
+    }
+
+    @Test
+    fun fingerprintPinning_runsOnTheFrameworkDatabase() {
+        val store = store("pins.db")
+        store.upsertContact(PEER, "alice", fingerprint = "AAAA")
+        assertEquals(FingerprintCheck.MATCHES, store.checkFingerprint(PEER, "aaaa", "alice-phone"))
+        assertEquals(FingerprintCheck.CHANGED, store.checkFingerprint(PEER, "bbbb", "x"))
+        assertEquals("bbbb", store.getContact(PEER)?.changedFingerprint)
+        assertTrue(store.trustChangedFingerprint(PEER))
+        assertEquals("bbbb", store.getContact(PEER)?.certFingerprint)
+        assertFalse(store.syncContact(PEER, "mallory"))
     }
 }
