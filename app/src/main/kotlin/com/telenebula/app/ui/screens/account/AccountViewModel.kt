@@ -13,11 +13,11 @@ import com.telenebula.app.platform.AttachmentStore
 import com.telenebula.app.platform.CertInspector
 import com.telenebula.app.platform.Format
 import com.telenebula.app.platform.IdentityStore
-import com.telenebula.app.platform.OpenWith
 import com.telenebula.app.platform.PrefsRepository
 import com.telenebula.app.platform.userMessage
 import com.telenebula.app.runtime.AppRuntime
 import com.telenebula.core.CoreClient
+import com.telenebula.core.CorePaths
 import com.telenebula.core.model.Profile
 import com.telenebula.app.ui.shared.uiState
 import java.io.File
@@ -42,7 +42,6 @@ class AccountViewModel(
     private val prefs: PrefsRepository,
     private val gateway: ActivityGateway,
     private val files: AttachmentStore,
-    private val openWith: OpenWith,
     private val notices: NoticeCenter,
     private val navigator: Navigator,
 ) : ViewModel() {
@@ -103,15 +102,30 @@ class AccountViewModel(
         if (isBusy.value) return
         isBusy.value = true
         viewModelScope.launch {
+            val target = gateway.pickSaveLocation(CorePaths.backupFileName(System.currentTimeMillis()))
+            if (target == null) {
+                password.fill('\u0000')
+                isBusy.value = false
+                return@launch
+            }
             try {
-                val summary = notices.withLoading("Copying and encrypting the database, settings and media…") { core.createBackup(BuildConfig.VERSION_NAME, password) }
-                openWith.shareFile(File(summary.path), "application/octet-stream")
+                val summary = notices.withLoading("Encrypting the database, settings and media…") {
+                    val created = core.createBackup(BuildConfig.VERSION_NAME, password)
+                    try {
+                        files.writeToDocument(File(created.path), target)
+                    } finally {
+                        core.discardBackupFiles()
+                    }
+                    created
+                }
                 notices.setSuccess(
-                    "Backup ready: ${summary.contacts} contacts · ${summary.messages} messages · ${summary.attachments} files · ${Format.bytes(summary.bytes)}. It's encrypted with your password, and your private key is not in it.",
+                    "Backup saved as ${files.displayName(target)}: ${summary.contacts} contacts · ${summary.messages} messages · ${summary.attachments} files · ${Format.bytes(summary.bytes)}. It's encrypted with your password, and your private key is not in it.",
                 )
             } catch (e: CancellationException) {
+                files.deleteDocument(target)
                 throw e
             } catch (e: Exception) {
+                files.deleteDocument(target)
                 notices.addError("Couldn't create the backup: ${e.userMessage()}")
             } finally {
                 isBusy.value = false
