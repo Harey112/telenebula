@@ -189,10 +189,9 @@ class CallEngine internal constructor(
         val attempt = newAttempt(UUID.randomUUID().toString(), CallPeer(peerIp, contact?.label ?: peerIp), isIncoming = false, video = video)
         media.setVerbose(prefs().isVerboseLogging)
         diag.begin("outgoing", attempt.callId, peerIp)
-        val speaker = video && prefs().videoSpeakerDefault
-        transition(Machine.Dialing(attempt, CallSession(callId = attempt.callId, peer = attempt.peer, video = video, speaker = speaker), media = null))
+        transition(Machine.Dialing(attempt, CallSession(callId = attempt.callId, peer = attempt.peer, video = video), media = null))
         system.startSession(attempt.peer.name, video, 0)
-        scope.launch(attempt.jobs) { runOutgoing(attempt, speaker) }
+        scope.launch(attempt.jobs) { runOutgoing(attempt) }
         return true
     }
 
@@ -275,7 +274,7 @@ class CallEngine internal constructor(
 
     // --- outbound ---------------------------------------------------------------------------
 
-    private suspend fun runOutgoing(attempt: Attempt, speaker: Boolean) {
+    private suspend fun runOutgoing(attempt: Attempt) {
         val tracks = try {
             withContext(workDispatcher) { media.openLocal(attempt.video) }
         } catch (e: Exception) {
@@ -300,7 +299,7 @@ class CallEngine internal constructor(
         }
         if (current(attempt) == null) return
 
-        audio.start(speaker)
+        audio.start(dialing.session.speaker, isCameraOn = attempt.video)
         val offerSignal = OutboundCallSignal(CallSignalType.OFFER, attempt.callId, sdp = offer.description, sdpType = offer.type.wire, video = attempt.video)
 
         // phase 1: ping only. A frame queued into a zombie socket looks sent, so the offer waits for a pong.
@@ -525,9 +524,7 @@ class CallEngine internal constructor(
             armLinkWatchdog(attempt, CONNECT_TIMEOUT_MS)
             link.link.setRemote(SessionDescription(sdpType(offer.sdpType, SessionDescription.Type.OFFER), offer.sdp))
             val answer = link.link.createAnswer()
-            val speaker = offer.video && prefs().videoSpeakerDefault
-            updateSession { it.copy(speaker = speaker) }
-            audio.start(speaker)
+            audio.start(still.session.speaker, isCameraOn = offer.video)
             system.startSession(attempt.peer.name, offer.video, 0)
             core.sendSignal(
                 attempt.peer.ip,
@@ -599,6 +596,7 @@ class CallEngine internal constructor(
             media.tracks.stopCamera()
             runCatching { media.link.setVideoTrack(null) }
             updateSession { it.copy(camOff = true, localVideo = null) }
+            audio.setCameraOn(false)
             sendQuietly(attempt.peer.ip, OutboundCallSignal(CallSignalType.CAM, attempt.callId, video = false), 0)
             return
         }
@@ -619,6 +617,7 @@ class CallEngine internal constructor(
             warningFlow.tryEmit("Couldn't switch the call's video: ${e.message}")
         }
         updateSession { it.copy(camOff = false, localVideo = track, isFrontCamera = media.tracks.isFrontCamera) }
+        audio.setCameraOn(true)
         sendQuietly(attempt.peer.ip, OutboundCallSignal(CallSignalType.CAM, attempt.callId, video = true), 0)
     }
 

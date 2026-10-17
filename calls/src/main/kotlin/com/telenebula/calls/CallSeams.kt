@@ -71,8 +71,9 @@ interface CallSystem {
 
 /** The call's audio session and progress tones. */
 interface CallAudioPort {
-    fun start(speaker: Boolean)
+    fun start(speaker: Boolean, isCameraOn: Boolean)
     fun setSpeaker(on: Boolean)
+    fun setCameraOn(on: Boolean)
     fun startRingback()
     fun stopRingback()
     fun stop(playBusyTone: Boolean)

@@ -16,7 +16,7 @@ import com.telenebula.calls.CallAudioPort
 
 /**
  * The call's audio session: focus, communication mode, one routing authority, and the two
- * progress tones. The speaker flag is re-applied on every device change so neither a headset
+ * progress tones. The route is re-applied on every device change so neither a headset
  * plugging in nor libwebrtc's audio module can silently flip the route. Main thread only.
  */
 class CallAudio(context: Context) : CallAudioPort {
@@ -26,6 +26,8 @@ class CallAudio(context: Context) : CallAudioPort {
     private var focus: AudioFocusRequest? = null
     private var isActive = false
     private var speakerOn = false
+    private var isCameraOn = false
+    private var isProximityWanted = false
     private var ringback: MediaPlayer? = null
     private var busy: MediaPlayer? = null
     private var proximityLock: PowerManager.WakeLock? = null
@@ -36,7 +38,8 @@ class CallAudio(context: Context) : CallAudioPort {
     }
 
     /** Takes focus, enters communication mode and routes. Call after media exists, before ringing. */
-    override fun start(speaker: Boolean) {
+    override fun start(speaker: Boolean, isCameraOn: Boolean) {
+        this.isCameraOn = isCameraOn
         if (!isActive) {
             isActive = true
             focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
@@ -52,6 +55,11 @@ class CallAudio(context: Context) : CallAudioPort {
 
     override fun setSpeaker(on: Boolean) {
         speakerOn = on
+        if (isActive) reapplyRoute()
+    }
+
+    override fun setCameraOn(on: Boolean) {
+        isCameraOn = on
         if (isActive) reapplyRoute()
     }
 
@@ -88,10 +96,11 @@ class CallAudio(context: Context) : CallAudioPort {
         }
     }
 
-    /** Screen off against the ear while on an earpiece call; released for speaker and headsets. */
+    /** Screen off against the ear while on an earpiece call; released for speaker, headsets and the camera. */
     override fun setProximityEnabled(enabled: Boolean) {
+        isProximityWanted = enabled
         val pm = app.getSystemService(Context.POWER_SERVICE) as PowerManager
-        if (enabled && !speakerOn && !hasWiredOrBluetooth()) {
+        if (enabled && !isLoud() && !hasWiredOrBluetooth()) {
             if (proximityLock?.isHeld == true) return
             if (!pm.isWakeLockLevelSupported(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK)) return
             proximityLock = pm.newWakeLock(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, PROXIMITY_TAG).also { it.acquire() }
@@ -103,19 +112,22 @@ class CallAudio(context: Context) : CallAudioPort {
 
     private fun reapplyRoute() {
         if (!isActive) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) modernRoute() else legacyRoute(speakerOn)
-        setProximityEnabled(proximityLock != null)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) modernRoute() else legacyRoute(isLoud() && !(isCameraOn && hasWiredOrBluetooth()))
+        setProximityEnabled(isProximityWanted)
     }
+
+    private fun isLoud(): Boolean = speakerOn || isCameraOn
 
     @RequiresApi(Build.VERSION_CODES.S)
     private fun modernRoute() {
         val devices = audioManager.availableCommunicationDevices
-        val target = if (speakerOn) {
-            devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-        } else {
-            devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || it.type == AudioDeviceInfo.TYPE_BLE_HEADSET }
-                ?: devices.firstOrNull { it.type in WIRED_TYPES }
-                ?: devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE }
+        val speaker = devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+        val headset = devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || it.type == AudioDeviceInfo.TYPE_BLE_HEADSET }
+            ?: devices.firstOrNull { it.type in WIRED_TYPES }
+        val target = when {
+            isCameraOn -> headset ?: speaker
+            speakerOn -> speaker
+            else -> headset ?: devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE }
         }
         if (target != null) audioManager.setCommunicationDevice(target) else audioManager.clearCommunicationDevice()
     }
