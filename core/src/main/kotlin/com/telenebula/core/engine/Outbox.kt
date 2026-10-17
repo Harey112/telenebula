@@ -301,6 +301,8 @@ internal class Outbox(private val engine: Engine) {
         isCovered: Boolean = false,
     ) {
         val ip = Ip.normalize(peerIp)
+        // replying to a request is accepting it
+        if (store.acceptContact(ip)) engine.events.contactChanged(ip)
         // the chat's disappearing timer: our copy counts from now, the peer's from first read
         val expireSecs = store.getContact(ip)?.disappearSeconds?.takeIf { it > 0 }?.toLong()
         val ts = System.currentTimeMillis()

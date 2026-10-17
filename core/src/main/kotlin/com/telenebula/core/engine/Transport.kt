@@ -14,6 +14,7 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -132,6 +133,7 @@ internal class Traffic {
  */
 internal class Transport(private val engine: Engine) {
     private val generations = AtomicLong(1)
+    private val inboundCount = AtomicInteger(0)
     private val overlayAddress: InetAddress? = engine.profile.overlayIp.takeIf { it.isNotBlank() }?.let { runCatching { Ip.unmapped(InetAddress.getByName(it)) }.getOrNull() }
 
     /**
@@ -168,8 +170,13 @@ internal class Transport(private val engine: Engine) {
                     runCatching { socket.close() }
                     continue
                 }
+                if (inboundCount.get() >= Limits.MAX_INBOUND_CONNECTIONS) {
+                    CoreLog.warn(TAG, "refused a connection: ${Limits.MAX_INBOUND_CONNECTIONS} already open")
+                    runCatching { socket.close() }
+                    continue
+                }
                 // a connection accepted while the engine is stopping has nobody to serve it
-                runCatching { attach(socket, Ip.normalize(socket.inetAddress?.hostAddress)) }.onFailure { runCatching { socket.close() } }
+                runCatching { attach(socket, Ip.normalize(socket.inetAddress?.hostAddress), isInbound = true) }.onFailure { runCatching { socket.close() } }
             }
         }
     }
@@ -185,13 +192,14 @@ internal class Transport(private val engine: Engine) {
     }
 
     /** Registers the connection's outbound queue and starts its reader and writer. */
-    private fun attach(socket: Socket, hintIp: String): PeerLink {
+    private fun attach(socket: Socket, hintIp: String, isInbound: Boolean = false): PeerLink {
         // a socket the engine can no longer serve would otherwise stay open with nobody to close it
         if (!engine.scope.isActive) {
             runCatching { socket.close() }
             throw CoreException.unreachable("engine stopped")
         }
         runCatching { socket.tcpNoDelay = true }
+        runCatching { socket.soTimeout = Limits.IDLE_READ_TIMEOUT_MS }
         val link = PeerLink(hintIp, generations.getAndIncrement(), socket)
         if (hintIp.isNotEmpty()) remember(hintIp, link)
 
@@ -219,13 +227,21 @@ internal class Transport(private val engine: Engine) {
             }
         }
 
-        engine.scope.launch { readLoop(socket, link, hintIp) }
+        if (isInbound) inboundCount.incrementAndGet()
+        engine.scope.launch {
+            try {
+                readLoop(socket, link, hintIp)
+            } finally {
+                if (isInbound) inboundCount.decrementAndGet()
+            }
+        }
         return link
     }
 
     private suspend fun readLoop(socket: Socket, link: PeerLink, hintIp: String) {
         var peerIp = hintIp
         val parser = FrameParser()
+        val budget = FrameBudget()
         val buffer = ByteArray(Limits.READ_BUFFER_BYTES)
         try {
             val input = socket.getInputStream()
@@ -237,6 +253,10 @@ internal class Transport(private val engine: Engine) {
                     parser.feed(buffer, read)
                 } catch (e: CoreException) {
                     CoreLog.warn(TAG, "protocol violation from $peerIp: ${e.message}")
+                    break
+                }
+                if (envelopes.any { !budget.take() }) {
+                    CoreLog.warn(TAG, "closing a connection from $peerIp: over ${Limits.FRAME_RATE_PER_SEC} frames/s")
                     break
                 }
                 for (envelope in envelopes) {

@@ -44,6 +44,8 @@ data class Contact(
     /** disappearing-message timer for messages we send in this chat (0 = off) */
     val disappearSeconds: Int = 0,
     val privacy: ContactPrivacyPrefs = ContactPrivacyPrefs(),
+    /** the peer wrote first and has not been accepted: no ringing, files, presence or receipts */
+    val isRequest: Boolean = false,
 )
 
 /** Per-contact privacy; null means the global setting applies. */
@@ -237,6 +239,7 @@ data class ChatSummary(
     val isBlocked: Boolean = false,
     val muteUntil: Long = 0,
     val isMarkedUnread: Boolean = false,
+    val isRequest: Boolean = false,
 )
 
 @Serializable

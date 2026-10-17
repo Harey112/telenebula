@@ -119,7 +119,70 @@ class EngineLoopbackTest {
         val b = Node("127.0.0.2", "bob", port)
         nodes += a
         nodes += b
+        // as after scanning each other's code: neither is a request to the other
+        a.store.upsertContact(b.ip, b.name)
+        b.store.upsertContact(a.ip, a.name)
         return a to b
+    }
+
+    /** Two devices that never added each other. */
+    private fun strangers(): Pair<Node, Node> {
+        val port = ServerSocket(0).use { it.localPort }
+        val a = Node("127.0.0.1", "alice", port)
+        val b = Node("127.0.0.2", "bob", port)
+        nodes += a
+        nodes += b
+        return a to b
+    }
+
+    @Test
+    fun `a stranger's first message opens a request and is announced without its content`() = runBlocking {
+        val (a, b) = strangers()
+        a.engine.outbox.sendText(b.ip, "buy my thing", null)
+        a.engine.outbox.sendText(b.ip, "please", null)
+        waitFor("both messages to arrive") { b.store.getMessages(a.ip, 10).size == 2 }
+
+        assertEquals(true, b.store.getContact(a.ip)?.isRequest)
+        val notices = b.events.filterIsInstance<CoreEvent.MessageReceived>().filter { it.ip == a.ip }
+        assertEquals(listOf(InboundDispatcher.REQUEST_PREVIEW), notices.map { it.preview })
+    }
+
+    @Test
+    fun `a request cannot send a file`() = runBlocking {
+        val (a, b) = strangers()
+        val source = File(scratch, "alice/attachments/spam.bin").apply { writeBytes(ByteArray(10_000) { 7 }) }
+        a.engine.outbox.sendAttachment(b.ip, source.path, MessageAttachment(name = "spam.bin", mime = "application/octet-stream", size = 10_000), null)
+        settle(a, b, "after the file")
+
+        assertTrue(b.store.getMessages(a.ip, 10).none { it.attachment != null })
+        assertTrue(b.attachments.listFiles().isNullOrEmpty())
+    }
+
+    @Test
+    fun `a request is told reachable, never online, until it is answered`() = runBlocking {
+        val (a, b) = strangers()
+        b.engine.isOnline.set(true)
+        settle(a, b, "hello?")
+        assertTrue(a.engine.pingPeer(b.ip, null) >= 0)
+        waitFor("presence to be announced") { a.events.any { it is CoreEvent.PresenceChanged && it.ip == b.ip } }
+        assertTrue(a.events.none { it is CoreEvent.PresenceChanged && it.presence == PeerPresence.ONLINE })
+
+        b.engine.outbox.sendText(a.ip, "hi, who is this?", null)
+        assertEquals("replying accepts", false, b.store.getContact(a.ip)?.isRequest)
+        a.events.clear()
+        assertTrue(a.engine.pingPeer(b.ip, null) >= 0)
+        waitFor("online to be announced") { a.events.any { it is CoreEvent.PresenceChanged && it.presence == PeerPresence.ONLINE } }
+    }
+
+    @Test
+    fun `a request keeps a bounded number of messages and acks the rest`() = runBlocking {
+        val (a, b) = strangers()
+        val total = Limits.MAX_REQUEST_MESSAGES + 5
+        repeat(total) { a.engine.outbox.sendText(b.ip, "spam $it", null) }
+        waitFor("every send to be acked", timeoutMs = 60_000) {
+            a.store.getMessages(b.ip, 100).count { a.store.getAction(it.id)?.status == MessageActionStatus.SUCCESS } == total
+        }
+        assertEquals(Limits.MAX_REQUEST_MESSAGES, b.store.getMessages(a.ip, 100).size)
     }
 
     @Test
@@ -160,7 +223,7 @@ class EngineLoopbackTest {
         val node = Node("127.0.0.6", "erin", port, networks = listOf("127.0.0.6/31")).also { nodes += it }
         dialFrom("127.0.0.7", node.ip, port).use { socket ->
             socket.getOutputStream().write(hello("127.0.0.7"))
-            waitFor("the hello to make a contact") { node.store.getContacts().any { it.ip == "127.0.0.7" } }
+            assertTrue("the hello is answered", socket.getInputStream().read() >= 0)
         }
     }
 

@@ -17,6 +17,7 @@ import com.telenebula.app.ui.fragments.ChatListRow
 import com.telenebula.app.ui.fragments.Fab
 import com.telenebula.app.ui.fragments.OptionsMenu
 import com.telenebula.app.ui.fragments.Screen
+import com.telenebula.app.ui.fragments.SettingRow
 import com.telenebula.app.ui.fragments.SearchHeader
 import com.telenebula.app.ui.icons.TnIcon
 import com.telenebula.app.ui.theme.TnSpace
@@ -49,10 +50,15 @@ fun ChatsScreen(viewModel: ChatsViewModel) {
 private fun ChatList(state: ChatsUiState, actions: ChatsActions) {
     val colors = TnTheme.colors
     LazyColumn(modifier = Modifier.fillMaxSize()) {
+        if (state.requestCount > 0) {
+            item(key = "requests", contentType = "requests") {
+                SettingRow(TnIcon.PERSON_ADD, "Message requests", subtitle = "${state.requestCount} waiting", onClick = actions::openRequests)
+            }
+        }
         items(state.chats, key = { it.ip }, contentType = { "chat" }) { chat ->
             ChatListRow(chat, onClick = actions::openChat, onLongClick = actions::openOptions)
         }
-        if (state.isLoaded && state.chats.isEmpty()) {
+        if (state.isLoaded && state.chats.isEmpty() && state.requestCount == 0) {
             item(key = "empty") {
                 Box(modifier = Modifier.fillMaxWidth().padding(TnSpace.xl), contentAlignment = Alignment.Center) {
                     Text("Tap on the button to start a new chat", style = TnType.body, color = colors.textMuted)

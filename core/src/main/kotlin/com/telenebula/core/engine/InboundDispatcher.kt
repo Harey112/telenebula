@@ -1,5 +1,6 @@
 package com.telenebula.core.engine
 
+import com.telenebula.core.db.Standing
 import com.telenebula.core.db.Wire
 import com.telenebula.core.events.CoreEvent
 import com.telenebula.core.model.ChatMessage
@@ -105,7 +106,8 @@ internal class InboundDispatcher(private val engine: Engine) {
     }
 
     private fun onHello(c: InboundContext): Boolean {
-        store.syncContact(c.fromIp, c.envelope.from.name)
+        // a greeting opens no request; only something addressed to the person does
+        if (store.standing(c.fromIp) != Standing.STRANGER) store.syncContact(c.fromIp, c.envelope.from.name)
         c.envelope.app?.let { store.setClientVersion(c.fromIp, it) }
         engine.transport.offer(c.link, engine.transport.envelope(EnvelopeType.HELLO_ACK).copy(app = engine.profile.appVersion))
         engine.outbox.renewPendingOffers(c.fromIp)
@@ -121,12 +123,14 @@ internal class InboundDispatcher(private val engine: Engine) {
     }
 
     private fun onTyping(c: InboundContext): Boolean {
+        if (!store.standing(c.fromIp).isContact) return false
         engine.events.emit(CoreEvent.Typing(c.fromIp, c.envelope.typing == true))
         return true
     }
 
     private fun onPing(c: InboundContext): Boolean {
-        val pong = engine.transport.envelope(EnvelopeType.PONG).copy(presence = PresenceWire.encode(engine.isOnline.get()))
+        val isOnline = engine.isOnline.get() && store.standing(c.fromIp).isContact
+        val pong = engine.transport.envelope(EnvelopeType.PONG).copy(presence = PresenceWire.encode(isOnline))
         engine.transport.offer(c.link, pong)
         return true
     }
@@ -141,13 +145,20 @@ internal class InboundDispatcher(private val engine: Engine) {
     private fun onMessage(c: InboundContext): Boolean {
         val body = c.envelope.body ?: return false
         if (c.envelope.id.isEmpty()) return false
-        store.syncContact(c.fromIp, c.envelope.from.name)
-        val isNew = storeIncoming(c.envelope, c.fromIp)
+        // past either cap the frame is acked and dropped, so the sender's queue stops retrying it
+        val standing = store.admit(c.fromIp, c.envelope.from.name, Limits.MAX_OPEN_REQUESTS)
+        if (standing == Standing.STRANGER) return true
+        if (standing == Standing.REQUEST && store.countIncoming(c.fromIp) >= Limits.MAX_REQUEST_MESSAGES) return true
+        val isNew = storeIncoming(c.envelope, c.fromIp, withAttachment = standing.isContact)
         engine.events.chatChanged(c.fromIp)
         // only a message we had not seen may raise a notification: a queue that re-sends until it
         // is acked will redeliver one whose ack was lost, and re-notifying for it every time the
         // peer reappears would be the queue shouting at the user
-        if (isNew) notifyMessage(c.fromIp, c.envelope.from.name, if (c.envelope.covered == true) COVERED_PREVIEW else body)
+        when {
+            !isNew -> Unit
+            standing.isContact -> notifyMessage(c.fromIp, c.envelope.from.name, if (c.envelope.covered == true) COVERED_PREVIEW else body)
+            standing == Standing.NEW_REQUEST -> notifyMessage(c.fromIp, c.envelope.from.name, REQUEST_PREVIEW)
+        }
         return true
     }
 
@@ -209,12 +220,12 @@ internal class InboundDispatcher(private val engine: Engine) {
      * Persists an incoming message; a legacy inline attachment lands on disk on the way in.
      * False when the message was already there, so a redelivery stays silent.
      */
-    private fun storeIncoming(envelope: Envelope, fromIp: String): Boolean {
+    private fun storeIncoming(envelope: Envelope, fromIp: String, withAttachment: Boolean): Boolean {
         // a redelivery must not rewrite the attachment file it already produced
         if (store.getMessage(envelope.id) != null) return false
         var attachment: MessageAttachment? = null
         var kind = MessageKind.TEXT
-        val inline = envelope.attachment
+        val inline = envelope.attachment?.takeIf { withAttachment }
         if (inline != null) {
             val path = runCatching {
                 engine.attachments.writeInlineAttachment(envelope.id, inline.name, inline.dataB64)
@@ -326,6 +337,9 @@ internal class InboundDispatcher(private val engine: Engine) {
 
         /** what a notification says about a covered message, matching the chat list's own line */
         const val COVERED_PREVIEW = "Covered message"
+
+        /** a request's first message is announced without its content */
+        const val REQUEST_PREVIEW = "Message request"
 
         /** One line for an attachment, as the chat list names it: the caption if there is one, else the kind. */
         fun attachmentPreview(mime: String, name: String, body: String, isCovered: Boolean): String = when {

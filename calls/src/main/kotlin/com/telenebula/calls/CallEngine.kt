@@ -471,7 +471,12 @@ class CallEngine internal constructor(
         }
         val settings = prefs()
         val gate = core.contact(fromIp)
-        if (!settings.ringForCalls || gate?.callsAllowed == false) {
+        // a stranger is refused without a trace: a log row per attempt would be a way to fill the call list
+        if (gate == null) {
+            sendQuietly(fromIp, OutboundCallSignal(CallSignalType.REJECT, signal.callId, reason = "declined"), SHORT_TIMEOUT_MS)
+            return
+        }
+        if (!settings.ringForCalls || !gate.callsAllowed) {
             sendQuietly(fromIp, OutboundCallSignal(CallSignalType.REJECT, signal.callId, reason = "declined"), SHORT_TIMEOUT_MS)
             val stamp = now()
             scope.launch { runCatching { core.logCall(CallLogEntry(signal.callId, fromIp, isIncoming = true, isVideo = signal.video, CallOutcome.DECLINED, stamp, null, stamp)) } }

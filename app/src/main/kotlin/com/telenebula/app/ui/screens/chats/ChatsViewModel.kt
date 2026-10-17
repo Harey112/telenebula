@@ -5,6 +5,7 @@ import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.telenebula.app.nav.Chat
+import com.telenebula.app.nav.MessageRequests
 import com.telenebula.app.nav.Navigator
 import com.telenebula.app.nav.NewMessage
 import com.telenebula.app.notices.NoticeCenter
@@ -27,6 +28,7 @@ data class ChatsUiState(
     /** false only before the very first read of the store: no "start a chat" hint yet */
     val isLoaded: Boolean = false,
     val chats: List<ChatSummary> = emptyList(),
+    val requestCount: Int = 0,
     val isSearching: Boolean = false,
     val query: String = "",
     val isVpnRunning: Boolean = false,
@@ -41,6 +43,7 @@ interface ChatsActions {
     fun endSearch()
     fun openChat(ip: String)
     fun openOptions(ip: String)
+    fun openRequests()
     fun setQuery(value: String)
 }
 
@@ -59,15 +62,21 @@ class ChatsViewModel(private val core: CoreClient, runtime: AppRuntime, notices:
         val chats = all.orEmpty()
         val needle = q.trim().lowercase()
         val visible = ArrayList<ChatSummary>(chats.size)
+        var requests = 0
         for (chat in chats) {
             // a contact nobody has written to yet is not a chat
             if (chat.isArchived || chat.lastTs == null) continue
+            if (chat.isRequest) {
+                if (!chat.isBlocked) requests++
+                continue
+            }
             if (needle.isEmpty() || chat.name.lowercase().contains(needle) || chat.ip.contains(needle)) visible.add(chat)
         }
         val options = selected?.let { ip -> chats.firstOrNull { it.ip == ip } }
         return ChatsUiState(
             isLoaded = all != null,
             chats = visible,
+            requestCount = requests,
             isSearching = s.isSearching,
             query = s.query,
             isVpnRunning = phase == TunnelPhase.RUNNING,
@@ -91,6 +100,7 @@ class ChatsViewModel(private val core: CoreClient, runtime: AppRuntime, notices:
         navigator.push(Chat(ip))
     }
     fun openNewMessage() = navigator.push(NewMessage)
+    override fun openRequests() = navigator.push(MessageRequests)
     override fun openOptions(ip: String) = actions.open(ip)
     fun closeOptions() = actions.close()
 }

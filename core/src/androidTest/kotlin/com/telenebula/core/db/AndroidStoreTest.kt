@@ -423,4 +423,22 @@ class AndroidStoreTest {
         assertEquals(0, store.countChatMedia(PEER))
         assertEquals(0, store.countChatLinkMessages(PEER))
     }
+
+    @Test
+    fun requests_admitAcceptAndTheBadge_runOnTheFrameworkDatabase() {
+        val store = store("requests.db")
+        assertEquals(Standing.NEW_REQUEST, store.admit(PEER, "stranger", maxOpenRequests = 1))
+        assertEquals(Standing.STRANGER, store.admit(OTHER, "another", maxOpenRequests = 1))
+        store.insertMessage(message("r1"))
+        assertEquals(1, store.countIncoming(PEER))
+        assertEquals(0, store.getUnreadTotal())
+        assertTrue(store.getChatSummaries().single().isRequest)
+        assertTrue(store.acceptContact(PEER))
+        assertEquals(Standing.CONTACT, store.standing(PEER))
+        assertEquals(1, store.getUnreadTotal())
+
+        store.setContactFlags(PEER, ContactFlagsPatch(isBlocked = true))
+        store.deleteContact(PEER)
+        assertTrue(store.isBlocked(PEER))
+    }
 }

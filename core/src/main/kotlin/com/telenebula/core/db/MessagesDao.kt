@@ -289,7 +289,9 @@ internal class MessagesDao(db: SqlDb, lock: ReentrantLock, private val contacts:
     }
 
     fun getUnreadTotal(): Int = locked {
-        db.count("SELECT COUNT(*) FROM messages WHERE direction = 'in' AND read = 0").toInt()
+        db.count(
+            "SELECT COUNT(*) FROM messages WHERE direction = 'in' AND read = 0 AND peer_ip NOT IN (SELECT ip FROM contacts WHERE is_request = 1)",
+        ).toInt()
     }
 
     // --- attachments (legacy migration) ---
@@ -343,6 +345,10 @@ internal class MessagesDao(db: SqlDb, lock: ReentrantLock, private val contacts:
         ).toInt()
     }
 
+    fun countIncoming(peerIp: String): Int = locked {
+        db.count("SELECT COUNT(*) FROM messages WHERE peer_ip = ? AND direction = 'in'", listOf(peerIp)).toInt()
+    }
+
     /** URLs found in one chat's message bodies, newest first (chat settings → Links). */
     fun getChatLinks(peerIp: String, limit: Long): List<ChatLink> = locked {
         db.query(
@@ -386,7 +392,8 @@ internal class MessagesDao(db: SqlDb, lock: ReentrantLock, private val contacts:
               m.ts, m.direction, m.status, m.seen_at,
               COALESCE(agg.unread, 0),
               c.pinned_at, c.is_archived, c.is_blocked, c.mute_until, c.is_marked_unread,
-              sa.status AS last_send_status
+              sa.status AS last_send_status,
+              c.is_request
             FROM contacts c
             LEFT JOIN (
               SELECT peer_ip, MAX(ts) AS max_ts,
@@ -416,6 +423,7 @@ internal class MessagesDao(db: SqlDb, lock: ReentrantLock, private val contacts:
                 muteUntil = row.long(11),
                 isMarkedUnread = row.boolean(12),
                 lastSendStatus = row.stringOrNull(13)?.let(Wire::actionStatus),
+                isRequest = row.boolean(14),
             )
         }
     }

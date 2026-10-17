@@ -48,6 +48,9 @@ internal class Store(
 
     fun upsertContact(ip: String, name: String) = contacts.upsertContact(ip, name)
     fun syncContact(ip: String, name: String): Boolean = contacts.syncContact(ip, name)
+    fun standing(ip: String): Standing = contacts.standing(ip)
+    fun admit(ip: String, name: String, maxOpenRequests: Int): Standing = contacts.admit(ip, name, maxOpenRequests)
+    fun acceptContact(ip: String): Boolean = contacts.acceptContact(ip)
     fun touchContact(ip: String) = contacts.touchContact(ip)
     fun setClientVersion(ip: String, version: String) = contacts.setClientVersion(ip, version)
     fun updateContactDetails(ip: String, name: String, nickname: String, notes: String) = contacts.updateContactDetails(ip, name, nickname, notes)
@@ -151,6 +154,7 @@ internal class Store(
 
     fun getChatMedia(peerIp: String, limit: Long): List<ChatMessage> = messages.getChatMedia(peerIp, limit)
     fun countChatMedia(peerIp: String): Int = messages.countChatMedia(peerIp)
+    fun countIncoming(peerIp: String): Int = messages.countIncoming(peerIp)
     fun getChatLinks(peerIp: String, limit: Long): List<ChatLink> = messages.getChatLinks(peerIp, limit)
     fun countChatLinkMessages(peerIp: String): Int = messages.countChatLinkMessages(peerIp)
     fun getChatSummaries(): List<ChatSummary> = messages.getChatSummaries()

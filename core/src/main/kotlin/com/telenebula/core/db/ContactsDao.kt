@@ -12,8 +12,37 @@ import java.util.concurrent.locks.ReentrantLock
 internal class ContactsDao(db: SqlDb, lock: ReentrantLock) : Dao(db, lock) {
     fun upsertContact(ip: String, name: String) = lockedTransaction {
         db.insert("INSERT OR IGNORE INTO contacts (ip, name, added_at) VALUES (?, ?, ?)", listOf(ip, name, now()))
-        db.update("UPDATE contacts SET name = ? WHERE ip = ?", listOf(name, ip))
+        db.update("UPDATE contacts SET name = ?, is_request = 0 WHERE ip = ?", listOf(name, ip))
         Unit
+    }
+
+    fun standing(ip: String): Standing = locked {
+        when (db.queryFirst("SELECT is_request FROM contacts WHERE ip = ?", listOf(ip)) { it.boolean(0) }) {
+            null -> Standing.STRANGER
+            true -> Standing.REQUEST
+            false -> Standing.CONTACT
+        }
+    }
+
+    /** A stranger becomes an open request, unless [maxOpenRequests] are already open; a known peer's name is synced. */
+    fun admit(ip: String, name: String, maxOpenRequests: Int): Standing = lockedTransaction {
+        when (standing(ip)) {
+            Standing.STRANGER -> {
+                val open = db.count("SELECT COUNT(*) FROM contacts WHERE is_request = 1").toInt()
+                if (open >= maxOpenRequests) return@lockedTransaction Standing.STRANGER
+                db.insert("INSERT INTO contacts (ip, name, added_at, is_request) VALUES (?, ?, ?, 1)", listOf(ip, name, now()))
+                Standing.NEW_REQUEST
+            }
+            else -> {
+                syncContact(ip, name)
+                standing(ip)
+            }
+        }
+    }
+
+    /** True when an open request was turned into a contact. */
+    fun acceptContact(ip: String): Boolean = locked {
+        db.update("UPDATE contacts SET is_request = 0 WHERE ip = ? AND is_request = 1", listOf(ip)) > 0
     }
 
     /**

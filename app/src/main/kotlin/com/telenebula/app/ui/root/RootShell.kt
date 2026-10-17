@@ -19,6 +19,7 @@ import com.telenebula.app.nav.About
 import com.telenebula.app.nav.Account
 import com.telenebula.app.nav.Appearance
 import com.telenebula.app.nav.ArchivedChats
+import com.telenebula.app.nav.MessageRequests
 import com.telenebula.app.nav.Blocked
 import com.telenebula.app.nav.Call
 import com.telenebula.app.nav.CallPrefs
@@ -82,6 +83,8 @@ import com.telenebula.calls.system.OverlayPermission
 import android.content.Intent
 import com.telenebula.app.ui.screens.archived.ArchivedChatsScreen
 import com.telenebula.app.ui.screens.archived.ArchivedChatsViewModel
+import com.telenebula.app.ui.screens.requests.MessageRequestsScreen
+import com.telenebula.app.ui.screens.requests.MessageRequestsViewModel
 import com.telenebula.app.ui.screens.chats.ChatsScreen
 import com.telenebula.app.ui.screens.chats.ChatsViewModel
 import com.telenebula.app.ui.screens.newmessage.NewMessageScreen
@@ -195,6 +198,7 @@ fun RootShell(activity: MainActivity) {
                             entry<ChatNotifications> { key -> ChatNotificationsScreen(viewModel(key = key.peerIp) { ChatNotificationsViewModel(key.peerIp, graph.core, navigator) }) }
                             entry<NewMessage> { NewMessageScreen(viewModel { NewMessageViewModel(graph.core, navigator) }) }
                             entry<ArchivedChats> { ArchivedChatsScreen(viewModel { ArchivedChatsViewModel(graph.core, graph.notices, navigator) }) }
+                            entry<MessageRequests> { MessageRequestsScreen(viewModel { MessageRequestsViewModel(graph.core, navigator) }) }
                             entry<Contact> { key -> ContactScreen(viewModel(key = key.peerIp) { ContactViewModel(key.peerIp, graph.core, graph.peerQueues, graph.peerPresence, graph.prefs, graph.vpn, graph.runtime, graph.callEngine, graph.gateway, graph.notices, navigator) }) }
                             entry<ContactCalls> { key -> ContactCallsScreen(viewModel(key = key.peerIp) { ContactCallsViewModel(key.peerIp, graph.core, navigator) }) }
                             entry<NewContact> { NewContactScreen(viewModel { NewContactViewModel(graph.core, graph.gateway, graph.notices, navigator) }) }

@@ -29,6 +29,7 @@ data class ChatLinks(override val peerIp: String) : ChatScopedKey
 data class ChatNotifications(override val peerIp: String) : ChatScopedKey
 data object NewMessage : TnKey
 data object ArchivedChats : TnKey
+data object MessageRequests : TnKey
 
 data class Contact(val peerIp: String) : TnKey
 data class ContactCalls(val peerIp: String) : TnKey
