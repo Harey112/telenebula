@@ -212,7 +212,7 @@ fun RootShell(activity: MainActivity) {
                             entry<CallPrefs> {
                                 CallPrefsScreen(
                                     viewModel {
-                                        CallPrefsViewModel(graph.prefs, activity.launchRequests, { graph.gateway.startActivity { OverlayPermission.settingsIntent(it).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) } }, navigator)
+                                        CallPrefsViewModel(activity.launchRequests, { graph.gateway.startActivity { OverlayPermission.settingsIntent(it).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) } }, navigator)
                                     },
                                 )
                             }

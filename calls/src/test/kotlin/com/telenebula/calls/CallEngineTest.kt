@@ -42,8 +42,9 @@ class CallEngineTest {
     }
 
     private class FakeAudio : CallAudioPort {
-        override fun start(speaker: Boolean) = Unit
+        override fun start(speaker: Boolean, isCameraOn: Boolean) = Unit
         override fun setSpeaker(on: Boolean) = Unit
+        override fun setCameraOn(on: Boolean) = Unit
         override fun startRingback() = Unit
         override fun stopRingback() = Unit
         override fun stop(playBusyTone: Boolean) = Unit
@@ -114,7 +115,7 @@ class CallEngineTest {
         val diagnostics = CallDiagnostics(isVerbose = { false }, now = { testScope.testScheduler.currentTime })
         val engine = CallEngine(
             core = core,
-            prefs = { CallPrefs(ringForCalls = true, vibrateWhileRinging = false, missedNotification = false, videoSpeakerDefault = false, overlayIp = SELF) },
+            prefs = { CallPrefs(ringForCalls = true, vibrateWhileRinging = false, missedNotification = false, overlayIp = SELF) },
             audio = FakeAudio(),
             media = media,
             system = FakeSystem(),

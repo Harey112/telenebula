@@ -91,9 +91,12 @@ private fun CallControls(state: CallUiState, actions: CallActions) {
             }
             state.phase == null -> Unit
             else -> {
-                RoundControl(TnIcon.SPEAKER, "Speaker", actions::toggleSpeaker, Modifier.weight(1f), isActive = state.speaker)
+                if (state.camOff) {
+                    RoundControl(TnIcon.SPEAKER, "Speaker", actions::toggleSpeaker, Modifier.weight(1f), isActive = state.speaker)
+                } else {
+                    RoundControl(TnIcon.FLIP_CAMERA, "Flip", actions::switchCamera, Modifier.weight(1f))
+                }
                 RoundControl(if (state.camOff) TnIcon.VIDEO_OFF else TnIcon.VIDEO, "Camera", actions::toggleCamera, Modifier.weight(1f), isActive = state.camOff)
-                if (!state.camOff) RoundControl(TnIcon.FLIP_CAMERA, "Flip", actions::switchCamera, Modifier.weight(1f))
                 RoundControl(if (state.muted) TnIcon.MIC_OFF else TnIcon.MIC, "Mute", actions::toggleMute, Modifier.weight(1f), isActive = state.muted)
                 RoundControl(TnIcon.CALL_END, "End", actions::end, Modifier.weight(1f), color = CallPalette.red)
             }

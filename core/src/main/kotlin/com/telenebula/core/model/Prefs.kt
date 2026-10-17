@@ -118,7 +118,6 @@ data class Prefs(
     val colorTheme: String = "sky",
     val customAccent: String = "#7FB7E6",
     val chatTextSize: ChatTextSize = ChatTextSize.MEDIUM,
-    val isVideoSpeakerDefault: Boolean = true,
     val isScreenshotBlocked: Boolean = false,
     val isBackgroundConnectionEnabled: Boolean = true,
     /** the system starts the app at boot and after an update, so the tunnel comes up on its own */
